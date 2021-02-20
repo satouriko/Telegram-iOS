@@ -113,6 +113,7 @@ filegroup(
     name = "AppStringResources",
     srcs = glob([
         "Telegram-iOS/*.lproj/Localizable.strings",
+        "Telegram-iOS/*.lproj/NekoLocalizable.strings",
     ], exclude = ["Telegram-iOS/*.lproj/**/.*"]),
 )
 
@@ -120,6 +121,7 @@ filegroup(
     name = "WatchAppStringResources",
     srcs = glob([
         "Telegram-iOS/*.lproj/Localizable.strings",
+        "Telegram-iOS/*.lproj/NekoLocalizable.strings",
     ], exclude = ["Telegram-iOS/*.lproj/**/.*"]),
 )
 
