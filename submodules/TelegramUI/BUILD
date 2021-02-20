@@ -218,6 +218,7 @@ swift_library(
         "//submodules/ChatHistoryImportTasks:ChatHistoryImportTasks",
         "//submodules/DatePickerNode:DatePickerNode",
         "//submodules/ConfettiEffect:ConfettiEffect",
+        "//Nekogram/NGStrings:NGStrings"
     ],
     visibility = [
         "//visibility:public",

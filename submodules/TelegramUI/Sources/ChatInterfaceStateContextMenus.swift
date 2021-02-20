@@ -15,6 +15,7 @@ import LegacyUI
 import AppBundle
 import SaveToCameraRoll
 import PresentationDataUtils
+import NGStrings
 
 private struct MessageContextMenuData {
     let starStatus: Bool?
@@ -832,6 +833,16 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }, action: { _, f in
                 let _ = controllerInteraction.openMessage(message, .default)
                 f(.dismissWithoutContent)
+            })))
+        }
+
+        if !isPinnedMessages, !isReplyThreadHead, data.canReply {
+            actions.append(.action(ContextMenuActionItem(text: l("repeat", chatPresentationInterfaceState.strings.baseLanguageCode), icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Repeat"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                interfaceInteraction.setupReplyMessage(messages[0].id, { transition in
+                    f(.custom(transition))
+                })
             })))
         }
                 
