@@ -89,7 +89,7 @@
 		<key>CFBundlePrimaryIcon</key>
 		<dict>
 			<key>CFBundleIconName</key>
-			<string>AppIconLLC</string>
+			<string>AppIcon</string>
 			<key>UIPrerenderedIcon</key>
 			<true/>
 		</dict>
@@ -175,7 +175,7 @@
 		<key>CFBundlePrimaryIcon</key>
 		<dict>
 			<key>CFBundleIconName</key>
-			<string>AppIconLLC</string>
+			<string>AppIcon</string>
 			<key>UIPrerenderedIcon</key>
 			<true/>
 		</dict>

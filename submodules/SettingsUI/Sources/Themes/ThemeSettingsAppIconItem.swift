@@ -303,22 +303,14 @@ class ThemeSettingsAppIconItemNode: ListViewItemNode, ItemListItemNode {
                             var name = "Icon"
                             var bordered = true
                             switch icon.name {
-                                case "Blue":
+                                case "Hawthorn":
                                     name = item.strings.Appearance_AppIconDefault
-                                case "Black":
-                                    name = item.strings.Appearance_AppIconDefaultX
-                                case "BlueClassic":
-                                    name = item.strings.Appearance_AppIconClassic
-                                case "BlackClassic":
-                                    name = item.strings.Appearance_AppIconClassicX
-                                case "BlueFilled":
+                                case "HawthornFilled":
                                     name = item.strings.Appearance_AppIconFilled
                                     bordered = false
-                                case "BlackFilled":
-                                    name = item.strings.Appearance_AppIconFilledX
+                                case "BlueFilled":
+                                    name = item.strings.Appearance_AppIconClassic
                                     bordered = false
-                                case "WhiteFilled":
-                                    name = "⍺ White"
                                 default:
                                     break
                             }
