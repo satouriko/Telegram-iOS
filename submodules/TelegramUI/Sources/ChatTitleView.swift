@@ -125,11 +125,7 @@ final class ChatTitleView: UIView, NavigationBarTitleView {
                                 if peerView.peerId == self.account.peerId {
                                     segments = [.text(0, NSAttributedString(string: self.strings.Conversation_SavedMessages, font: Font.medium(17.0), textColor: titleTheme.rootController.navigationBar.primaryTextColor))]
                                 } else {
-                                    if !peerView.peerIsContact, let user = peer as? TelegramUser, !user.flags.contains(.isSupport), user.botInfo == nil, let phone = user.phone, !phone.isEmpty {
-                                        segments = [.text(0, NSAttributedString(string: formatPhoneNumber(phone), font: Font.medium(17.0), textColor: titleTheme.rootController.navigationBar.primaryTextColor))]
-                                    } else {
-                                        segments = [.text(0, NSAttributedString(string: peer.displayTitle(strings: self.strings, displayOrder: self.nameDisplayOrder), font: Font.medium(17.0), textColor: titleTheme.rootController.navigationBar.primaryTextColor))]
-                                    }
+                                    segments = [.text(0, NSAttributedString(string: peer.displayTitle(strings: self.strings, displayOrder: self.nameDisplayOrder), font: Font.medium(17.0), textColor: titleTheme.rootController.navigationBar.primaryTextColor))]
                                 }
                                 if peer.isFake {
                                     titleFakeIcon = true
