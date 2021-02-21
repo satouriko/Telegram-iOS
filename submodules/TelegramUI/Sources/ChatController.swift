@@ -4810,6 +4810,13 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 let forwardMessageIds = messages.map { $0.id }.sorted()
                 strongSelf.forwardMessages(messageIds: forwardMessageIds)
             }
+        }, repeatMessage: { [weak self] messageId in
+            if let strongSelf = self {
+                strongSelf.commitPurposefulAction()
+                strongSelf.sendMessages([
+                    .forward(source: messageId, grouping: .auto, attributes: [])
+                ])
+            }
         }, shareSelectedMessages: { [weak self] in
             if let strongSelf = self, let selectedIds = strongSelf.presentationInterfaceState.interfaceState.selectionState?.selectedIds, !selectedIds.isEmpty {
                 strongSelf.commitPurposefulAction()

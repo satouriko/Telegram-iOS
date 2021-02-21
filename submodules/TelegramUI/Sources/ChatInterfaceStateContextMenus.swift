@@ -840,9 +840,8 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             actions.append(.action(ContextMenuActionItem(text: l("repeat", chatPresentationInterfaceState.strings.baseLanguageCode), icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Repeat"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
-                interfaceInteraction.setupReplyMessage(messages[0].id, { transition in
-                    f(.custom(transition))
-                })
+                interfaceInteraction.repeatMessage(messages[0].id)
+                f(.dismissWithoutContent)
             })))
         }
                 
