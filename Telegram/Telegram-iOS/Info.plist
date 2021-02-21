@@ -18,51 +18,12 @@
 	<dict>
 		<key>CFBundleAlternateIcons</key>
 		<dict>
-			<key>Black</key>
+			<key>HawthornFilled</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlackIcon</string>
-					<string>BlackNotificationIcon</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>BlackClassic</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>BlackClassicIcon</string>
-					<string>BlackClassicNotificationIcon</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>BlackFilled</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>BlackFilledIcon</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>Blue</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>BlueIcon</string>
-					<string>BlueNotificationIcon</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>BlueClassic</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>BlueClassicIcon</string>
-					<string>BlueClassicNotificationIcon</string>
+					<string>HawthornFilledIcon</string>
+					<string>HawthornFilledNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
@@ -72,15 +33,7 @@
 				<key>CFBundleIconFiles</key>
 				<array>
 					<string>BlueFilledIcon</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>WhiteFilled</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>WhiteFilledIcon</string>
+					<string>BlueNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
@@ -98,56 +51,13 @@
 	<dict>
 		<key>CFBundleAlternateIcons</key>
 		<dict>
-			<key>Black</key>
+			<key>HawthornFilled</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlackIconIpad</string>
-					<string>BlackIconLargeIpad</string>
-					<string>BlackNotificationIcon</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>BlackClassic</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>BlackClassicIconIpad</string>
-					<string>BlackClassicIconLargeIpad</string>
-					<string>BlackClassicNotificationIcon</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>BlackFilled</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>BlackFilledIconIpad</string>
-					<string>BlackFilledIconLargeIpad</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>Blue</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>BlueIconIpad</string>
-					<string>BlueIconLargeIpad</string>
-					<string>BlueNotificationIcon</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>BlueClassic</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>BlueClassicIconIpad</string>
-					<string>BlueClassicIconLargeIpad</string>
-					<string>BlueClassicNotificationIcon</string>
+					<string>HawthornFilledIconIpad</string>
+					<string>HawthornFilledIconLargeIpad</string>
+					<string>HawthornFilledNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
@@ -158,15 +68,7 @@
 				<array>
 					<string>BlueFilledIconIpad</string>
 					<string>BlueFilledIconLargeIpad</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>WhiteFilled</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>WhiteFilledIcon</string>
+					<string>BlueFilledNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
