@@ -8,3 +8,6 @@ telegram_is_appstore_build = "false"
 telegram_appstore_id = "1554737908"
 telegram_app_specific_url_scheme = "tg"
 telegram_aps_environment = "development"
+telegram_enable_siri = True
+telegram_enable_icloud = True
+telegram_enable_watch = True
