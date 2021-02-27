@@ -167,7 +167,6 @@ swift_library(
         "//third-party/opus:opus",
         "//submodules/WatchBridgeAudio:WatchBridgeAudio",
         "//submodules/WatchBridge:WatchBridge",
-        "//submodules/LegacyDataImport:LegacyDataImport",
         "//submodules/ShareItems:ShareItems",
         "//submodules/ShareItems/Impl:ShareItemsImpl",
         "//submodules/ReactionSelectionNode:ReactionSelectionNode",
@@ -218,7 +217,8 @@ swift_library(
         "//submodules/ChatHistoryImportTasks:ChatHistoryImportTasks",
         "//submodules/DatePickerNode:DatePickerNode",
         "//submodules/ConfettiEffect:ConfettiEffect",
-        "//Nekogram/NGStrings:NGStrings"
+        "//submodules/Speak:Speak",
+        "//Nekogram/NGStrings:NGStrings",
     ],
     visibility = [
         "//visibility:public",
