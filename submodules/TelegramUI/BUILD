@@ -220,7 +220,7 @@ swift_library(
         "//submodules/Speak:Speak",
         "//submodules/PeerInfoAvatarListNode:PeerInfoAvatarListNode",
         "//submodules/DebugSettingsUI:DebugSettingsUI",
-        "//Nekogram/NGStrings:NGStrings",
+        "//Nanogram/NNStrings:NNStrings",
     ],
     visibility = [
         "//visibility:public",

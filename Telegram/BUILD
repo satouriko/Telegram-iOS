@@ -124,7 +124,7 @@ filegroup(
     name = "AppStringResources",
     srcs = glob([
         "Telegram-iOS/*.lproj/Localizable.strings",
-        "Telegram-iOS/*.lproj/NekoLocalizable.strings",
+        "Telegram-iOS/*.lproj/NanoLocalizable.strings",
     ], exclude = ["Telegram-iOS/*.lproj/**/.*"]),
 )
 
@@ -132,7 +132,7 @@ filegroup(
     name = "WatchAppStringResources",
     srcs = glob([
         "Telegram-iOS/*.lproj/Localizable.strings",
-        "Telegram-iOS/*.lproj/NekoLocalizable.strings",
+        "Telegram-iOS/*.lproj/NanoLocalizable.strings",
     ], exclude = ["Telegram-iOS/*.lproj/**/.*"]),
 )
 
@@ -443,7 +443,7 @@ plist_fragment(
     template =
     """
     <key>CFBundleDisplayName</key>
-    <string>Nekogram Lite</string>
+    <string>Nanogram</string>
     """
 )
 
@@ -491,7 +491,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.watchkitapp.watchkitextension</string>
     <key>CFBundleName</key>
-    <string>Nekogram Lite</string>
+    <string>Nanogram</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>WKExtensionDelegateClassName</key>
@@ -511,7 +511,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.watchkitapp</string>
     <key>CFBundleName</key>
-    <string>Nekogram Lite</string>
+    <string>Nanogram</string>
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
@@ -1015,7 +1015,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.Share</string>
     <key>CFBundleName</key>
-    <string>Nekogram Lite</string>
+    <string>Nanogram</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1102,7 +1102,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.NotificationContent</string>
     <key>CFBundleName</key>
-    <string>Nekogram Lite</string>
+    <string>Nanogram</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1205,7 +1205,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.Widget</string>
     <key>CFBundleName</key>
-    <string>Nekogram Lite</string>
+    <string>Nanogram</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1313,7 +1313,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.SiriIntents</string>
     <key>CFBundleName</key>
-    <string>Nekogram Lite</string>
+    <string>Nanogram</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1442,7 +1442,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.NotificationService</string>
     <key>CFBundleName</key>
-    <string>Nekogram Lite</string>
+    <string>Nanogram</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1519,11 +1519,11 @@ plist_fragment(
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>Nekogram Lite</string>
+    <string>Nanogram</string>
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}</string>
     <key>CFBundleName</key>
-    <string>Nekogram Lite</string>
+    <string>Nanogram</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleSignature</key>

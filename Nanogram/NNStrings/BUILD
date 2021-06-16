@@ -1,8 +1,8 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
 swift_library(
-    name = "NGStrings",
-    module_name = "NGStrings",
+    name = "NNStrings",
+    module_name = "NNStrings",
     srcs = glob([
         "Sources/**/*.swift",
     ]),

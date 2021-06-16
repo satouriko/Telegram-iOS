@@ -18,7 +18,7 @@ import SaveToCameraRoll
 import PresentationDataUtils
 import TelegramPresentationData
 import TelegramStringFormatting
-import NGStrings
+import NNStrings
 import UndoUI
 
 private struct MessageContextMenuData {
