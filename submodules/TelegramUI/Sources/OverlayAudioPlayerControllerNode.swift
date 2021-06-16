@@ -70,6 +70,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, UIGestu
         }, openPeer: { _, _, _ in
         }, openPeerMention: { _ in
         }, openMessageContextMenu: { _, _, _, _, _ in
+        }, activateMessagePinch: { _ in
         }, openMessageContextActions: { _, _, _, _ in
         }, navigateToMessage: { _, _ in
         }, navigateToMessageStandalone: { _ in
@@ -84,7 +85,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, UIGestu
         }, sendBotContextResultAsGif: { _, _, _, _ in
             return false
         }, requestMessageActionCallback: { _, _, _, _ in
-        }, requestMessageActionUrlAuth: { _, _, _ in
+        }, requestMessageActionUrlAuth: { _, _ in
         }, activateSwitchInline: { _, _ in
         }, openUrl: { _, _, _, _ in
         }, shareCurrentLocation: {
@@ -144,6 +145,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, UIGestu
         }, openMessageStats: { _ in
         }, editMessageMedia: { _, _ in
         }, copyText: { _ in
+        }, displayUndo: { _ in
         }, requestMessageUpdate: { _ in
         }, cancelInteractiveKeyboardGestures: {
         }, automaticMediaDownloadSettings: MediaAutoDownloadSettings.defaultSettings, pollActionState: ChatInterfacePollActionState(), stickerSettings: ChatInterfaceStickerSettings(loopAnimatedStickers: false))

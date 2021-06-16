@@ -2,32 +2,43 @@ import Foundation
 import Postbox
 import TelegramApi
 import SwiftSignalKit
+import MtProtoKit
 
 import SyncCore
 
 public enum JoinChannelError {
     case generic
     case tooMuchJoined
+    case tooMuchUsers
 }
 
-public func joinChannel(account: Account, peerId: PeerId) -> Signal<RenderedChannelParticipant?, JoinChannelError> {
+public func joinChannel(account: Account, peerId: PeerId, hash: String?) -> Signal<RenderedChannelParticipant?, JoinChannelError> {
     return account.postbox.loadedPeerWithId(peerId)
     |> take(1)
     |> castError(JoinChannelError.self)
     |> mapToSignal { peer -> Signal<RenderedChannelParticipant?, JoinChannelError> in
         if let inputChannel = apiInputChannel(peer) {
-            return account.network.request(Api.functions.channels.joinChannel(channel: inputChannel))
+            let request: Signal<Api.Updates, MTRpcError>
+            if let hash = hash {
+                request = account.network.request(Api.functions.messages.importChatInvite(hash: hash))
+            } else {
+                request = account.network.request(Api.functions.channels.joinChannel(channel: inputChannel))
+            }
+            return request
             |> mapError { error -> JoinChannelError in
-                if error.errorDescription == "CHANNELS_TOO_MUCH" {
-                    return .tooMuchJoined
-                } else {
-                    return .generic
+                switch error.errorDescription {
+                    case "CHANNELS_TOO_MUCH":
+                        return .tooMuchJoined
+                    case "USERS_TOO_MUCH":
+                        return .tooMuchUsers
+                    default:
+                        return .generic
                 }
             }
             |> mapToSignal { updates -> Signal<RenderedChannelParticipant?, JoinChannelError> in
                 account.stateManager.addUpdates(updates)
                 
-                return account.network.request(Api.functions.channels.getParticipant(channel: inputChannel, userId: .inputUserSelf))
+                return account.network.request(Api.functions.channels.getParticipant(channel: inputChannel, participant: .inputPeerSelf))
                 |> map(Optional.init)
                 |> `catch` { _ -> Signal<Api.channels.ChannelParticipant?, JoinChannelError> in
                     return .single(nil)
@@ -48,7 +59,7 @@ public func joinChannel(account: Account, peerId: PeerId) -> Signal<RenderedChan
                         }
                         let updatedParticipant: ChannelParticipant
                         switch result {
-                            case let .channelParticipant(participant, _):
+                            case let .channelParticipant(participant, _, _):
                                 updatedParticipant = ChannelParticipant(apiParticipant: participant)
                         }
                         if case let .member(_, _, maybeAdminInfo, _, _) = updatedParticipant {

@@ -157,8 +157,8 @@ public class ComposeControllerImpl: ViewController, ComposeController {
                 let controller = ContactSelectionControllerImpl(ContactSelectionControllerParams(context: strongSelf.context, autoDismiss: false, title: { $0.Compose_NewEncryptedChatTitle }))
                 strongSelf.createActionDisposable.set((controller.result
                     |> take(1)
-                    |> deliverOnMainQueue).start(next: { [weak controller] peer in
-                    if let strongSelf = self, let (contactPeer, _) = peer, case let .peer(peer, _, _) = contactPeer {
+                    |> deliverOnMainQueue).start(next: { [weak controller] result in
+                    if let strongSelf = self, let (contactPeers, _) = result, case let .peer(peer, _, _) = contactPeers.first {
                         controller?.dismissSearch()
                         controller?.displayNavigationActivity = true
                         strongSelf.createActionDisposable.set((createSecretChat(account: strongSelf.context.account, peerId: peer.id) |> deliverOnMainQueue).start(next: { peerId in
@@ -166,12 +166,18 @@ public class ComposeControllerImpl: ViewController, ComposeController {
                                 controller.displayNavigationActivity = false
                                 (controller.navigationController as? NavigationController)?.replaceAllButRootController(ChatControllerImpl(context: strongSelf.context, chatLocation: .peer(peerId)), animated: true)
                             }
-                        }, error: { _ in
+                        }, error: { error in
                             if let strongSelf = self, let controller = controller {
                                 let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }
-                                
                                 controller.displayNavigationActivity = false
-                                controller.present(textAlertController(context: strongSelf.context, title: nil, text: presentationData.strings.Login_UnknownError, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                                let text: String
+                                switch error {
+                                    case .limitExceeded:
+                                        text = presentationData.strings.TwoStepAuth_FloodError
+                                    default:
+                                        text = presentationData.strings.Login_UnknownError
+                                }
+                                controller.present(textAlertController(context: strongSelf.context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                             }
                         }))
                     }

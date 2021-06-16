@@ -374,10 +374,10 @@ public class ItemListAvatarAndNameInfoItemNode: ListViewItemNode, ItemListItemNo
             var credibilityIconOffset: CGFloat = 4.0
             if let peer = item.peer {
                 if peer.isScam {
-                    credibilityIconImage = PresentationResourcesChatList.scamIcon(item.presentationData.theme, type: .regular)
+                    credibilityIconImage = PresentationResourcesChatList.scamIcon(item.presentationData.theme, strings: item.presentationData.strings, type: .regular)
                     credibilityIconOffset = 6.0
                 } else if peer.isFake {
-                    credibilityIconImage = PresentationResourcesChatList.fakeIcon(item.presentationData.theme, type: .regular)
+                    credibilityIconImage = PresentationResourcesChatList.fakeIcon(item.presentationData.theme, strings: item.presentationData.strings, type: .regular)
                     credibilityIconOffset = 2.0
                 } else if peer.isVerified {
                     credibilityIconImage = PresentationResourcesItemList.verifiedPeerIcon(item.presentationData.theme)
@@ -531,7 +531,7 @@ public class ItemListAvatarAndNameInfoItemNode: ListViewItemNode, ItemListItemNo
             }
             
             var updateAvatarOverlayImage: UIImage?
-            if item.updatingImage != nil && item.peer?.id.namespace != -1 && currentOverlayImage == nil {
+            if item.updatingImage != nil && item.peer?.id.namespace != .max && currentOverlayImage == nil {
                 updateAvatarOverlayImage = updatingAvatarOverlayImage
             }
             

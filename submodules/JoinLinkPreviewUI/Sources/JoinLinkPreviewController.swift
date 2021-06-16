@@ -11,6 +11,7 @@ import AccountContext
 import AlertUI
 import PresentationDataUtils
 import PeerInfoUI
+import UndoUI
 
 public final class JoinLinkPreviewController: ViewController {
     private var controllerNode: JoinLinkPreviewControllerNode {
@@ -87,7 +88,8 @@ public final class JoinLinkPreviewController: ViewController {
                         strongSelf.navigateToPeer(peerId, ChatPeekTimeout(deadline: deadline, linkData: strongSelf.link))
                         strongSelf.dismiss()
                     case .invalidHash:
-                        strongSelf.present(textAlertController(context: strongSelf.context, title: nil, text: strongSelf.presentationData.strings.InviteLinks_InviteLinkExpired, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                        let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }
+                        strongSelf.present(UndoOverlayController(presentationData: presentationData, content: .linkRevoked(text: presentationData.strings.InviteLinks_InviteLinkExpired), elevatedLayout: true, animateInAsReplacement: true, action: { _ in return false }), in: .window(.root))
                         strongSelf.dismiss()
                 }
             }
@@ -128,22 +130,27 @@ public final class JoinLinkPreviewController: ViewController {
             }
         }, error: { [weak self] error in
             if let strongSelf = self {
-                if case .tooMuchJoined = error {
-                    if let parentNavigationController = strongSelf.parentNavigationController {
-                        let context = strongSelf.context
-                        let link = strongSelf.link
-                        let navigateToPeer = strongSelf.navigateToPeer
-                        let resolvedState = strongSelf.resolvedState
-                        parentNavigationController.pushViewController(oldChannelsController(context: strongSelf.context, intent: .join, completed: { [weak parentNavigationController] value in
-                            if value {
-                                (parentNavigationController?.viewControllers.last as? ViewController)?.present(JoinLinkPreviewController(context: context, link: link, navigateToPeer: navigateToPeer, parentNavigationController: parentNavigationController, resolvedState: resolvedState), in: .window(.root))
-                            }
-                        }))
-                    } else {
-                        strongSelf.present(textAlertController(context: strongSelf.context, title: nil, text: strongSelf.presentationData.strings.Join_ChannelsTooMuch, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
-                    }
-                    strongSelf.dismiss()
+                switch error {
+                    case .tooMuchJoined:
+                        if let parentNavigationController = strongSelf.parentNavigationController {
+                            let context = strongSelf.context
+                            let link = strongSelf.link
+                            let navigateToPeer = strongSelf.navigateToPeer
+                            let resolvedState = strongSelf.resolvedState
+                            parentNavigationController.pushViewController(oldChannelsController(context: strongSelf.context, intent: .join, completed: { [weak parentNavigationController] value in
+                                if value {
+                                    (parentNavigationController?.viewControllers.last as? ViewController)?.present(JoinLinkPreviewController(context: context, link: link, navigateToPeer: navigateToPeer, parentNavigationController: parentNavigationController, resolvedState: resolvedState), in: .window(.root))
+                                }
+                            }))
+                        } else {
+                            strongSelf.present(textAlertController(context: strongSelf.context, title: nil, text: strongSelf.presentationData.strings.Join_ChannelsTooMuch, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                        }
+                    case .tooMuchUsers:
+                        strongSelf.present(textAlertController(context: strongSelf.context, title: nil, text: strongSelf.presentationData.strings.Conversation_UsersTooMuchError, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                    case .generic:
+                        break
                 }
+                strongSelf.dismiss()
             }
         }))
     }
