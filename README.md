@@ -26,8 +26,6 @@
 
 # Nanogram
 
-# 应该能用但是不支持 Xcode 12.5，先不管了
-
 > iOS 上可复读的 Telegram
 
 ## 编译指南（开发版）
