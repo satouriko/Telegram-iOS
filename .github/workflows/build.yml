@@ -114,3 +114,10 @@ jobs:
         with:
           name: release-dsym
           path: /Users/telegram/telegram-ios/build/artifacts/Telegram.DSYMs.zip
+
+      - name: Deploy to App Store Connect
+        run: |
+          xcrun altool --upload-app --type ios \
+            --file /Users/telegram/telegram-ios/build/artifacts/Telegram.ipa \
+            --username "${{ secrets.APPSTORE_CONNECT_USERNAME }}" \
+            --password "${{ secrets.APPSTORE_CONNECT_PASSWORD }}" --verbose
