@@ -5226,7 +5226,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             if let strongSelf = self {
                 strongSelf.commitPurposefulAction()
                 strongSelf.sendMessages([
-                    .forward(source: messageId, grouping: .auto, attributes: [])
+                    .forward(source: messageId, grouping: .auto, attributes: [], correlationId: nil)
                 ])
             }
         }, shareSelectedMessages: { [weak self] in
