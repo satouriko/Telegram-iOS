@@ -500,11 +500,11 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             threadMessageId = replyThreadMessage.messageId
         }
         
-        if !isPinnedMessages, !isReplyThreadHead, data.canReply, !messages[0].text.isEmpty {
+        if !isPinnedMessages, data.canReply, !messages[0].text.isEmpty {
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuReply, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Reply"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
-                interfaceInteraction.repeatMessageAsReply(messages[0], threadMessageId)
+                interfaceInteraction.repeatMessageAsReply(messages[0])
                 f(.dismissWithoutContent)
             })))
         }
@@ -789,6 +789,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 })))
             }
         }
+
         
         if let message = messages.first, message.id.namespace == Namespaces.Message.Cloud, let channel = message.peers[message.id.peerId] as? TelegramChannel, !(message.media.first is TelegramMediaAction), !isReplyThreadHead, !isMigrated {
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuCopyLink, icon: { theme in
@@ -888,11 +889,11 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             })))
         }
 
-        if !isPinnedMessages, !isReplyThreadHead, data.canReply {
+        if !isPinnedMessages, data.canReply, threadMessageId == nil || !messages[0].text.isEmpty {
             actions.append(.action(ContextMenuActionItem(text: l("repeat", chatPresentationInterfaceState.strings.baseLanguageCode), icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Repeat"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
-                interfaceInteraction.repeatMessage(messages[0].id)
+                interfaceInteraction.repeatMessage(messages[0], threadMessageId)
                 f(.dismissWithoutContent)
             })))
         }

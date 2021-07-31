@@ -5231,14 +5231,24 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 let forwardMessageIds = messages.map { $0.id }.sorted()
                 strongSelf.forwardMessages(messageIds: forwardMessageIds)
             }
-        }, repeatMessage: { [weak self] messageId in
+        }, repeatMessage: { [weak self] message, threadMessageId in
             if let strongSelf = self {
                 strongSelf.commitPurposefulAction()
-                strongSelf.sendMessages([
-                    .forward(source: messageId, grouping: .auto, attributes: [], correlationId: nil)
-                ])
+                if let threadMessageId = threadMessageId {
+                    let messageText = message.text
+                    var attributes: [MessageAttribute] = []
+                    let entities = generateTextEntities(messageText, enabledTypes: .all)
+                    if !entities.isEmpty {
+                        attributes.append(TextEntitiesMessageAttribute(entities: entities))
+                    }
+                    strongSelf.sendMessages([.message(text: messageText, attributes: attributes, mediaReference: nil, replyToMessageId: threadMessageId, localGroupingKey: nil, correlationId: nil)])
+                } else {
+                    strongSelf.sendMessages([
+                        .forward(source: message.id, grouping: .auto, attributes: [], correlationId: nil)
+                    ])
+                }
             }
-        }, repeatMessageAsReply: { [weak self] message, threadMessageId in
+        }, repeatMessageAsReply: { [weak self] message in
             if let strongSelf = self {
                 strongSelf.commitPurposefulAction()
                 var messageText = ""
@@ -5256,11 +5266,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 if !entities.isEmpty {
                     attributes.append(TextEntitiesMessageAttribute(entities: entities))
                 }
-                if let threadMessageId = threadMessageId {
-                    strongSelf.sendMessages([.message(text: messageText, attributes: attributes, mediaReference: nil, replyToMessageId: threadMessageId, localGroupingKey: nil, correlationId: nil)])
-                } else {
-                    strongSelf.sendMessages([.message(text: messageText, attributes: attributes, mediaReference: nil, replyToMessageId: message.id, localGroupingKey: nil, correlationId: nil)])
-                }
+                strongSelf.sendMessages([.message(text: messageText, attributes: attributes, mediaReference: nil, replyToMessageId: message.id, localGroupingKey: nil, correlationId: nil)])
             }
         }, shareSelectedMessages: { [weak self] in
             if let strongSelf = self, let selectedIds = strongSelf.presentationInterfaceState.interfaceState.selectionState?.selectedIds, !selectedIds.isEmpty {
