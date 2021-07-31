@@ -5248,7 +5248,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     } else if char == "我" {
                         messageText += "你"
                     } else {
-                        messageText += char
+                        messageText += String(char)
                     }
                 }
                 var attributes: [MessageAttribute] = []
