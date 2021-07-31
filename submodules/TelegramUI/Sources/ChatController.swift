@@ -5229,6 +5229,30 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     .forward(source: messageId, grouping: .auto, attributes: [], correlationId: nil)
                 ])
             }
+        }, repeatMessageAsReply: { [weak self] message, threadMessageId in
+            if let strongSelf = self {
+                strongSelf.commitPurposefulAction()
+                var messageText = ""
+                for char in message.text {
+                    if char == "你" {
+                        messageText += "我"
+                    } else if char == "我" {
+                        messageText += "你"
+                    } else {
+                        messageText += char
+                    }
+                }
+                var attributes: [MessageAttribute] = []
+                let entities = generateTextEntities(messageText, enabledTypes: .all)
+                if !entities.isEmpty {
+                    attributes.append(TextEntitiesMessageAttribute(entities: entities))
+                }
+                if let threadMessageId = threadMessageId {
+                    strongSelf.sendMessages([.message(text: messageText, attributes: attributes, mediaReference: nil, replyToMessageId: threadMessageId, localGroupingKey: nil, correlationId: nil)])
+                } else {
+                    strongSelf.sendMessages([.message(text: messageText, attributes: attributes, mediaReference: nil, replyToMessageId: message.id, localGroupingKey: nil, correlationId: nil)])
+                }
+            }
         }, shareSelectedMessages: { [weak self] in
             if let strongSelf = self, let selectedIds = strongSelf.presentationInterfaceState.interfaceState.selectionState?.selectedIds, !selectedIds.isEmpty {
                 strongSelf.commitPurposefulAction()

@@ -188,6 +188,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         }, forwardCurrentForwardMessages: {
         }, forwardMessages: { _ in
         }, repeatMessage: { _ in
+        }, repeatMessageAsReply: { _, _ in
         }, shareSelectedMessages: {
         }, updateTextInputStateAndMode: { [weak self] f in
             if let strongSelf = self {

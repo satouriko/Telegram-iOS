@@ -67,6 +67,7 @@ final class ChatRecentActionsController: TelegramBaseController {
         }, forwardCurrentForwardMessages: {
         }, forwardMessages: { _ in
         }, repeatMessage: { _ in
+        }, repeatMessageAsReply: { _, _ in
         }, shareSelectedMessages: {
         }, updateTextInputStateAndMode: { _ in
         }, updateInputModeAndDismissedButtonKeyboardMessageId: { _ in

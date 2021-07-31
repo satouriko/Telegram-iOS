@@ -62,6 +62,7 @@ final class ChatPanelInterfaceInteraction {
     let forwardCurrentForwardMessages: () -> Void
     let forwardMessages: ([Message]) -> Void
     let repeatMessage: (MessageId) -> Void
+    let repeatMessageAsReply: (Message, MessageId?) -> Void
     let shareSelectedMessages: () -> Void
     let updateTextInputStateAndMode: (@escaping (ChatTextInputState, ChatInputMode) -> (ChatTextInputState, ChatInputMode)) -> Void
     let updateInputModeAndDismissedButtonKeyboardMessageId: ((ChatPresentationInterfaceState) -> (ChatInputMode, MessageId?)) -> Void
@@ -147,6 +148,7 @@ final class ChatPanelInterfaceInteraction {
         forwardCurrentForwardMessages: @escaping () -> Void,
         forwardMessages: @escaping ([Message]) -> Void,
         repeatMessage: @escaping (MessageId) -> Void,
+        repeatMessageAsReply: @escaping (Message, MessageId?) -> Void,
         shareSelectedMessages: @escaping () -> Void,
         updateTextInputStateAndMode: @escaping ((ChatTextInputState, ChatInputMode) -> (ChatTextInputState, ChatInputMode)) -> Void,
         updateInputModeAndDismissedButtonKeyboardMessageId: @escaping ((ChatPresentationInterfaceState) -> (ChatInputMode, MessageId?)) -> Void,
@@ -231,6 +233,7 @@ final class ChatPanelInterfaceInteraction {
         self.forwardCurrentForwardMessages = forwardCurrentForwardMessages
         self.forwardMessages = forwardMessages
         self.repeatMessage = repeatMessage
+        self.repeatMessageAsReply = repeatMessageAsReply
         self.shareSelectedMessages = shareSelectedMessages
         self.updateTextInputStateAndMode = updateTextInputStateAndMode
         self.updateInputModeAndDismissedButtonKeyboardMessageId = updateInputModeAndDismissedButtonKeyboardMessageId
