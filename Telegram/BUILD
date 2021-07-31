@@ -78,6 +78,80 @@ genrule(
     cmd = "touch $(OUTS)",
 )
 
+genrule(
+    name = "GeneratedPresentationStrings",
+    srcs = [
+        "//build-system:GenerateStrings/GenerateStrings.py",
+        "Telegram-iOS/en.lproj/Localizable.strings",
+    ],
+    cmd = '''
+        python3 $(location //build-system:GenerateStrings/GenerateStrings.py) \\
+            --source=$(location Telegram-iOS/en.lproj/Localizable.strings) \\
+            --outImplementation=$(location GeneratedPresentationStrings/Sources/PresentationStrings.m) \\
+            --outHeader=$(location GeneratedPresentationStrings/PublicHeaders/PresentationStrings/PresentationStrings.h) \\
+            --outData=$(location GeneratedPresentationStrings/Resources/PresentationStrings.data) \\
+    ''',
+    outs = [
+        "GeneratedPresentationStrings/PublicHeaders/PresentationStrings/PresentationStrings.h",
+        "GeneratedPresentationStrings/Sources/PresentationStrings.m",
+        "GeneratedPresentationStrings/Resources/PresentationStrings.data",
+    ],
+)
+
+empty_languages = [
+    "ar",
+    "be",
+    "ca",
+    "de",
+    "es",
+    "fa",
+    "fr",
+    "id",
+    "it",
+    "ko",
+    "ms",
+    "nl",
+    "pl",
+    "pt",
+    "ru",
+    "tr",
+    "uk",
+    "uz",
+]
+
+[
+    genrule(
+        name = "Localizable_{}.strings".format(language),
+        outs = ["{}.lproj/Localizable.strings".format(language)],
+        cmd = "touch $(OUTS)",
+    ) for language in empty_languages
+]
+
+objc_library(
+    name = "PresentationStrings",
+    enable_modules = True,
+    module_name = "PresentationStrings",
+    srcs = [
+        "GeneratedPresentationStrings/Sources/PresentationStrings.m",
+    ],
+    hdrs = [
+        "GeneratedPresentationStrings/PublicHeaders/PresentationStrings/PresentationStrings.h",
+    ],
+    includes = [
+        "GeneratedPresentationStrings/PublicHeaders",
+    ],
+    sdk_frameworks = [
+        "Foundation",
+    ],
+    deps = [
+        "//submodules/NumberPluralizationForm:NumberPluralizationForm",
+        "//submodules/AppBundle:AppBundle",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)
+
 swift_library(
     name = "_LocalDebugOptions",
     srcs = [":empty"],
@@ -122,10 +196,17 @@ filegroup(
 
 filegroup(
     name = "AppStringResources",
-    srcs = glob([
-        "Telegram-iOS/*.lproj/Localizable.strings",
-        "Telegram-iOS/*.lproj/NanoLocalizable.strings",
-    ], exclude = ["Telegram-iOS/*.lproj/**/.*"]),
+    srcs = [
+        "Telegram-iOS/en.lproj/Localizable.strings",
+    ] + [
+        "{}.lproj/Localizable.strings".format(language) for language in empty_languages
+    ] + [
+        "Telegram-iOS/en.lproj/NanoLocalizable.strings",
+        "Telegram-iOS/ja.lproj/NanoLocalizable.strings",
+        "Telegram-iOS/zh-Hans.lproj/NanoLocalizable.strings",
+        "Telegram-iOS/zh-Hant.lproj/NanoLocalizable.strings",
+        "Telegram-iOS/zh-HK.lproj/NanoLocalizable.strings",
+    ],
 )
 
 filegroup(
@@ -222,6 +303,7 @@ swift_library(
         "//submodules/PasswordSetupUI:PasswordSetupUIAssets",
         "//submodules/TelegramUI:TelegramUIResources",
         "//submodules/TelegramUI:TelegramUIAssets",
+        ":GeneratedPresentationStrings/Resources/PresentationStrings.data",
     ],
     deps = [
         "//submodules/TelegramUI:TelegramUI",
@@ -748,49 +830,6 @@ ios_framework(
 )
 
 plist_fragment(
-    name = "SyncCoreInfoPlist",
-    extension = "plist",
-    template =
-    """
-    <key>CFBundleIdentifier</key>
-    <string>{telegram_bundle_id}.SyncCore</string>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
-    <key>CFBundleName</key>
-    <string>SyncCore</string>
-    <key>CFBundlePackageType</key>
-    <string>FMWK</string>
-    """.format(
-        telegram_bundle_id = telegram_bundle_id,
-    )
-)
-
-ios_framework(
-    name = "SyncCoreFramework",
-    bundle_id = "{telegram_bundle_id}.SyncCore".format(
-        telegram_bundle_id = telegram_bundle_id,
-    ),
-    families = [
-        "iphone",
-        "ipad",
-    ],
-    infoplists = [
-        ":SyncCoreInfoPlist",
-        ":BuildNumberInfoPlist",
-        ":VersionInfoPlist",
-    ],
-    frameworks = [
-        ":SwiftSignalKitFramework",
-        ":PostboxFramework",
-    ],
-    minimum_os_version = "9.0",
-    ipa_post_processor = strip_framework,
-    deps = [
-        "//submodules/SyncCore:SyncCore",
-    ],
-)
-
-plist_fragment(
     name = "TelegramCoreInfoPlist",
     extension = "plist",
     template =
@@ -826,7 +865,6 @@ ios_framework(
         ":MtProtoKitFramework",
         ":SwiftSignalKitFramework",
         ":PostboxFramework",
-        ":SyncCoreFramework",
     ],
     minimum_os_version = "9.0",
     ipa_post_processor = strip_framework,
@@ -996,7 +1034,6 @@ ios_framework(
         ":MtProtoKitFramework",
         ":SwiftSignalKitFramework",
         ":PostboxFramework",
-        ":SyncCoreFramework",
         ":TelegramCoreFramework",
         ":AsyncDisplayKitFramework",
         ":DisplayFramework",
@@ -1248,7 +1285,6 @@ swift_library(
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/Postbox:Postbox",
         "//submodules/TelegramCore:TelegramCore",
-        "//submodules/SyncCore:SyncCore",
         "//submodules/OpenSSLEncryptionProvider:OpenSSLEncryptionProvider",
         "//Telegram:GeneratedSources",
     ],
@@ -1301,7 +1337,6 @@ ios_extension(
     frameworks = [
         ":SwiftSignalKitFramework",
         ":PostboxFramework",
-        ":SyncCoreFramework",
         ":TelegramCoreFramework",
     ],
 )
@@ -1376,7 +1411,6 @@ swift_library(
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/Postbox:Postbox",
         "//submodules/TelegramApi:TelegramApi",
-        "//submodules/SyncCore:SyncCore",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/BuildConfig:BuildConfig",
         "//submodules/OpenSSLEncryptionProvider:OpenSSLEncryptionProvider",
@@ -1431,7 +1465,6 @@ ios_extension(
         ":SwiftSignalKitFramework",
         ":PostboxFramework",
         ":TelegramCoreFramework",
-        ":SyncCoreFramework",
     ],
 )
 
@@ -1694,6 +1727,8 @@ plist_fragment(
     <key>UIAppFonts</key>
     <array>
         <string>SFCompactRounded-Semibold.otf</string>
+        <string>AremacFS-Regular.otf</string>
+        <string>AremacFS-Semibold.otf</string>
     </array>
     <key>UIBackgroundModes</key>
     <array>
@@ -1796,7 +1831,6 @@ ios_application(
         ":MtProtoKitFramework",
         ":SwiftSignalKitFramework",
         ":PostboxFramework",
-        ":SyncCoreFramework",
         ":TelegramCoreFramework",
         ":AsyncDisplayKitFramework",
         ":DisplayFramework",
