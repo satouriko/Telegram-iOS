@@ -28,7 +28,7 @@ jobs:
           mv /Users/telegram/$(basename $GITHUB_WORKSPACE) /Users/telegram/telegram-ios
 
       - name: Cache bazel build
-        uses: actions/cache@v2
+        uses: pat-s/always-upload-cache@v2.1.5
         with:
           path: /Users/telegram/telegram-ios/telegram-bazel-cache
           key: ${{ runner.os }}-${{ hashFiles('versions.json') }}
