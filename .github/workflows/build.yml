@@ -27,12 +27,6 @@ jobs:
           cp -R $GITHUB_WORKSPACE /Users/telegram/
           mv /Users/telegram/$(basename $GITHUB_WORKSPACE) /Users/telegram/telegram-ios
 
-      - name: Cache bazel build
-        uses: pat-s/always-upload-cache@v2.1.5
-        with:
-          path: /Users/telegram/telegram-ios/telegram-bazel-cache
-          key: ${{ runner.os }}-${{ hashFiles('versions.json') }}
-
       - name: Build the App
         run: |
           set -x
@@ -80,9 +74,6 @@ jobs:
           rm -rf $HOME/telegram-configuration
           mkdir -p $HOME/telegram-configuration
           cp -R telegram-configuration-dist/* $HOME/telegram-configuration/
-
-          # Create a build cache directory to speed up rebuilds
-          mkdir -p "$HOME/telegram-bazel-cache"
 
           # build the app
           python3 build-system/Make/Make.py \
