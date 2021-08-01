@@ -146,7 +146,7 @@ final class ChatPanelInterfaceInteraction {
         forwardSelectedMessages: @escaping () -> Void,
         forwardCurrentForwardMessages: @escaping () -> Void,
         forwardMessages: @escaping ([Message]) -> Void,
-        repeatMessage: @escaping (Message， MessageId?) -> Void,
+        repeatMessage: @escaping (Message, MessageId?) -> Void,
         repeatMessageAsReply: @escaping (Message) -> Void,
         shareSelectedMessages: @escaping () -> Void,
         updateTextInputStateAndMode: @escaping ((ChatTextInputState, ChatInputMode) -> (ChatTextInputState, ChatInputMode)) -> Void,
