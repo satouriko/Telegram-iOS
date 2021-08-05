@@ -5236,12 +5236,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 strongSelf.commitPurposefulAction()
                 if let threadMessageId = threadMessageId {
                     let messageText = message.text
-                    var attributes: [MessageAttribute] = []
-                    let entities = generateTextEntities(messageText, enabledTypes: .all)
-                    if !entities.isEmpty {
-                        attributes.append(TextEntitiesMessageAttribute(entities: entities))
-                    }
-                    strongSelf.sendMessages([.message(text: messageText, attributes: attributes, mediaReference: nil, replyToMessageId: threadMessageId, localGroupingKey: nil, correlationId: nil)])
+                    strongSelf.sendMessages([.message(text: messageText, attributes: message.attributes, mediaReference: nil, replyToMessageId: threadMessageId, localGroupingKey: nil, correlationId: nil)])
                 } else {
                     strongSelf.sendMessages([
                         .forward(source: message.id, grouping: .auto, attributes: [], correlationId: nil)
@@ -5261,12 +5256,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         messageText += String(char)
                     }
                 }
-                var attributes: [MessageAttribute] = []
-                let entities = generateTextEntities(messageText, enabledTypes: .all)
-                if !entities.isEmpty {
-                    attributes.append(TextEntitiesMessageAttribute(entities: entities))
-                }
-                strongSelf.sendMessages([.message(text: messageText, attributes: attributes, mediaReference: nil, replyToMessageId: message.id, localGroupingKey: nil, correlationId: nil)])
+                strongSelf.sendMessages([.message(text: messageText, attributes: message.attributes, mediaReference: nil, replyToMessageId: message.id, localGroupingKey: nil, correlationId: nil)])
             }
         }, shareSelectedMessages: { [weak self] in
             if let strongSelf = self, let selectedIds = strongSelf.presentationInterfaceState.interfaceState.selectionState?.selectedIds, !selectedIds.isEmpty {
