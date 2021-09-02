@@ -62,6 +62,8 @@ final class ChatPanelInterfaceInteraction {
     let forwardMessages: ([Message]) -> Void
     let repeatMessage: (Message, MessageId?) -> Void
     let repeatMessageAsReply: (Message) -> Void
+    let updateForwardOptionsState: ((ChatInterfaceForwardOptionsState) -> ChatInterfaceForwardOptionsState) -> Void
+    let presentForwardOptions: (ASDisplayNode) -> Void
     let shareSelectedMessages: () -> Void
     let updateTextInputStateAndMode: (@escaping (ChatTextInputState, ChatInputMode) -> (ChatTextInputState, ChatInputMode)) -> Void
     let updateInputModeAndDismissedButtonKeyboardMessageId: ((ChatPresentationInterfaceState) -> (ChatInputMode, MessageId?)) -> Void
@@ -148,6 +150,8 @@ final class ChatPanelInterfaceInteraction {
         forwardMessages: @escaping ([Message]) -> Void,
         repeatMessage: @escaping (Message, MessageId?) -> Void,
         repeatMessageAsReply: @escaping (Message) -> Void,
+        updateForwardOptionsState: @escaping ((ChatInterfaceForwardOptionsState) -> ChatInterfaceForwardOptionsState) -> Void,
+        presentForwardOptions: @escaping (ASDisplayNode) -> Void,
         shareSelectedMessages: @escaping () -> Void,
         updateTextInputStateAndMode: @escaping ((ChatTextInputState, ChatInputMode) -> (ChatTextInputState, ChatInputMode)) -> Void,
         updateInputModeAndDismissedButtonKeyboardMessageId: @escaping ((ChatPresentationInterfaceState) -> (ChatInputMode, MessageId?)) -> Void,
@@ -233,6 +237,8 @@ final class ChatPanelInterfaceInteraction {
         self.forwardMessages = forwardMessages
         self.repeatMessage = repeatMessage
         self.repeatMessageAsReply = repeatMessageAsReply
+        self.updateForwardOptionsState = updateForwardOptionsState
+        self.presentForwardOptions = presentForwardOptions
         self.shareSelectedMessages = shareSelectedMessages
         self.updateTextInputStateAndMode = updateTextInputStateAndMode
         self.updateInputModeAndDismissedButtonKeyboardMessageId = updateInputModeAndDismissedButtonKeyboardMessageId

@@ -238,6 +238,7 @@ swift_library(
         "//submodules/ImportStickerPackUI:ImportStickerPackUI",
         "//submodules/GradientBackground:GradientBackground",
         "//submodules/WallpaperBackgroundNode:WallpaperBackgroundNode",
+        "//submodules/ComponentFlow:ComponentFlow",
         "//Nanogram/NNStrings:NNStrings",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_armv7": [],
