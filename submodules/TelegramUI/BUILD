@@ -239,6 +239,7 @@ swift_library(
         "//submodules/GradientBackground:GradientBackground",
         "//submodules/WallpaperBackgroundNode:WallpaperBackgroundNode",
         "//submodules/ComponentFlow:ComponentFlow",
+        "//submodules/AdUI:AdUI",
         "//Nanogram/NNStrings:NNStrings",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_armv7": [],
