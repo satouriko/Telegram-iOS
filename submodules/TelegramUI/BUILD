@@ -38,6 +38,9 @@ swift_library(
     srcs = glob([
         "Sources/**/*.swift",
     ]),
+    copts = [
+        "-warnings-as-errors",
+    ],
     deps = [
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/SSignalKit/SSignalKit:SSignalKit",
@@ -185,7 +188,6 @@ swift_library(
         "//submodules/WatchBridge:WatchBridge",
         "//submodules/ShareItems:ShareItems",
         "//submodules/ShareItems/Impl:ShareItemsImpl",
-        "//submodules/ReactionSelectionNode:ReactionSelectionNode",
         "//submodules/SettingsUI:SettingsUI",
         "//submodules/UrlHandling:UrlHandling",
         "//submodules/HexColor:HexColor",
@@ -229,7 +231,6 @@ swift_library(
         "//Telegram:GeneratedSources",
         "//third-party/ZipArchive:ZipArchive",
         "//submodules/ChatImportUI:ChatImportUI",
-        "//submodules/ChatHistoryImportTasks:ChatHistoryImportTasks",
         "//submodules/DatePickerNode:DatePickerNode",
         "//submodules/ConfettiEffect:ConfettiEffect",
         "//submodules/Speak:Speak",
@@ -240,6 +241,11 @@ swift_library(
         "//submodules/WallpaperBackgroundNode:WallpaperBackgroundNode",
         "//submodules/ComponentFlow:ComponentFlow",
         "//submodules/AdUI:AdUI",
+        "//submodules/SparseItemGrid:SparseItemGrid",
+        "//submodules/CalendarMessageScreen:CalendarMessageScreen",
+        #"//submodules/LottieMeshSwift:LottieMeshSwift",
+        #"//submodules/MeshAnimationCache:MeshAnimationCache",
+        "//submodules/DirectMediaImageCache:DirectMediaImageCache",
         "//Nanogram/NNStrings:NNStrings",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_armv7": [],
