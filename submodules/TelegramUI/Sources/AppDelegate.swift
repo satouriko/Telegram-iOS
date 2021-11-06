@@ -665,7 +665,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             self.window?.rootViewController?.dismiss(animated: true, completion: nil)
         }, getAvailableAlternateIcons: {
             if #available(iOS 10.3, *) {
-                var icons = [PresentationAppIcon(name: "Hawthorn", imageName: "HawthornIcon", isDefault: buildConfig.isAppStoreBuild),
+                let icons = [PresentationAppIcon(name: "Hawthorn", imageName: "HawthornIcon", isDefault: buildConfig.isAppStoreBuild),
                         PresentationAppIcon(name: "HawthornFilled", imageName: "HawthornFilledIcon"),
                         PresentationAppIcon(name: "BlueFilled", imageName: "BlueFilledIcon")]
                 return icons
