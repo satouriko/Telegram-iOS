@@ -122,3 +122,14 @@ jobs:
             --file /Users/telegram/telegram-ios/build/artifacts/Telegram.ipa \
             --username "${{ secrets.APPSTORE_CONNECT_USERNAME }}" \
             --password "${{ secrets.APPSTORE_CONNECT_PASSWORD }}" --verbose
+
+      - name: Upload to channel
+        env:
+          CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          BOT_API_SERVER: ${{ secrets.BOT_API_SERVER }}
+        run: |
+          cd /Users/telegram/telegram-ios
+          mv /Users/telegram/telegram-ios/build/artifacts/Telegram.ipa "/Users/telegram/telegram-ios/build/artifacts/Nanogram-$APP_VERSION-$BUILD_NUMBER.ipa"
+          mv /Users/telegram/telegram-ios/build/artifacts/Telegram.DSYMs.zip "/Users/telegram/telegram-ios/build/artifacts/Nanogram-$APP_VERSION-$BUILD_NUMBER.DSYMs.zip"
+          eval $(python3 buildbox/sendMediaGroup.py)
