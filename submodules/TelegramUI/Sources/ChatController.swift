@@ -5656,6 +5656,33 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 let forwardMessageIds = messages.map { $0.id }.sorted()
                 strongSelf.forwardMessages(messageIds: forwardMessageIds)
             }
+        }, repeatMessage: { [weak self] message, threadMessageId in
+            if let strongSelf = self {
+                strongSelf.commitPurposefulAction()
+                if let threadMessageId = threadMessageId {
+                    let messageText = message.text
+                    strongSelf.sendMessages([.message(text: messageText, attributes: message.attributes, mediaReference: nil, replyToMessageId: threadMessageId, localGroupingKey: nil, correlationId: nil)])
+                } else {
+                    strongSelf.sendMessages([
+                        .forward(source: message.id, grouping: .auto, attributes: [], correlationId: nil)
+                    ])
+                }
+            }
+        }, repeatMessageAsReply: { [weak self] message in
+            if let strongSelf = self {
+                strongSelf.commitPurposefulAction()
+                var messageText = ""
+                for char in message.text {
+                    if char == "你" {
+                        messageText += "我"
+                    } else if char == "我" {
+                        messageText += "你"
+                    } else {
+                        messageText += String(char)
+                    }
+                }
+                strongSelf.sendMessages([.message(text: messageText, attributes: message.attributes, mediaReference: nil, replyToMessageId: message.id, localGroupingKey: nil, correlationId: nil)])
+            }
         }, updateForwardOptionsState: { [weak self] f in
             if let strongSelf = self {
                 strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, { $0.updatedInterfaceState({ $0.withUpdatedForwardOptionsState(f($0.forwardOptionsState ?? ChatInterfaceForwardOptionsState(hideNames: false, hideCaptions: false, unhideNamesOnCaptionChange: false))) }) })

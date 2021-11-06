@@ -189,6 +189,8 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         }, forwardSelectedMessages: {
         }, forwardCurrentForwardMessages: {
         }, forwardMessages: { _ in
+        }, repeatMessage: { _, _ in
+        }, repeatMessageAsReply: { _ in
         }, updateForwardOptionsState: { [weak self] value in
             if let strongSelf = self {
                 strongSelf.updateChatPresentationInterfaceState(animated: true, { $0.updatedInterfaceState({ $0.withUpdatedForwardOptionsState($0.forwardOptionsState) }) })

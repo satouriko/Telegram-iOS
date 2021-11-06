@@ -1,108 +1,63 @@
-# Telegram iOS Source Code Compilation Guide
+<p style="text-align: center; font-style: italic" align="center"><i>「<ruby>
+  小さ<rp>(</rp><rt>Chiisa</rt><rp>)</rp>
+  な<rp>(</rp><rt>na</rt><rp>)</rp>
+  体<rp>(</rp><rt>karada</rt><rp>)</rp>
+  でも<rp>(</rp><rt>demo</rt><rp>)</rp>
+  ギリギリ<rp>(</rp><rt>girigiri</rt><rp>)</rp>
+  まで<rp>(</rp><rt>made</rt><rp>)</rp>
+  乗り<rp>(</rp><rt>nori</rt><rp>)</rp>
+  出して<rp>(</rp><rt>dashite</rt><rp>)</rp>
+</ruby><br><ruby>
+  伸ばした<rp>(</rp><rt>nobashita</rt><rp>)</rp>
+  手<rp>(</rp><rt>te</rt><rp>)</rp>
+  を<rp>(</rp><rt>o</rt><rp>)</rp>
+  ぎゅっと<rp>(</rp><rt>gyutto</rt><rp>)</rp>
+</ruby><br><ruby>
+  つか<rp>(</rp><rt>tsuka</rt><rp>)</rp>
+  んで<rp>(</rp><rt>nde</rt><rp>)</rp>
+  欲しい<rp>(</rp><rt>hoshii</rt><rp>)</rp>
+  の<rp>(</rp><rt>no</rt><rp>)</rp>
+  です<rp>(</rp><rt>desu</rt><rp>)</rp>
+</ruby>」</i></p>
 
-We welcome all developers to use our API and source code to create applications on our platform.
-There are several things we require from **all developers** for the moment.
+<p style="text-align: right; font-style: italic" align="right"><i>——《なのです!》</i></p>
 
-# Creating your Telegram Application
+---
 
-1. [**Obtain your own api_id**](https://core.telegram.org/api/obtaining_api_id) for your application.
-2. Please **do not** use the name Telegram for your app — or make sure your users understand that it is unofficial.
-3. Kindly **do not** use our standard logo (white paper plane in a blue circle) as your app's logo.
-3. Please study our [**security guidelines**](https://core.telegram.org/mtproto/security_guidelines) and take good care of your users' data and privacy.
-4. Please remember to publish **your** code too in order to comply with the licences.
+# Nanogram
 
-# Compilation Guide
+> iOS 上可复读的 Telegram
 
-1. Install Xcode (directly from https://developer.apple.com/download/more or using the App Store).
-2. Clone the project from GitHub:
+## 编译指南（开发版）
 
-```
-git clone --recursive -j8 https://github.com/TelegramMessenger/Telegram-iOS.git
-```
+1. 填充 `telegram-configuration/provision`
+2. 生成 Xcode 项目
+    ```
+    python3 build-system/Make/Make.py \
+        --bazel="/opt/homebrew/bin/bazel" \
+        --cacheDir="telegram-bazel-cache" \
+        generateProject --bazel_x86_64="/usr/local/bin/bazel" \
+        --configurationPath="telegram-configuration" \
+        --disableExtensions
+    ```
+3. 打开 Xcode，选择 PROJECT Telegram -> TARGETS Telegram -> Signing & Capabilities -> 设置 Provisioning Profile
+4. 转到 Build Settings -> Signing -> 设置 Code Signing Identity
+5. 转到 Signing & Capabilities -> + Capability -> App Groups
 
-3. Download Bazel 4.0.0
+## 编译指南（发行版）
 
-```
-mkdir -p $HOME/bazel-dist
-cd $HOME/bazel-dist
-curl -O -L https://github.com/bazelbuild/bazel/releases/download/4.0.0/bazel-4.0.0-darwin-x86_64
-mv bazel-* bazel
-```
+1. 填充 `telegram-configuration-dist/provision`
+2. 编译项目
+    ```
+    python3 build-system/Make/Make.py \
+        --bazel="/opt/homebrew/bin/bazel" \
+        --cacheDir="telegram-bazel-cache" \
+        build \
+        --configurationPath="telegram-configuration-dist" \
+        --buildNumber=100001 \
+        --configuration=release_universal
+    ```
 
-Verify that it's working
+## 姊妹项目
 
-```
-chmod +x bazel
-./bazel --version
-```
-
-4. Adjust configuration parameters
-
-```
-mkdir -p $HOME/telegram-configuration
-cp -R build-system/example-configuration/* $HOME/telegram-configuration/
-```
-
-- Modify the values in `variables.bzl`
-- Replace the provisioning profiles in `provisioning` with valid files
-
-5. (Optional) Create a build cache directory to speed up rebuilds
-
-```
-mkdir -p "$HOME/telegram-bazel-cache"
-```
-
-5. Build the app
-
-```
-python3 build-system/Make/Make.py \
-    --bazel="$HOME/bazel-dist/bazel" \
-    --cacheDir="$HOME/telegram-bazel-cache" \
-    build \
-    --configurationPath="$HOME/telegram-configuration" \
-    --buildNumber=100001 \
-    --configuration=release_universal
-```
-
-6. (Optional) Generate an Xcode project
-
-```
-python3 build-system/Make/Make.py \
-    --bazel="$HOME/bazel-dist/bazel" \
-    --cacheDir="$HOME/telegram-bazel-cache" \
-    generateProject \
-    --configurationPath="$HOME/telegram-configuration" \
-    --disableExtensions
-```
-
-It is possible to generate a project that does not require any codesigning certificates to be installed: add `--disableProvisioningProfiles` flag:
-```
-python3 build-system/Make/Make.py \
-    --bazel="$HOME/bazel-dist/bazel" \
-    --cacheDir="$HOME/telegram-bazel-cache" \
-    generateProject \
-    --configurationPath="$HOME/telegram-configuration" \
-    --disableExtensions \
-    --disableProvisioningProfiles
-```
-
-
-Tip: use `--disableExtensions` when developing to speed up development by not building application extensions and the WatchOS app.
-
-
-# Tips
-
-Bazel is used to build the app. To simplify the development setup a helper script is provided (`build-system/Make/Make.py`). See help:
-
-```
-python3 build-system/Make/Make.py --help
-python3 build-system/Make/Make.py build --help
-python3 build-system/Make/Make.py generateProject --help
-```
-
-Each release is built using specific Xcode and Bazel versions (see `versions.json`). The helper script checks the versions of installed software and reports an error if they don't match the ones specified in `versions.json`. There are flags that allow to bypass these checks:
-
-```
-python3 build-system/Make/Make.py --overrideBazelVersion build ... # Don't check the version of Bazel
-python3 build-system/Make/Make.py --overrideXcodeVersion build ... # Don't check the version of Xcode
-```
+- [Android 版](https://github.com/satouriko/nanogram-android)

@@ -17,6 +17,7 @@ import SaveToCameraRoll
 import PresentationDataUtils
 import TelegramPresentationData
 import TelegramStringFormatting
+import NNStrings
 import UndoUI
 import ShimmerEffect
 import AnimatedAvatarSetNode
@@ -643,17 +644,18 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         
         var isReplyThreadHead = false
+        var threadMessageId: MessageId?
         if case let .replyThread(replyThreadMessage) = chatPresentationInterfaceState.chatLocation {
             isReplyThreadHead = messages[0].id == replyThreadMessage.effectiveTopId
+            threadMessageId = replyThreadMessage.messageId
         }
         
-        if !isPinnedMessages, !isReplyThreadHead, data.canReply {
+        if !isPinnedMessages, data.canReply, !messages[0].text.isEmpty {
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuReply, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Reply"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
-                interfaceInteraction.setupReplyMessage(messages[0].id, { transition in
-                    f(.custom(transition))
-                })
+                interfaceInteraction.repeatMessageAsReply(messages[0])
+                f(.dismissWithoutContent)
             })))
         }
         
@@ -939,15 +941,12 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 })))
             }
         }
+
         
         if let message = messages.first, message.id.namespace == Namespaces.Message.Cloud, let channel = message.peers[message.id.peerId] as? TelegramChannel, !(message.media.first is TelegramMediaAction), !isReplyThreadHead, !isMigrated {
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuCopyLink, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Link"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
-                var threadMessageId: MessageId?
-                if case let .replyThread(replyThreadMessage) = chatPresentationInterfaceState.chatLocation {
-                    threadMessageId = replyThreadMessage.messageId
-                }
                 let _ = (context.engine.messages.exportMessageLink(peerId: message.id.peerId, messageId: message.id, isThread: threadMessageId != nil)
                 |> map { result -> String? in
                     return result
@@ -1031,6 +1030,15 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Sticker"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
                 let _ = controllerInteraction.openMessage(message, .default)
+                f(.dismissWithoutContent)
+            })))
+        }
+
+        if !isPinnedMessages, data.canReply, threadMessageId == nil || !messages[0].text.isEmpty {
+            actions.append(.action(ContextMenuActionItem(text: l("repeat", chatPresentationInterfaceState.strings.baseLanguageCode), icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Repeat"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                interfaceInteraction.repeatMessage(messages[0], threadMessageId)
                 f(.dismissWithoutContent)
             })))
         }

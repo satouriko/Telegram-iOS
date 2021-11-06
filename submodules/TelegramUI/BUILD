@@ -246,6 +246,7 @@ swift_library(
         #"//submodules/LottieMeshSwift:LottieMeshSwift",
         #"//submodules/MeshAnimationCache:MeshAnimationCache",
         "//submodules/DirectMediaImageCache:DirectMediaImageCache",
+        "//Nanogram/NNStrings:NNStrings",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_armv7": [],
         "@build_bazel_rules_apple//apple:ios_arm64": appcenter_targets,

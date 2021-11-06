@@ -17,7 +17,7 @@ jobs:
           fetch-depth: '0'
 
       - name: Set active Xcode path
-        run: sudo xcode-select -s /Applications/Xcode_12.5.1.app/Contents/Developer
+        run: sudo xcode-select -s /Applications/Xcode_13.0.app/Contents/Developer
 
       - name: Create canonical source directory
         run: |
@@ -65,26 +65,21 @@ jobs:
           security set-keychain-settings "$MY_KEYCHAIN"
           security unlock-keychain -p "$MY_KEYCHAIN_PASSWORD" "$MY_KEYCHAIN"
 
-          # install fake certificates
-          export CERTS_PATH="build-system/fake-codesigning/certs/distribution"
-          for f in "$CERTS_PATH"/*.p12; do
-            security import "$f" -k "$MY_KEYCHAIN" -P "" -T /usr/bin/codesign -T /usr/bin/security
-          done
-          # fake certificates are self-signed, so we need to manually mark them as trusted (otherwise bazel will not pick them up)
-          for f in "$CERTS_PATH"/*.cer; do
-            sudo security add-trusted-cert -d -r trustRoot -p codeSign -k "$MY_KEYCHAIN" "$f"
-          done
+          # install certificates
+          echo $APPLE_DISTRIBUTION | base64 -di - > "dist.p12"
+          security import "dist.p12" -k "$MY_KEYCHAIN" -P "$APPLE_DISTRIBUTION_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple: -k "$MY_KEYCHAIN_PASSWORD" "$MY_KEYCHAIN"
 
           # use the official release configuration
           rm -rf $HOME/telegram-configuration
           mkdir -p $HOME/telegram-configuration
-          cp -R build-system/example-configuration/* $HOME/telegram-configuration/
+          cp -R telegram-configuration-dist/* $HOME/telegram-configuration/
 
           # build the app
           python3 build-system/Make/Make.py \
             --bazel="$HOME/bazel-dist/bazel" \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
+            --cacheDir="$HOME/telegram-bazel-cache" \
             build \
             --disableParallelSwiftmoduleGeneration \
             --configurationPath="$HOME/telegram-configuration" \
@@ -105,38 +100,25 @@ jobs:
             cp -R "$f" build/DSYMs/
           done
           zip -r "./$OUTPUT_PATH/Telegram.DSYMs.zip" build/DSYMs 1>/dev/null
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: build-${{ env.BUILD_NUMBER }}
-          release_name: Telegram ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})
-          body: |
-            An unsigned build of Telegram for iOS ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})
-          draft: false
-          prerelease: false
+          APPLE_DISTRIBUTION: ${{ secrets.APPLE_DISTRIBUTION }}
+          APPLE_DISTRIBUTION_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_PASSWORD }}
 
-      - name: Upload Release IPA
-        id: upload-release-ipa 
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload IPA
+        uses: actions/upload-artifact@v2
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: /Users/telegram/telegram-ios/build/artifacts/Telegram.ipa
-          asset_name: Telegram.ipa
-          asset_content_type: application/zip
+          name: release-ipa
+          path: /Users/telegram/telegram-ios/build/artifacts/Telegram.ipa
 
-      - name: Upload Release DSYM
-        id: upload-release-dsym 
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload DSYM
+        uses: actions/upload-artifact@v2
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: /Users/telegram/telegram-ios/build/artifacts/Telegram.DSYMs.zip
-          asset_name: Telegram.DSYMs.zip
-          asset_content_type: application/zip
+          name: release-dsym
+          path: /Users/telegram/telegram-ios/build/artifacts/Telegram.DSYMs.zip
+
+      - name: Deploy to App Store Connect
+        run: |
+          xcrun altool --upload-app --type ios \
+            --file /Users/telegram/telegram-ios/build/artifacts/Telegram.ipa \
+            --username "${{ secrets.APPSTORE_CONNECT_USERNAME }}" \
+            --password "${{ secrets.APPSTORE_CONNECT_PASSWORD }}" --verbose

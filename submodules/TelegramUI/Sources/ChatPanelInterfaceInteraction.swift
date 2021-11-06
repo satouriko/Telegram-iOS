@@ -60,6 +60,8 @@ final class ChatPanelInterfaceInteraction {
     let forwardSelectedMessages: () -> Void
     let forwardCurrentForwardMessages: () -> Void
     let forwardMessages: ([Message]) -> Void
+    let repeatMessage: (Message, MessageId?) -> Void
+    let repeatMessageAsReply: (Message) -> Void
     let updateForwardOptionsState: ((ChatInterfaceForwardOptionsState) -> ChatInterfaceForwardOptionsState) -> Void
     let presentForwardOptions: (ASDisplayNode) -> Void
     let shareSelectedMessages: () -> Void
@@ -147,6 +149,8 @@ final class ChatPanelInterfaceInteraction {
         forwardSelectedMessages: @escaping () -> Void,
         forwardCurrentForwardMessages: @escaping () -> Void,
         forwardMessages: @escaping ([Message]) -> Void,
+        repeatMessage: @escaping (Message, MessageId?) -> Void,
+        repeatMessageAsReply: @escaping (Message) -> Void,
         updateForwardOptionsState: @escaping ((ChatInterfaceForwardOptionsState) -> ChatInterfaceForwardOptionsState) -> Void,
         presentForwardOptions: @escaping (ASDisplayNode) -> Void,
         shareSelectedMessages: @escaping () -> Void,
@@ -233,6 +237,8 @@ final class ChatPanelInterfaceInteraction {
         self.forwardSelectedMessages = forwardSelectedMessages
         self.forwardCurrentForwardMessages = forwardCurrentForwardMessages
         self.forwardMessages = forwardMessages
+        self.repeatMessage = repeatMessage
+        self.repeatMessageAsReply = repeatMessageAsReply
         self.updateForwardOptionsState = updateForwardOptionsState
         self.presentForwardOptions = presentForwardOptions
         self.shareSelectedMessages = shareSelectedMessages
