@@ -356,7 +356,7 @@ const NSUInteger TGNeoChatsControllerForwardLimit = 20;
     if (_forForward)
         self.title = nil;
     else
-        self.title = TGLocalized(@"Watch.AppName");
+        self.title = @"Nanogram"; // TGLocalized(@"Watch.AppName");
 }
 
 + (NSString *)stringForSyncState:(TGBridgeSynchronizationStateValue)value

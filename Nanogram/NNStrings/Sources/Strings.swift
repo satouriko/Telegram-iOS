@@ -78,7 +78,7 @@ public func l(_ key: String, _ locale: String = "en") -> String {
 
 
 public func getStringsUrl(_ lang: String) -> String {
-    return "https://raw.githubusercontent.com/satouriko/nanogram-ios/master/Telegram/Telegram-iOS/" + lang + ".lproj/NanoLocalizable.strings"
+    return "https://raw.githubusercontent.com/satouriko/Telegram-iOS/master/Telegram/Telegram-iOS/" + lang + ".lproj/NanoLocalizable.strings"
 }
 
 
