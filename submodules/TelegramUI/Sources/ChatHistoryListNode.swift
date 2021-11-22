@@ -589,7 +589,7 @@ public final class ChatHistoryListNode: ListView, ChatHistoryNode {
         self.prefetchManager = InChatPrefetchManager(context: context)
 
         var adMessages: Signal<[Message], NoError>
-        if case .bubbles = mode, case let .peer(peerId) = chatLocation, case .none = subject {
+        if case .bubbles = mode, case let .peer(peerId) = chatLocation, case .none = subject, false {
             let adMessagesContext = context.engine.messages.adMessages(peerId: peerId)
             self.adMessagesContext = adMessagesContext
             adMessages = adMessagesContext.state
