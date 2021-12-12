@@ -344,6 +344,8 @@ final class ChatPanelInterfaceInteraction {
         }, forwardSelectedMessages: {
         }, forwardCurrentForwardMessages: {
         }, forwardMessages: { _ in
+        }, repeatMessage: { _, _ in
+        }, repeatMessageAsReply: { _ in
         }, updateForwardOptionsState: { _ in
         }, presentForwardOptions: { _ in
         }, shareSelectedMessages: {
