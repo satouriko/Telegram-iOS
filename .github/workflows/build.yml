@@ -17,7 +17,7 @@ jobs:
           fetch-depth: '0'
 
       - name: Set active Xcode path
-        run: sudo xcode-select -s /Applications/Xcode_13.0.app/Contents/Developer
+        run: sudo xcode-select -s /Applications/Xcode_13.1.app/Contents/Developer
 
       - name: Create canonical source directory
         run: |
