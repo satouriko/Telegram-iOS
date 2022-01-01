@@ -1016,7 +1016,7 @@ final class MessageStoryRenderer {
         let theme = self.presentationData.theme.withUpdated(preview: true)
         let headerItem = self.context.sharedContext.makeChatMessageDateHeaderItem(context: self.context, timestamp: self.messages.first?.timestamp ?? 0, theme: theme, strings: self.presentationData.strings, wallpaper: self.presentationData.chatWallpaper, fontSize: self.presentationData.chatFontSize, chatBubbleCorners: self.presentationData.chatBubbleCorners, dateTimeFormat: self.presentationData.dateTimeFormat, nameOrder: self.presentationData.nameDisplayOrder)
     
-        let items: [ListViewItem] = [self.context.sharedContext.makeChatMessagePreviewItem(context: self.context, messages: self.messages, theme: theme, strings: self.presentationData.strings, wallpaper: self.presentationData.theme.chat.defaultWallpaper, fontSize: self.presentationData.chatFontSize, chatBubbleCorners: self.presentationData.chatBubbleCorners, dateTimeFormat: self.presentationData.dateTimeFormat, nameOrder: self.presentationData.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: nil)]
+        let items: [ListViewItem] = [self.context.sharedContext.makeChatMessagePreviewItem(context: self.context, messages: self.messages, theme: theme, strings: self.presentationData.strings, wallpaper: self.presentationData.theme.chat.defaultWallpaper, fontSize: self.presentationData.chatFontSize, chatBubbleCorners: self.presentationData.chatBubbleCorners, dateTimeFormat: self.presentationData.dateTimeFormat, nameOrder: self.presentationData.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: nil, availableReactions: nil)]
     
         let inset: CGFloat = 16.0
         let width = layout.size.width - inset * 2.0
@@ -1080,41 +1080,50 @@ final class MessageStoryRenderer {
     }
 }
 
-private class ShareToInstagramActivity: UIActivity {
+public class ShareToInstagramActivity: UIActivity {
+    private let context: AccountContext
     private var activityItems = [Any]()
-    private var action: ([Any]) -> Void
     
-    init(action: @escaping ([Any]) -> Void) {
-        self.action = action
+    public init(context: AccountContext) {
+        self.context = context
+        
         super.init()
     }
     
-    override var activityTitle: String? {
-        return "Share to Instagram Stories"
+    public override var activityTitle: String? {
+        return self.context.sharedContext.currentPresentationData.with { $0 }.strings.Share_ShareToInstagramStories
     }
 
-    override var activityImage: UIImage? {
-        return nil
+    public override var activityImage: UIImage? {
+        return UIImage(bundleImageName: "Share/Instagram")
     }
     
-    override var activityType: UIActivity.ActivityType? {
+    public override var activityType: UIActivity.ActivityType? {
         return UIActivity.ActivityType(rawValue: "org.telegram.Telegram.ShareToInstagram")
     }
 
-    override class var activityCategory: UIActivity.Category {
+    public override class var activityCategory: UIActivity.Category {
         return .action
     }
     
-    override func canPerform(withActivityItems activityItems: [Any]) -> Bool {
-        return true
+    public override func canPerform(withActivityItems activityItems: [Any]) -> Bool {
+        return self.context.sharedContext.applicationBindings.canOpenUrl("instagram-stories://")
     }
     
-    override func prepare(withActivityItems activityItems: [Any]) {
+    public override func prepare(withActivityItems activityItems: [Any]) {
         self.activityItems = activityItems
     }
     
-    override func perform() {
-        self.action(self.activityItems)
+    public override func perform() {
+        if let url = self.activityItems.first as? URL, let data = try? Data(contentsOf: url) {
+            let pasteboardItems: [[String: Any]] = [["com.instagram.sharedSticker.backgroundImage": data]]
+            if #available(iOS 10.0, *) {
+                UIPasteboard.general.setItems(pasteboardItems, options: [.expirationDate: Date().addingTimeInterval(5 * 60)])
+            } else {
+                UIPasteboard.general.items = pasteboardItems
+            }
+            context.sharedContext.applicationBindings.openUrl("instagram-stories://share")
+        }
         activityDidFinish(true)
     }
 }

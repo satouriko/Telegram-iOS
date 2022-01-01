@@ -705,7 +705,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             UINavigationController.attemptRotationToDeviceOrientation()
         })
 
-        let accountManager = AccountManager<TelegramAccountManagerTypes>(basePath: rootPath + "/accounts-metadata", isTemporary: false, isReadOnly: false, useCaches: true)
+        let accountManager = AccountManager<TelegramAccountManagerTypes>(basePath: rootPath + "/accounts-metadata", isTemporary: false, isReadOnly: false, useCaches: true, removeDatabaseOnError: true)
         self.accountManager = accountManager
 
         telegramUIDeclareEncodables()
@@ -1272,6 +1272,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     }
 
     private func resetBadge() {
+        var resetOnce = true
         self.badgeDisposable.set((self.context.get()
         |> mapToSignal { context -> Signal<Int32, NoError> in
             if let context = context {
@@ -1281,6 +1282,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             }
         }
         |> deliverOnMainQueue).start(next: { count in
+            if resetOnce {
+                resetOnce = false
+                if count == 0 {
+                    UIApplication.shared.applicationIconBadgeNumber = 1
+                }
+            }
             UIApplication.shared.applicationIconBadgeNumber = Int(count)
         }))
     }
