@@ -1092,7 +1092,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             })))
         }
 
-        if !isPinnedMessages, data.canReply, threadMessageId == nil || !messages[0].text.isEmpty {
+        if !isPinnedMessages, data.canReply, (threadMessageId == nil && !chatPresentationInterfaceState.copyProtectionEnabled) || !messages[0].text.isEmpty {
             actions.append(.action(ContextMenuActionItem(text: l("repeat", chatPresentationInterfaceState.strings.baseLanguageCode), icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Repeat"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in

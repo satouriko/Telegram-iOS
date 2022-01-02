@@ -6101,6 +6101,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 if let threadMessageId = threadMessageId {
                     let messageText = message.text
                     strongSelf.sendMessages([.message(text: messageText, attributes: message.attributes, mediaReference: nil, replyToMessageId: threadMessageId, localGroupingKey: nil, correlationId: nil)])
+                } else if strongSelf.presentationInterfaceState.copyProtectionEnabled {
+                    let messageText = message.text
+                    strongSelf.sendMessages([.message(text: messageText, attributes: message.attributes, mediaReference: nil, replyToMessageId: nil, localGroupingKey: nil, correlationId: nil)])
                 } else {
                     strongSelf.sendMessages([
                         .forward(source: message.id, grouping: .auto, attributes: [], correlationId: nil)
