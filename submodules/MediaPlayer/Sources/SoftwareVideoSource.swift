@@ -1,5 +1,9 @@
 import Foundation
+#if !os(macOS)
 import UIKit
+#else
+import AppKit
+#endif
 import CoreMedia
 import SwiftSignalKit
 import FFMpegBinding
@@ -193,6 +197,14 @@ public final class SoftwareVideoSource {
         }
         
         return (frames.first, endOfStream)
+    }
+    
+    public func getFramerate() -> Int {
+        if let videoStream = self.videoStream {
+            return Int(videoStream.fps.seconds)
+        } else {
+            return 0
+        }
     }
     
     public func readFrame(maxPts: CMTime?) -> (MediaTrackFrame?, CGFloat, CGFloat, Bool) {

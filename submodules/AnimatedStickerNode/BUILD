@@ -31,6 +31,9 @@ swift_library(
         "//submodules/GZip:GZip",
         "//submodules/rlottie:RLottieBinding",
         "//submodules/MediaResources:MediaResources",
+        "//submodules/MediaPlayer:UniversalMediaPlayer",
+        "//submodules/ManagedFile:ManagedFile",
+        "//submodules/TelegramCore:TelegramCore",
     ],
     visibility = [
         "//visibility:public",

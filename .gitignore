@@ -68,3 +68,4 @@ build-input/gen/*
 __pycache__
 telegram-bazel-cache
 telegram-configuration/provisioning
+build-input/*
