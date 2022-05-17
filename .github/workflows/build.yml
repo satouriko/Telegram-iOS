@@ -40,8 +40,8 @@ jobs:
           # download bazel
           mkdir -p $HOME/bazel-dist
           pushd $HOME/bazel-dist
-          curl -O -L https://github.com/bazelbuild/bazel/releases/download/5.0.0/bazel-5.0.0-darwin-x86_64
-          mv bazel-5.0.0* bazel
+          curl -O -L https://github.com/bazelbuild/bazel/releases/download/5.1.0/bazel-5.1.0-darwin-x86_64
+          mv bazel-5.1.0* bazel
           chmod +x bazel
           ./bazel --version
           popd
