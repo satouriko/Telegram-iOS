@@ -69,3 +69,4 @@ __pycache__
 telegram-bazel-cache
 telegram-configuration/provisioning
 build-input/*
+*/*.pyc
