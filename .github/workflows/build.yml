@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-11
+    runs-on: macos-12
 
     steps:
       - uses: actions/checkout@v2
@@ -17,7 +17,9 @@ jobs:
           fetch-depth: '0'
 
       - name: Set active Xcode path
-        run: sudo xcode-select -s /Applications/Xcode_13.2.1.app/Contents/Developer
+        run: |
+          XCODE_VERSION=$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["xcode"]);')
+          sudo xcode-select -s /Applications/Xcode_$XCODE_VERSION.app/Contents/Developer
 
       - name: Create canonical source directory
         run: |
@@ -36,15 +38,6 @@ jobs:
 
           # use canonical bazel root
           BAZEL_USER_ROOT="/private/var/tmp/_bazel_telegram"
-
-          # download bazel
-          mkdir -p $HOME/bazel-dist
-          pushd $HOME/bazel-dist
-          curl -O -L https://github.com/bazelbuild/bazel/releases/download/5.1.0/bazel-5.1.0-darwin-x86_64
-          mv bazel-5.1.0* bazel
-          chmod +x bazel
-          ./bazel --version
-          popd
 
           cd $SOURCE_DIR
 
@@ -77,7 +70,6 @@ jobs:
 
           # build the app
           python3 build-system/Make/Make.py \
-            --bazel="$HOME/bazel-dist/bazel" \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             --cacheDir="$HOME/telegram-bazel-cache" \
             build \
