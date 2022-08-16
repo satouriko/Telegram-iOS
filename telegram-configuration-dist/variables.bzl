@@ -7,6 +7,7 @@ telegram_is_internal_build = "false"
 telegram_is_appstore_build = "true"
 telegram_appstore_id = "1554737908"
 telegram_app_specific_url_scheme = "tg"
+telegram_premium_iap_product_id = "org.telegram.telegramPremium.monthly"
 telegram_aps_environment = "production"
 telegram_enable_siri = True
 telegram_enable_icloud = True
