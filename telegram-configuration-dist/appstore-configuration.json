@@ -1,0 +1,16 @@
+{
+    "bundle_id": "com.cool2645.nekolite.ios",
+    "api_id": "3491340",
+    "api_hash": "09d02fe22494452bcdbb0df4202c1191",
+    "team_id": "872762N56U",
+    "app_center_id": "0",
+    "is_internal_build": "true",
+    "is_appstore_build": "false",
+    "appstore_id": "1554737908",
+    "app_specific_url_scheme": "tg",
+    "premium_iap_product_id": "org.telegram.telegramPremium.monthly",
+    "aps_environment": "development",
+    "enable_siri": true,
+    "enable_icloud": true,
+    "enable_watch": true
+}
