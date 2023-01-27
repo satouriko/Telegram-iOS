@@ -59,9 +59,12 @@ jobs:
           security unlock-keychain -p "$MY_KEYCHAIN_PASSWORD" "$MY_KEYCHAIN"
 
           # install certificates
-          echo $APPLE_DISTRIBUTION | base64 -di - > "dist.p12"
-          security import "dist.p12" -k "$MY_KEYCHAIN" -P "$APPLE_DISTRIBUTION_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
-          security set-key-partition-list -S apple-tool:,apple: -k "$MY_KEYCHAIN_PASSWORD" "$MY_KEYCHAIN"
+          mkdir -p $HOME/codesigning/certs
+          echo $APPLE_DISTRIBUTION_V2 | base64 -di - > "$HOME/codesigning/certs/dist.p12"
+          # security import "dist.p12" -k "$MY_KEYCHAIN" -P "$APPLE_DISTRIBUTION_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          # security set-key-partition-list -S apple-tool:,apple: -k "$MY_KEYCHAIN_PASSWORD" "$MY_KEYCHAIN"
+          mkdir -p $HOME/codesigning/profiles
+          cp telegram-configuration-dist/provisioning/* $HOME/codesigning/profiles/
 
           # use the official release configuration
           rm -rf $HOME/telegram-configuration
@@ -75,6 +78,7 @@ jobs:
             build \
             --disableParallelSwiftmoduleGeneration \
             --configurationPath="$HOME/telegram-configuration" \
+            --codesigningInformationPath="$HOME/codesigning/" \
             --buildNumber=$BUILD_NUMBER \
             --configuration=release_universal
 
