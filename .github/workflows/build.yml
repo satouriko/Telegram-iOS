@@ -76,7 +76,6 @@ jobs:
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             --cacheDir="$HOME/telegram-bazel-cache" \
             build \
-            --disableParallelSwiftmoduleGeneration \
             --configurationPath="$HOME/telegram-configuration/appstore-configuration.json" \
             --codesigningInformationPath="$HOME/codesigning" \
             --buildNumber=$BUILD_NUMBER \
