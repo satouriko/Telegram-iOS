@@ -52,6 +52,9 @@ func _internal_requestStickerSet(postbox: Postbox, network: Network, reference: 
     case .iconStatusEmoji:
         collectionId = nil
         input = .inputStickerSetEmojiDefaultStatuses
+    case .iconTopicEmoji:
+        collectionId = nil
+        input = .inputStickerSetEmojiDefaultTopicIcons
     }
     
     let localSignal: (ItemCollectionId) -> Signal<(ItemCollectionInfo, [ItemCollectionItem])?, NoError> = { collectionId in
@@ -165,12 +168,12 @@ func _internal_installStickerSetInteractively(account: Account, info: StickerPac
         return .generic
     }
     |> mapToSignal { result -> Signal<InstallStickerSetResult, InstallStickerSetError> in
-        let addResult:InstallStickerSetResult
+        let addResult: InstallStickerSetResult
         switch result {
         case .stickerSetInstallResultSuccess:
             addResult = .successful
         case let .stickerSetInstallResultArchive(sets: archived):
-            var coveredSets:[CoveredStickerSet] = []
+            var coveredSets: [CoveredStickerSet] = []
             for archived in archived {
                 let apiDocuments:[Api.Document]
                 let apiSet:Api.StickerSet
@@ -184,6 +187,9 @@ func _internal_installStickerSetInteractively(account: Account, info: StickerPac
                 case let .stickerSetFullCovered(set, _, _, documents):
                     apiSet = set
                     apiDocuments = documents
+                case let .stickerSetNoCovered(set):
+                    apiSet = set
+                    apiDocuments = []
                 }
                 
                 let info = StickerPackCollectionInfo(apiSet: apiSet, namespace: Namespaces.ItemCollection.CloudStickerPacks)

@@ -18,11 +18,13 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
     
     private var customTitle: String?
     
-    public var peerSelected: ((Peer) -> Void)?
+    public var peerSelected: ((Peer, Int64?) -> Void)?
     public var multiplePeersSelected: (([Peer], [PeerId: Peer], NSAttributedString, AttachmentTextInputPanelSendMode, ChatInterfaceForwardOptionsState?) -> Void)?
     private let filter: ChatListNodePeersFilter
+    private let forumPeerId: EnginePeer.Id?
+    private let selectForumThreads: Bool
     
-    private let attemptSelection: ((Peer) -> Void)?
+    private let attemptSelection: ((Peer, Int64?) -> Void)?
     private let createNewGroup: (() -> Void)?
     
     public var inProgress: Bool = false {
@@ -80,6 +82,7 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
     public init(_ params: PeerSelectionControllerParams) {
         self.context = params.context
         self.filter = params.filter
+        self.forumPeerId = params.forumPeerId
         self.hasChatListSelector = params.hasChatListSelector
         self.hasContactSelector = params.hasContactSelector
         self.hasGlobalSearch = params.hasGlobalSearch
@@ -89,17 +92,20 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
         self.pretendPresentedInModal = params.pretendPresentedInModal
         self.forwardedMessageIds = params.forwardedMessageIds
         self.hasTypeHeaders = params.hasTypeHeaders
+        self.selectForumThreads = params.selectForumThreads
         
         super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: self.presentationData))
-        
-        self.navigationPresentation = .modal
         
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
         
         self.customTitle = params.title
         self.title = self.customTitle ?? self.presentationData.strings.Conversation_ForwardTitle
         
-        self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed))
+        if params.forumPeerId == nil {
+            self.navigationPresentation = .modal
+            self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed))
+        }
+        self.navigationItem.backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
         
         self.scrollToTop = { [weak self] in
             if let strongSelf = self {
@@ -153,7 +159,7 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
     }
     
     override public func loadDisplayNode() {
-        self.displayNode = PeerSelectionControllerNode(context: self.context, presentationData: self.presentationData, filter: self.filter, hasChatListSelector: self.hasChatListSelector, hasContactSelector: self.hasContactSelector, hasGlobalSearch: self.hasGlobalSearch, forwardedMessageIds: self.forwardedMessageIds, hasTypeHeaders: self.hasTypeHeaders, createNewGroup: self.createNewGroup, present: { [weak self] c, a in
+        self.displayNode = PeerSelectionControllerNode(context: self.context, presentationData: self.presentationData, filter: self.filter, forumPeerId: self.forumPeerId, hasChatListSelector: self.hasChatListSelector, hasContactSelector: self.hasContactSelector, hasGlobalSearch: self.hasGlobalSearch, forwardedMessageIds: self.forwardedMessageIds, hasTypeHeaders: self.hasTypeHeaders, createNewGroup: self.createNewGroup, present: { [weak self] c, a in
             self?.present(c, in: .window(.root), with: a)
         }, presentInGlobalOverlay: { [weak self] c, a in
             self?.presentInGlobalOverlay(c, with: a)
@@ -175,24 +181,48 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
             self?.activateSearch()
         }
         
-        self.peerSelectionNode.requestOpenPeer = { [weak self] peer in
+        self.peerSelectionNode.requestOpenPeer = { [weak self] peer, threadId in
             if let strongSelf = self, let peerSelected = strongSelf.peerSelected {
-                peerSelected(peer)
+                if let peer = peer as? TelegramChannel, peer.flags.contains(.isForum), threadId == nil, strongSelf.selectForumThreads {
+                    let controller = PeerSelectionControllerImpl(
+                        PeerSelectionControllerParams(
+                            context: strongSelf.context,
+                            updatedPresentationData: nil,
+                            filter: strongSelf.filter,
+                            forumPeerId: peer.id,
+                            hasChatListSelector: false,
+                            hasContactSelector: false,
+                            hasGlobalSearch: false,
+                            title: EnginePeer(peer).compactDisplayTitle,
+                            attemptSelection: strongSelf.attemptSelection,
+                            createNewGroup: nil,
+                            pretendPresentedInModal: false,
+                            multipleSelection: false,
+                            forwardedMessageIds: [],
+                            hasTypeHeaders: false,
+                            selectForumThreads: false
+                        )
+                    )
+                    controller.peerSelected = strongSelf.peerSelected
+                    strongSelf.push(controller)
+                } else {
+                    peerSelected(peer, threadId)
+                }
             }
         }
         
-        self.peerSelectionNode.requestOpenDisabledPeer = { [weak self] peer in
+        self.peerSelectionNode.requestOpenDisabledPeer = { [weak self] peer, threadId in
             if let strongSelf = self {
-                strongSelf.attemptSelection?(peer)
+                strongSelf.attemptSelection?(peer, threadId)
             }
         }
         
-        self.peerSelectionNode.requestOpenPeerFromSearch = { [weak self] peer in
+        self.peerSelectionNode.requestOpenPeerFromSearch = { [weak self] peer, threadId in
             if let strongSelf = self {
                 strongSelf.openMessageFromSearchDisposable.set((strongSelf.context.engine.peers.ensurePeerIsLocallyAvailable(peer: EnginePeer(peer))
                 |> deliverOnMainQueue).start(completed: { [weak strongSelf] in
                     if let strongSelf = strongSelf, let peerSelected = strongSelf.peerSelected {
-                        peerSelected(peer)
+                        peerSelected(peer, threadId)
                     }
                 }))
             }

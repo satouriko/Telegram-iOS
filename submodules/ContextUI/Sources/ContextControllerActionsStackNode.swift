@@ -12,6 +12,7 @@ import Markdown
 import EntityKeyboard
 import AnimationCache
 import MultiAnimationRenderer
+import AnimationUI
 
 public protocol ContextControllerActionsStackItemNode: ASDisplayNode {
     var wantsFullWidth: Bool { get }
@@ -63,6 +64,7 @@ private final class ContextControllerActionsListActionItemNode: HighlightTrackin
     private let titleLabelNode: ImmediateTextNode
     private let subtitleNode: ImmediateTextNode
     private let iconNode: ASImageNode
+    private var animationNode: AnimationNode?
     
     private var iconDisposable: Disposable?
     
@@ -85,7 +87,6 @@ private final class ContextControllerActionsListActionItemNode: HighlightTrackin
         self.titleLabelNode = ImmediateTextNode()
         self.titleLabelNode.isAccessibilityElement = false
         self.titleLabelNode.displaysAsynchronously = false
-        self.titleLabelNode.isUserInteractionEnabled = false
         
         self.subtitleNode = ImmediateTextNode()
         self.subtitleNode.isAccessibilityElement = false
@@ -95,7 +96,7 @@ private final class ContextControllerActionsListActionItemNode: HighlightTrackin
         self.iconNode = ASImageNode()
         self.iconNode.isAccessibilityElement = false
         self.iconNode.isUserInteractionEnabled = false
-        
+                
         super.init()
         
         self.isAccessibilityElement = true
@@ -124,6 +125,12 @@ private final class ContextControllerActionsListActionItemNode: HighlightTrackin
     
     deinit {
         self.iconDisposable?.dispose()
+    }
+    
+    override func didLoad() {
+        super.didLoad()
+        
+        self.view.isExclusiveTouch = true
     }
     
     @objc private func pressed() {
@@ -160,6 +167,16 @@ private final class ContextControllerActionsListActionItemNode: HighlightTrackin
         self.pressed()
     }
     
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        if self.titleLabelNode.tapAttributeAction != nil {
+            if let result = self.titleLabelNode.hitTest(self.view.convert(point, to: self.titleLabelNode.view), with: event) {
+                return result
+            }
+        }
+        
+        return super.hitTest(point, with: event)
+    }
+    
     func update(presentationData: PresentationData, constrainedSize: CGSize) -> (minSize: CGSize, apply: (_ size: CGSize, _ transition: ContainedViewLayoutTransition) -> Void) {
         let sideInset: CGFloat = 16.0
         let verticalInset: CGFloat = 11.0
@@ -184,12 +201,16 @@ private final class ContextControllerActionsListActionItemNode: HighlightTrackin
             self.titleLabelNode.lineSpacing = 0.1
         }
         
+        var forcedHeight: CGFloat?
+        var titleVerticalOffset: CGFloat?
         let titleFont: UIFont
         let titleBoldFont: UIFont
         switch self.item.textFont {
-        case let .custom(font):
+        case let .custom(font, height, verticalOffset):
             titleFont = font
             titleBoldFont = font
+            forcedHeight = height
+            titleVerticalOffset = verticalOffset
         case .small:
             let smallTextFont = Font.regular(floor(presentationData.listsFontSize.baseDisplaySize * 14.0 / 17.0))
             titleFont = smallTextFont
@@ -218,17 +239,32 @@ private final class ContextControllerActionsListActionItemNode: HighlightTrackin
                 attributes: MarkdownAttributes(
                     body: MarkdownAttributeSet(font: titleFont, textColor: titleColor),
                     bold: MarkdownAttributeSet(font: titleBoldFont, textColor: titleColor),
-                    link: MarkdownAttributeSet(font: titleFont, textColor: titleColor),
-                    linkAttribute: { _ in return nil }
+                    link: MarkdownAttributeSet(font: titleBoldFont, textColor: presentationData.theme.list.itemAccentColor),
+                    linkAttribute: { value in return ("URL", value) }
                 )
             )
             self.titleLabelNode.attributedText = attributedText
+            self.titleLabelNode.linkHighlightColor = presentationData.theme.list.itemAccentColor.withMultipliedAlpha(0.5)
+            self.titleLabelNode.highlightAttributeAction = { attributes in
+                if let _ = attributes[NSAttributedString.Key(rawValue: "URL")] {
+                    return NSAttributedString.Key(rawValue: "URL")
+                } else {
+                    return nil
+                }
+            }
+            self.titleLabelNode.tapAttributeAction = { [weak item] attributes, _ in
+                if let _ = attributes[NSAttributedString.Key(rawValue: "URL")] {
+                    item?.textLinkAction()
+                }
+            }
         } else {
             self.titleLabelNode.attributedText = NSAttributedString(
                 string: self.item.text,
                 font: titleFont,
                 textColor: titleColor)
         }
+        
+        self.titleLabelNode.isUserInteractionEnabled = self.titleLabelNode.tapAttributeAction != nil
         
         self.subtitleNode.attributedText = subtitle.flatMap { subtitle in
             return NSAttributedString(
@@ -251,6 +287,14 @@ private final class ContextControllerActionsListActionItemNode: HighlightTrackin
             }
         } else if let image = self.iconNode.image {
             iconSize = image.size
+        } else if let animationName = self.item.animationName {
+            if self.animationNode == nil {
+                let animationNode = AnimationNode(animation: animationName, colors: ["__allcolors__": titleColor], scale: 1.0)
+                animationNode.loop(count: 3)
+                self.addSubnode(animationNode)
+                self.animationNode = animationNode
+            }
+            iconSize = CGSize(width: 24.0, height: 24.0)
         } else {
             let iconImage = self.item.icon(presentationData.theme)
             self.iconNode.image = iconImage
@@ -280,15 +324,22 @@ private final class ContextControllerActionsListActionItemNode: HighlightTrackin
         } else {
             minSize.width += sideInset
         }
-        minSize.height += verticalInset * 2.0
-        minSize.height += titleSize.height
-        if subtitle != nil {
-            minSize.height += titleSubtitleSpacing
-            minSize.height += subtitleSize.height
+        if let forcedHeight {
+            minSize.height = forcedHeight
+        } else {
+            minSize.height += verticalInset * 2.0
+            minSize.height += titleSize.height
+            if subtitle != nil {
+                minSize.height += titleSubtitleSpacing
+                minSize.height += subtitleSize.height
+            }
         }
         
         return (minSize: minSize, apply: { size, transition in
-            let titleFrame = CGRect(origin: CGPoint(x: sideInset, y: verticalInset), size: titleSize)
+            var titleFrame = CGRect(origin: CGPoint(x: sideInset, y: verticalInset), size: titleSize)
+            if let titleVerticalOffset {
+                titleFrame = titleFrame.offsetBy(dx: 0.0, dy: titleVerticalOffset)
+            }
             let subtitleFrame = CGRect(origin: CGPoint(x: sideInset, y: titleFrame.maxY + titleSubtitleSpacing), size: subtitleSize)
             
             transition.updateFrame(node: self.highlightBackgroundNode, frame: CGRect(origin: CGPoint(), size: size), beginWithCurrentState: true)
@@ -299,6 +350,9 @@ private final class ContextControllerActionsListActionItemNode: HighlightTrackin
                 let iconWidth = max(standardIconWidth, iconSize.width)
                 let iconFrame = CGRect(origin: CGPoint(x: size.width - iconSideInset - iconWidth + floor((iconWidth - iconSize.width) / 2.0), y: floor((size.height - iconSize.height) / 2.0)), size: iconSize)
                 transition.updateFrame(node: self.iconNode, frame: iconFrame, beginWithCurrentState: true)
+                if let animationNode = self.animationNode {
+                    transition.updateFrame(node: animationNode, frame: iconFrame, beginWithCurrentState: true)
+                }
             }
         })
     }
@@ -963,7 +1017,7 @@ final class ContextControllerActionsStackNode: ASDisplayNode {
             return (size, apparentHeight)
         }
         
-        func updateTip(presentationData: PresentationData, width: CGFloat, transition: ContainedViewLayoutTransition) -> (node: InnerTextSelectionTipContainerNode, height: CGFloat)? {
+        func updateTip(presentationData: PresentationData, presentation: ContextControllerActionsStackNode.Presentation, width: CGFloat, transition: ContainedViewLayoutTransition) -> (node: InnerTextSelectionTipContainerNode, height: CGFloat)? {
             if let tip = self.tip {
                 var updatedTransition = transition
                 if let tipNode = self.tipNode, tipNode.tip == tip {
@@ -985,7 +1039,7 @@ final class ContextControllerActionsStackNode: ASDisplayNode {
                 }
                 
                 if let tipNode = self.tipNode {
-                    let size = tipNode.updateLayout(widthClass: .compact, width: width, transition: updatedTransition)
+                    let size = tipNode.updateLayout(widthClass: .compact, presentation: presentation, width: width, transition: updatedTransition)
                     return (tipNode, size.height)
                 } else {
                     return nil
@@ -1229,7 +1283,7 @@ final class ContextControllerActionsStackNode: ASDisplayNode {
                 standardMaxWidth = 240.0
                 standardMinWidth = standardMaxWidth
                 
-                if let (tipNode, tipHeight) = itemContainer.updateTip(presentationData: presentationData, width: standardMaxWidth, transition: itemContainerTransition) {
+                if let (tipNode, tipHeight) = itemContainer.updateTip(presentationData: presentationData, presentation: presentation, width: standardMaxWidth, transition: itemContainerTransition) {
                     tip = TipLayout(tipNode: tipNode, tipHeight: tipHeight)
                     additionalBottomInset = tipHeight + 10.0
                 } else {
@@ -1256,7 +1310,7 @@ final class ContextControllerActionsStackNode: ASDisplayNode {
             }
             
             if !itemContainer.node.wantsFullWidth {
-                if let (tipNode, tipHeight) = itemContainer.updateTip(presentationData: presentationData, width: itemSize.size.width, transition: itemContainerTransition) {
+                if let (tipNode, tipHeight) = itemContainer.updateTip(presentationData: presentationData, presentation: presentation, width: itemSize.size.width, transition: itemContainerTransition) {
                     tip = TipLayout(tipNode: tipNode, tipHeight: tipHeight)
                 }
             }
@@ -1321,22 +1375,32 @@ final class ContextControllerActionsStackNode: ASDisplayNode {
                 let tipTransition = transition
                 var animateTipIn = false
                 if tip.tipNode.supernode == nil {
+                    self.insertSubnode(tip.tipNode.shadowNode, at: 0)
                     self.addSubnode(tip.tipNode)
                     animateTipIn = transition.isAnimated
-                    tip.tipNode.frame = CGRect(origin: CGPoint(x: previousNavigationContainerFrame.minX, y: previousNavigationContainerFrame.maxY + tipSpacing), size: CGSize(width: itemLayouts[i].size.width, height: tip.tipHeight))
-                    tip.tipNode.setActualSize(size: tip.tipNode.bounds.size, transition: .immediate)
+                    let tipFrame = CGRect(origin: CGPoint(x: previousNavigationContainerFrame.minX, y: previousNavigationContainerFrame.maxY + tipSpacing), size: CGSize(width: itemLayouts[i].size.width, height: tip.tipHeight))
+                    tip.tipNode.frame = tipFrame
+                    tip.tipNode.setActualSize(size: tipFrame.size, transition: .immediate)
+                    transition.updateFrame(node: tip.tipNode.shadowNode, frame: tipFrame.insetBy(dx: -30.0, dy: -30.0))
                 }
                 
                 let tipAlpha: CGFloat = itemLayouts[i].alphaTransitionFraction
                 
-                tipTransition.updateFrame(node: tip.tipNode, frame: CGRect(origin: CGPoint(x: navigationContainerFrame.minX, y: navigationContainerFrame.maxY + tipSpacing), size: CGSize(width: itemLayouts[i].size.width, height: tip.tipHeight)), beginWithCurrentState: true)
+                let tipFrame = CGRect(origin: CGPoint(x: navigationContainerFrame.minX, y: navigationContainerFrame.maxY + tipSpacing), size: CGSize(width: itemLayouts[i].size.width, height: tip.tipHeight))
+                tipTransition.updateFrame(node: tip.tipNode, frame: tipFrame, beginWithCurrentState: true)
+                transition.updateFrame(node: tip.tipNode.shadowNode, frame: tipFrame.insetBy(dx: -30.0, dy: -30.0))
+                
                 tip.tipNode.setActualSize(size: tip.tipNode.bounds.size, transition: tipTransition)
                 
                 if animateTipIn {
                     tip.tipNode.alpha = tipAlpha
                     tip.tipNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                    
+                    tip.tipNode.shadowNode.alpha = tipAlpha
+                    tip.tipNode.shadowNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
                 } else {
                     tipTransition.updateAlpha(node: tip.tipNode, alpha: tipAlpha, beginWithCurrentState: true)
+                    tipTransition.updateAlpha(node: tip.tipNode.shadowNode, alpha: tipAlpha, beginWithCurrentState: true)
                 }
                 
                 if i == self.itemContainers.count - 1 {
@@ -1356,9 +1420,16 @@ final class ContextControllerActionsStackNode: ASDisplayNode {
                 itemContainer?.removeFromSupernode()
             })
             if let tipNode = itemContainer.tipNode {
-                transition.updateFrame(node: tipNode, frame: CGRect(origin: CGPoint(x: navigationContainerFrame.minX, y: navigationContainerFrame.maxY + tipSpacing), size: tipNode.frame.size), beginWithCurrentState: true)
+                let tipFrame = CGRect(origin: CGPoint(x: navigationContainerFrame.minX, y: navigationContainerFrame.maxY + tipSpacing), size: tipNode.frame.size)
+                transition.updateFrame(node: tipNode, frame: tipFrame, beginWithCurrentState: true)
+                transition.updateFrame(node: tipNode.shadowNode, frame: tipFrame.insetBy(dx: -30.0, dy: -30.0))
+                
                 transition.updateAlpha(node: tipNode, alpha: 0.0, completion: { [weak tipNode] _ in
                     tipNode?.removeFromSupernode()
+                })
+                let shadowNode = tipNode.shadowNode
+                transition.updateAlpha(node: shadowNode, alpha: 0.0, completion: { [weak shadowNode] _ in
+                    shadowNode?.removeFromSupernode()
                 })
             }
         }

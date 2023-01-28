@@ -400,10 +400,24 @@ public final class OngoingGroupCallContext {
         public var incomingVideoStats: [String: IncomingVideoStats]
     }
     
+    public final class Tone {
+        public let samples: Data
+        public let sampleRate: Int
+        public let loopCount: Int
+        
+        public init(samples: Data, sampleRate: Int, loopCount: Int) {
+            self.samples = samples
+            self.sampleRate = sampleRate
+            self.loopCount = loopCount
+        }
+    }
+    
     private final class Impl {
         let queue: Queue
         let context: GroupCallThreadLocalContext
-        
+#if os(iOS)
+        let audioDevice: SharedCallAudioDevice?
+#endif
         let sessionId = UInt32.random(in: 0 ..< UInt32(Int32.max))
         
         let joinPayload = Promise<(String, UInt32)>()
@@ -416,9 +430,15 @@ public final class OngoingGroupCallContext {
         
         private let broadcastPartsSource = Atomic<BroadcastPartSource?>(value: nil)
         
-        init(queue: Queue, inputDeviceId: String, outputDeviceId: String, video: OngoingCallVideoCapturer?, requestMediaChannelDescriptions: @escaping (Set<UInt32>, @escaping ([MediaChannelDescription]) -> Void) -> Disposable, rejoinNeeded: @escaping () -> Void, outgoingAudioBitrateKbit: Int32?, videoContentType: VideoContentType, enableNoiseSuppression: Bool, disableAudioInput: Bool, preferX264: Bool, logPath: String) {
+        private let audioSessionActiveDisposable = MetaDisposable()
+        
+        init(queue: Queue, inputDeviceId: String, outputDeviceId: String, audioSessionActive: Signal<Bool, NoError>, video: OngoingCallVideoCapturer?, requestMediaChannelDescriptions: @escaping (Set<UInt32>, @escaping ([MediaChannelDescription]) -> Void) -> Disposable, rejoinNeeded: @escaping () -> Void, outgoingAudioBitrateKbit: Int32?, videoContentType: VideoContentType, enableNoiseSuppression: Bool, disableAudioInput: Bool, preferX264: Bool, logPath: String) {
             self.queue = queue
             
+#if os(iOS)
+            self.audioDevice = nil
+            let audioDevice = self.audioDevice
+#endif
             var networkStateUpdatedImpl: ((GroupCallNetworkState) -> Void)?
             var audioLevelsUpdatedImpl: (([NSNumber]) -> Void)?
             
@@ -433,7 +453,101 @@ public final class OngoingGroupCallContext {
             }
             
             var getBroadcastPartsSource: (() -> BroadcastPartSource?)?
+#if os(iOS)
+            self.context = GroupCallThreadLocalContext(
+                queue: ContextQueueImpl(queue: queue),
+                networkStateUpdated: { state in
+                    networkStateUpdatedImpl?(state)
+                },
+                audioLevelsUpdated: { levels in
+                    audioLevelsUpdatedImpl?(levels)
+                },
+                inputDeviceId: inputDeviceId,
+                outputDeviceId: outputDeviceId,
+                videoCapturer: video?.impl,
+                requestMediaChannelDescriptions: { ssrcs, completion in
+                    final class OngoingGroupCallMediaChannelDescriptionTaskImpl : NSObject, OngoingGroupCallMediaChannelDescriptionTask {
+                        private let disposable: Disposable
 
+                        init(disposable: Disposable) {
+                            self.disposable = disposable
+                        }
+
+                        func cancel() {
+                            self.disposable.dispose()
+                        }
+                    }
+
+                    let disposable = requestMediaChannelDescriptions(Set(ssrcs.map { $0.uint32Value }), { channels in
+                        completion(channels.map { channel -> OngoingGroupCallMediaChannelDescription in
+                            let mappedType: OngoingGroupCallMediaChannelType
+                            switch channel.kind {
+                            case .audio:
+                                mappedType = .audio
+                            case .video:
+                                mappedType = .video
+                            }
+                            return OngoingGroupCallMediaChannelDescription(
+                                type: mappedType,
+                                audioSsrc: channel.audioSsrc,
+                                videoDescription: channel.videoDescription
+                            )
+                        })
+                    })
+
+                    return OngoingGroupCallMediaChannelDescriptionTaskImpl(disposable: disposable)
+                },
+                requestCurrentTime: { completion in
+                    let disposable = MetaDisposable()
+
+                    queue.async {
+                        disposable.set(getBroadcastPartsSource?()?.requestTime(completion: completion))
+                    }
+
+                    return OngoingGroupCallBroadcastPartTaskImpl(disposable: disposable)
+                },
+                requestAudioBroadcastPart: { timestampMilliseconds, durationMilliseconds, completion in
+                    let disposable = MetaDisposable()
+                    
+                    queue.async {
+                        disposable.set(getBroadcastPartsSource?()?.requestPart(timestampMilliseconds: timestampMilliseconds, durationMilliseconds: durationMilliseconds, subject: .audio, completion: completion, rejoinNeeded: {
+                            rejoinNeeded()
+                        }))
+                    }
+                    
+                    return OngoingGroupCallBroadcastPartTaskImpl(disposable: disposable)
+                },
+                requestVideoBroadcastPart: { timestampMilliseconds, durationMilliseconds, channelId, quality, completion in
+                    let disposable = MetaDisposable()
+
+                    queue.async {
+                        let mappedQuality: OngoingGroupCallContext.VideoChannel.Quality
+                        switch quality {
+                        case .thumbnail:
+                            mappedQuality = .thumbnail
+                        case .medium:
+                            mappedQuality = .medium
+                        case .full:
+                            mappedQuality = .full
+                        @unknown default:
+                            mappedQuality = .thumbnail
+                        }
+                        disposable.set(getBroadcastPartsSource?()?.requestPart(timestampMilliseconds: timestampMilliseconds, durationMilliseconds: durationMilliseconds, subject: .video(channelId: channelId, quality: mappedQuality), completion: completion, rejoinNeeded: {
+                            rejoinNeeded()
+                        }))
+                    }
+
+                    return OngoingGroupCallBroadcastPartTaskImpl(disposable: disposable)
+                },
+                outgoingAudioBitrateKbit: outgoingAudioBitrateKbit ?? 32,
+                videoContentType: _videoContentType,
+                enableNoiseSuppression: enableNoiseSuppression,
+                disableAudioInput: disableAudioInput,
+                preferX264: preferX264,
+                logPath: logPath,
+                audioDevice: audioDevice
+            )
+#else
             self.context = GroupCallThreadLocalContext(
                 queue: ContextQueueImpl(queue: queue),
                 networkStateUpdated: { state in
@@ -526,6 +640,8 @@ public final class OngoingGroupCallContext {
                 preferX264: preferX264,
                 logPath: logPath
             )
+#endif
+            
             
             let queue = self.queue
             
@@ -571,9 +687,21 @@ public final class OngoingGroupCallContext {
                     strongSelf.joinPayload.set(.single((payload, ssrc)))
                 }
             })
+            
+            self.audioSessionActiveDisposable.set((audioSessionActive
+            |> deliverOn(queue)).start(next: { [weak self] isActive in
+                guard let `self` = self else {
+                    return
+                }
+//                self.audioDevice?.setManualAudioSessionIsActive(isActive)
+                #if os(iOS)
+                self.context.setManualAudioSessionIsActive(isActive)
+                #endif
+            }))
         }
         
         deinit {
+            self.audioSessionActiveDisposable.dispose()
         }
         
         func setJoinResponse(payload: String) {
@@ -871,6 +999,20 @@ public final class OngoingGroupCallContext {
                 completion(Stats(incomingVideoStats: incomingVideoStats))
             })
         }
+        
+        func setTone(tone: Tone?) {
+            #if os(iOS)
+            let mappedTone = tone.flatMap { tone in
+                CallAudioTone(samples: tone.samples, sampleRate: tone.sampleRate, loopCount: tone.loopCount)
+            }
+//            if let audioDevice = self.audioDevice {
+//                audioDevice.setTone(mappedTone)
+//            } else {
+                self.context.setTone(mappedTone)
+//            }
+            #endif
+            
+        }
     }
     
     private let queue = Queue()
@@ -936,10 +1078,10 @@ public final class OngoingGroupCallContext {
         }
     }
     
-    public init(inputDeviceId: String = "", outputDeviceId: String = "", video: OngoingCallVideoCapturer?, requestMediaChannelDescriptions: @escaping (Set<UInt32>, @escaping ([MediaChannelDescription]) -> Void) -> Disposable, rejoinNeeded: @escaping () -> Void, outgoingAudioBitrateKbit: Int32?, videoContentType: VideoContentType, enableNoiseSuppression: Bool, disableAudioInput: Bool, preferX264: Bool, logPath: String) {
+    public init(inputDeviceId: String = "", outputDeviceId: String = "", audioSessionActive: Signal<Bool, NoError>, video: OngoingCallVideoCapturer?, requestMediaChannelDescriptions: @escaping (Set<UInt32>, @escaping ([MediaChannelDescription]) -> Void) -> Disposable, rejoinNeeded: @escaping () -> Void, outgoingAudioBitrateKbit: Int32?, videoContentType: VideoContentType, enableNoiseSuppression: Bool, disableAudioInput: Bool, preferX264: Bool, logPath: String) {
         let queue = self.queue
         self.impl = QueueLocalObject(queue: queue, generate: {
-            return Impl(queue: queue, inputDeviceId: inputDeviceId, outputDeviceId: outputDeviceId, video: video, requestMediaChannelDescriptions: requestMediaChannelDescriptions, rejoinNeeded: rejoinNeeded, outgoingAudioBitrateKbit: outgoingAudioBitrateKbit, videoContentType: videoContentType, enableNoiseSuppression: enableNoiseSuppression, disableAudioInput: disableAudioInput, preferX264: preferX264, logPath: logPath)
+            return Impl(queue: queue, inputDeviceId: inputDeviceId, outputDeviceId: outputDeviceId, audioSessionActive: audioSessionActive, video: video, requestMediaChannelDescriptions: requestMediaChannelDescriptions, rejoinNeeded: rejoinNeeded, outgoingAudioBitrateKbit: outgoingAudioBitrateKbit, videoContentType: videoContentType, enableNoiseSuppression: enableNoiseSuppression, disableAudioInput: disableAudioInput, preferX264: preferX264, logPath: logPath)
         })
     }
     
@@ -1060,6 +1202,12 @@ public final class OngoingGroupCallContext {
     public func getStats(completion: @escaping (Stats) -> Void) {
         self.impl.with { impl in
             impl.getStats(completion: completion)
+        }
+    }
+    
+    public func setTone(tone: Tone?) {
+        self.impl.with { impl in
+            impl.setTone(tone: tone)
         }
     }
 }

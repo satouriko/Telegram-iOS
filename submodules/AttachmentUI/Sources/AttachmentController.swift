@@ -168,6 +168,7 @@ public class AttachmentController: ViewController {
     private let buttons: [AttachmentButtonType]
     private let initialButton: AttachmentButtonType
     private let fromMenu: Bool
+    private let hasTextInput: Bool
     private let makeEntityInputView: () -> AttachmentTextInputPanelInputView?
     
     public var willDismiss: () -> Void = {}
@@ -437,10 +438,10 @@ public class AttachmentController: ViewController {
             }
         }
         
-        private func updateSelectionCount(_ count: Int) {
+        fileprivate func updateSelectionCount(_ count: Int, animated: Bool = true) {
             self.selectionCount = count
             if let layout = self.validLayout {
-                self.containerLayoutUpdated(layout, transition: .animated(duration: 0.4, curve: .spring))
+                self.containerLayoutUpdated(layout, transition: animated ? .animated(duration: 0.4, curve: .spring) : .immediate)
             }
         }
         
@@ -754,7 +755,7 @@ public class AttachmentController: ViewController {
             let previousHasButton = self.hasButton
             let hasButton = self.panel.isButtonVisible && !self.isDismissing
             self.hasButton = hasButton
-            if let controller = self.controller, controller.buttons.count > 1 {
+            if let controller = self.controller, controller.buttons.count > 1 || controller.hasTextInput {
                 hasPanel = true
             }
                             
@@ -856,13 +857,14 @@ public class AttachmentController: ViewController {
     
     public var getSourceRect: (() -> CGRect?)?
     
-    public init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, chatLocation: ChatLocation, buttons: [AttachmentButtonType], initialButton: AttachmentButtonType = .gallery, fromMenu: Bool = false, makeEntityInputView: @escaping () -> AttachmentTextInputPanelInputView?) {
+    public init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, chatLocation: ChatLocation, buttons: [AttachmentButtonType], initialButton: AttachmentButtonType = .gallery, fromMenu: Bool = false, hasTextInput: Bool = true, makeEntityInputView: @escaping () -> AttachmentTextInputPanelInputView? = { return nil}) {
         self.context = context
         self.updatedPresentationData = updatedPresentationData
         self.chatLocation = chatLocation
         self.buttons = buttons
         self.initialButton = initialButton
         self.fromMenu = fromMenu
+        self.hasTextInput = hasTextInput
         self.makeEntityInputView = makeEntityInputView
         
         super.init(navigationBarPresentationData: nil)
@@ -884,6 +886,10 @@ public class AttachmentController: ViewController {
     
     fileprivate var isStandalone: Bool {
         return self.buttons.contains(.standalone)
+    }
+    
+    public func updateSelectionCount(_ count: Int) {
+        self.node.updateSelectionCount(count, animated: false)
     }
     
     private var node: Node {
@@ -978,7 +984,7 @@ public class AttachmentController: ViewController {
                                 let accountFullSizeData = Signal<(Data?, Bool), NoError> { subscriber in
                                     let accountResource = context.account.postbox.mediaBox.cachedResourceRepresentation(file.resource, representation: CachedPreparedSvgRepresentation(), complete: false, fetch: true)
                                     
-                                    let fetchedFullSize = fetchedMediaResource(mediaBox: context.account.postbox.mediaBox, reference: .media(media: .attachBot(peer: peer, media: file), resource: file.resource))
+                                    let fetchedFullSize = fetchedMediaResource(mediaBox: context.account.postbox.mediaBox, userLocation: .other, userContentType: MediaResourceUserContentType(file: file), reference: .media(media: .attachBot(peer: peer, media: file), resource: file.resource))
                                     let fetchedFullSizeDisposable = fetchedFullSize.start()
                                     let fullSizeDisposable = accountResource.start()
                                     
@@ -990,7 +996,7 @@ public class AttachmentController: ViewController {
                                 disposableSet.add(accountFullSizeData.start())
                             }
                         } else {
-                            disposableSet.add(freeMediaFileInteractiveFetched(account: context.account, fileReference: .attachBot(peer: peer, media: file)).start())
+                            disposableSet.add(freeMediaFileInteractiveFetched(account: context.account, userLocation: .other, fileReference: .attachBot(peer: peer, media: file)).start())
                         }
                     }
                 }

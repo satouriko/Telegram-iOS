@@ -21,7 +21,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .stickerKeyword(let documentId, let keyword):
-                return ("stickerKeyword", [("documentId", String(describing: documentId)), ("keyword", String(describing: keyword))])
+                return ("stickerKeyword", [("documentId", documentId as Any), ("keyword", keyword as Any)])
     }
     }
     
@@ -67,7 +67,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .stickerPack(let emoticon, let documents):
-                return ("stickerPack", [("emoticon", String(describing: emoticon)), ("documents", String(describing: documents))])
+                return ("stickerPack", [("emoticon", emoticon as Any), ("documents", documents as Any)])
     }
     }
     
@@ -123,7 +123,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .stickerSet(let flags, let installedDate, let id, let accessHash, let title, let shortName, let thumbs, let thumbDcId, let thumbVersion, let thumbDocumentId, let count, let hash):
-                return ("stickerSet", [("flags", String(describing: flags)), ("installedDate", String(describing: installedDate)), ("id", String(describing: id)), ("accessHash", String(describing: accessHash)), ("title", String(describing: title)), ("shortName", String(describing: shortName)), ("thumbs", String(describing: thumbs)), ("thumbDcId", String(describing: thumbDcId)), ("thumbVersion", String(describing: thumbVersion)), ("thumbDocumentId", String(describing: thumbDocumentId)), ("count", String(describing: count)), ("hash", String(describing: hash))])
+                return ("stickerSet", [("flags", flags as Any), ("installedDate", installedDate as Any), ("id", id as Any), ("accessHash", accessHash as Any), ("title", title as Any), ("shortName", shortName as Any), ("thumbs", thumbs as Any), ("thumbDcId", thumbDcId as Any), ("thumbVersion", thumbVersion as Any), ("thumbDocumentId", thumbDocumentId as Any), ("count", count as Any), ("hash", hash as Any)])
     }
     }
     
@@ -181,6 +181,7 @@ public extension Api {
         case stickerSetCovered(set: Api.StickerSet, cover: Api.Document)
         case stickerSetFullCovered(set: Api.StickerSet, packs: [Api.StickerPack], keywords: [Api.StickerKeyword], documents: [Api.Document])
         case stickerSetMultiCovered(set: Api.StickerSet, covers: [Api.Document])
+        case stickerSetNoCovered(set: Api.StickerSet)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
@@ -223,17 +224,25 @@ public extension Api {
                         item.serialize(buffer, true)
                     }
                     break
+                case .stickerSetNoCovered(let set):
+                    if boxed {
+                        buffer.appendInt32(2008112412)
+                    }
+                    set.serialize(buffer, true)
+                    break
     }
     }
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .stickerSetCovered(let set, let cover):
-                return ("stickerSetCovered", [("set", String(describing: set)), ("cover", String(describing: cover))])
+                return ("stickerSetCovered", [("set", set as Any), ("cover", cover as Any)])
                 case .stickerSetFullCovered(let set, let packs, let keywords, let documents):
-                return ("stickerSetFullCovered", [("set", String(describing: set)), ("packs", String(describing: packs)), ("keywords", String(describing: keywords)), ("documents", String(describing: documents))])
+                return ("stickerSetFullCovered", [("set", set as Any), ("packs", packs as Any), ("keywords", keywords as Any), ("documents", documents as Any)])
                 case .stickerSetMultiCovered(let set, let covers):
-                return ("stickerSetMultiCovered", [("set", String(describing: set)), ("covers", String(describing: covers))])
+                return ("stickerSetMultiCovered", [("set", set as Any), ("covers", covers as Any)])
+                case .stickerSetNoCovered(let set):
+                return ("stickerSetNoCovered", [("set", set as Any)])
     }
     }
     
@@ -301,6 +310,19 @@ public extension Api {
                 return nil
             }
         }
+        public static func parse_stickerSetNoCovered(_ reader: BufferReader) -> StickerSetCovered? {
+            var _1: Api.StickerSet?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.StickerSet
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.StickerSetCovered.stickerSetNoCovered(set: _1!)
+            }
+            else {
+                return nil
+            }
+        }
     
     }
 }
@@ -334,7 +356,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .theme(let flags, let id, let accessHash, let slug, let title, let document, let settings, let emoticon, let installsCount):
-                return ("theme", [("flags", String(describing: flags)), ("id", String(describing: id)), ("accessHash", String(describing: accessHash)), ("slug", String(describing: slug)), ("title", String(describing: title)), ("document", String(describing: document)), ("settings", String(describing: settings)), ("emoticon", String(describing: emoticon)), ("installsCount", String(describing: installsCount))])
+                return ("theme", [("flags", flags as Any), ("id", id as Any), ("accessHash", accessHash as Any), ("slug", slug as Any), ("title", title as Any), ("document", document as Any), ("settings", settings as Any), ("emoticon", emoticon as Any), ("installsCount", installsCount as Any)])
     }
     }
     
@@ -407,7 +429,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .themeSettings(let flags, let baseTheme, let accentColor, let outboxAccentColor, let messageColors, let wallpaper):
-                return ("themeSettings", [("flags", String(describing: flags)), ("baseTheme", String(describing: baseTheme)), ("accentColor", String(describing: accentColor)), ("outboxAccentColor", String(describing: outboxAccentColor)), ("messageColors", String(describing: messageColors)), ("wallpaper", String(describing: wallpaper))])
+                return ("themeSettings", [("flags", flags as Any), ("baseTheme", baseTheme as Any), ("accentColor", accentColor as Any), ("outboxAccentColor", outboxAccentColor as Any), ("messageColors", messageColors as Any), ("wallpaper", wallpaper as Any)])
     }
     }
     
@@ -465,7 +487,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .topPeer(let peer, let rating):
-                return ("topPeer", [("peer", String(describing: peer)), ("rating", String(describing: rating))])
+                return ("topPeer", [("peer", peer as Any), ("rating", rating as Any)])
     }
     }
     
@@ -624,7 +646,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .topPeerCategoryPeers(let category, let count, let peers):
-                return ("topPeerCategoryPeers", [("category", String(describing: category)), ("count", String(describing: count)), ("peers", String(describing: peers))])
+                return ("topPeerCategoryPeers", [("category", category as Any), ("count", count as Any), ("peers", peers as Any)])
     }
     }
     
@@ -671,7 +693,9 @@ public extension Api {
         case updateChannelMessageForwards(channelId: Int64, id: Int32, forwards: Int32)
         case updateChannelMessageViews(channelId: Int64, id: Int32, views: Int32)
         case updateChannelParticipant(flags: Int32, channelId: Int64, date: Int32, actorId: Int64, userId: Int64, prevParticipant: Api.ChannelParticipant?, newParticipant: Api.ChannelParticipant?, invite: Api.ExportedChatInvite?, qts: Int32)
-        case updateChannelReadMessagesContents(channelId: Int64, messages: [Int32])
+        case updateChannelPinnedTopic(flags: Int32, channelId: Int64, topicId: Int32)
+        case updateChannelPinnedTopics(flags: Int32, channelId: Int64, order: [Int32]?)
+        case updateChannelReadMessagesContents(flags: Int32, channelId: Int64, topMsgId: Int32?, messages: [Int32])
         case updateChannelTooLong(flags: Int32, channelId: Int64, pts: Int32?)
         case updateChannelUserTyping(flags: Int32, channelId: Int64, topMsgId: Int32?, fromId: Api.Peer, action: Api.SendMessageAction)
         case updateChannelWebPage(channelId: Int64, webpage: Api.WebPage, pts: Int32, ptsCount: Int32)
@@ -694,7 +718,7 @@ public extension Api {
         case updateDialogFilters
         case updateDialogPinned(flags: Int32, folderId: Int32?, peer: Api.DialogPeer)
         case updateDialogUnreadMark(flags: Int32, peer: Api.DialogPeer)
-        case updateDraftMessage(peer: Api.Peer, draft: Api.DraftMessage)
+        case updateDraftMessage(flags: Int32, peer: Api.Peer, topMsgId: Int32?, draft: Api.DraftMessage)
         case updateEditChannelMessage(message: Api.Message, pts: Int32, ptsCount: Int32)
         case updateEditMessage(message: Api.Message, pts: Int32, ptsCount: Int32)
         case updateEncryptedChatTyping(chatId: Int32)
@@ -714,7 +738,7 @@ public extension Api {
         case updateMessageID(id: Int32, randomId: Int64)
         case updateMessagePoll(flags: Int32, pollId: Int64, poll: Api.Poll?, results: Api.PollResults)
         case updateMessagePollVote(pollId: Int64, userId: Int64, options: [Buffer], qts: Int32)
-        case updateMessageReactions(peer: Api.Peer, msgId: Int32, reactions: Api.MessageReactions)
+        case updateMessageReactions(flags: Int32, peer: Api.Peer, msgId: Int32, topMsgId: Int32?, reactions: Api.MessageReactions)
         case updateMoveStickerSetToTop(flags: Int32, stickerset: Int64)
         case updateNewChannelMessage(message: Api.Message, pts: Int32, ptsCount: Int32)
         case updateNewEncryptedMessage(message: Api.EncryptedMessage, qts: Int32)
@@ -753,10 +777,10 @@ public extension Api {
         case updateStickerSetsOrder(flags: Int32, order: [Int64])
         case updateTheme(theme: Api.Theme)
         case updateTranscribedAudio(flags: Int32, peer: Api.Peer, msgId: Int32, transcriptionId: Int64, text: String)
+        case updateUser(userId: Int64)
         case updateUserEmojiStatus(userId: Int64, emojiStatus: Api.EmojiStatus)
-        case updateUserName(userId: Int64, firstName: String, lastName: String, username: String)
+        case updateUserName(userId: Int64, firstName: String, lastName: String, usernames: [Api.Username])
         case updateUserPhone(userId: Int64, phone: String)
-        case updateUserPhoto(userId: Int64, date: Int32, photo: Api.UserProfilePhoto, previous: Api.Bool)
         case updateUserStatus(userId: Int64, status: Api.UserStatus)
         case updateUserTyping(userId: Int64, action: Api.SendMessageAction)
         case updateWebPage(webpage: Api.WebPage, pts: Int32, ptsCount: Int32)
@@ -924,11 +948,33 @@ public extension Api {
                     if Int(flags) & Int(1 << 2) != 0 {invite!.serialize(buffer, true)}
                     serializeInt32(qts, buffer: buffer, boxed: false)
                     break
-                case .updateChannelReadMessagesContents(let channelId, let messages):
+                case .updateChannelPinnedTopic(let flags, let channelId, let topicId):
                     if boxed {
-                        buffer.appendInt32(1153291573)
+                        buffer.appendInt32(422509539)
                     }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
                     serializeInt64(channelId, buffer: buffer, boxed: false)
+                    serializeInt32(topicId, buffer: buffer, boxed: false)
+                    break
+                case .updateChannelPinnedTopics(let flags, let channelId, let order):
+                    if boxed {
+                        buffer.appendInt32(-31881726)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    serializeInt64(channelId, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(order!.count))
+                    for item in order! {
+                        serializeInt32(item, buffer: buffer, boxed: false)
+                    }}
+                    break
+                case .updateChannelReadMessagesContents(let flags, let channelId, let topMsgId, let messages):
+                    if boxed {
+                        buffer.appendInt32(-366410403)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    serializeInt64(channelId, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeInt32(topMsgId!, buffer: buffer, boxed: false)}
                     buffer.appendInt32(481674261)
                     buffer.appendInt32(Int32(messages.count))
                     for item in messages {
@@ -1128,11 +1174,13 @@ public extension Api {
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     peer.serialize(buffer, true)
                     break
-                case .updateDraftMessage(let peer, let draft):
+                case .updateDraftMessage(let flags, let peer, let topMsgId, let draft):
                     if boxed {
-                        buffer.appendInt32(-299124375)
+                        buffer.appendInt32(457829485)
                     }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
                     peer.serialize(buffer, true)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeInt32(topMsgId!, buffer: buffer, boxed: false)}
                     draft.serialize(buffer, true)
                     break
                 case .updateEditChannelMessage(let message, let pts, let ptsCount):
@@ -1290,12 +1338,14 @@ public extension Api {
                     }
                     serializeInt32(qts, buffer: buffer, boxed: false)
                     break
-                case .updateMessageReactions(let peer, let msgId, let reactions):
+                case .updateMessageReactions(let flags, let peer, let msgId, let topMsgId, let reactions):
                     if boxed {
-                        buffer.appendInt32(357013699)
+                        buffer.appendInt32(1578843320)
                     }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
                     peer.serialize(buffer, true)
                     serializeInt32(msgId, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeInt32(topMsgId!, buffer: buffer, boxed: false)}
                     reactions.serialize(buffer, true)
                     break
                 case .updateMoveStickerSetToTop(let flags, let stickerset):
@@ -1621,6 +1671,12 @@ public extension Api {
                     serializeInt64(transcriptionId, buffer: buffer, boxed: false)
                     serializeString(text, buffer: buffer, boxed: false)
                     break
+                case .updateUser(let userId):
+                    if boxed {
+                        buffer.appendInt32(542282808)
+                    }
+                    serializeInt64(userId, buffer: buffer, boxed: false)
+                    break
                 case .updateUserEmojiStatus(let userId, let emojiStatus):
                     if boxed {
                         buffer.appendInt32(674706841)
@@ -1628,14 +1684,18 @@ public extension Api {
                     serializeInt64(userId, buffer: buffer, boxed: false)
                     emojiStatus.serialize(buffer, true)
                     break
-                case .updateUserName(let userId, let firstName, let lastName, let username):
+                case .updateUserName(let userId, let firstName, let lastName, let usernames):
                     if boxed {
-                        buffer.appendInt32(-1007549728)
+                        buffer.appendInt32(-1484486364)
                     }
                     serializeInt64(userId, buffer: buffer, boxed: false)
                     serializeString(firstName, buffer: buffer, boxed: false)
                     serializeString(lastName, buffer: buffer, boxed: false)
-                    serializeString(username, buffer: buffer, boxed: false)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(usernames.count))
+                    for item in usernames {
+                        item.serialize(buffer, true)
+                    }
                     break
                 case .updateUserPhone(let userId, let phone):
                     if boxed {
@@ -1643,15 +1703,6 @@ public extension Api {
                     }
                     serializeInt64(userId, buffer: buffer, boxed: false)
                     serializeString(phone, buffer: buffer, boxed: false)
-                    break
-                case .updateUserPhoto(let userId, let date, let photo, let previous):
-                    if boxed {
-                        buffer.appendInt32(-232290676)
-                    }
-                    serializeInt64(userId, buffer: buffer, boxed: false)
-                    serializeInt32(date, buffer: buffer, boxed: false)
-                    photo.serialize(buffer, true)
-                    previous.serialize(buffer, true)
                     break
                 case .updateUserStatus(let userId, let status):
                     if boxed {
@@ -1689,181 +1740,185 @@ public extension Api {
                 case .updateAttachMenuBots:
                 return ("updateAttachMenuBots", [])
                 case .updateBotCallbackQuery(let flags, let queryId, let userId, let peer, let msgId, let chatInstance, let data, let gameShortName):
-                return ("updateBotCallbackQuery", [("flags", String(describing: flags)), ("queryId", String(describing: queryId)), ("userId", String(describing: userId)), ("peer", String(describing: peer)), ("msgId", String(describing: msgId)), ("chatInstance", String(describing: chatInstance)), ("data", String(describing: data)), ("gameShortName", String(describing: gameShortName))])
+                return ("updateBotCallbackQuery", [("flags", flags as Any), ("queryId", queryId as Any), ("userId", userId as Any), ("peer", peer as Any), ("msgId", msgId as Any), ("chatInstance", chatInstance as Any), ("data", data as Any), ("gameShortName", gameShortName as Any)])
                 case .updateBotChatInviteRequester(let peer, let date, let userId, let about, let invite, let qts):
-                return ("updateBotChatInviteRequester", [("peer", String(describing: peer)), ("date", String(describing: date)), ("userId", String(describing: userId)), ("about", String(describing: about)), ("invite", String(describing: invite)), ("qts", String(describing: qts))])
+                return ("updateBotChatInviteRequester", [("peer", peer as Any), ("date", date as Any), ("userId", userId as Any), ("about", about as Any), ("invite", invite as Any), ("qts", qts as Any)])
                 case .updateBotCommands(let peer, let botId, let commands):
-                return ("updateBotCommands", [("peer", String(describing: peer)), ("botId", String(describing: botId)), ("commands", String(describing: commands))])
+                return ("updateBotCommands", [("peer", peer as Any), ("botId", botId as Any), ("commands", commands as Any)])
                 case .updateBotInlineQuery(let flags, let queryId, let userId, let query, let geo, let peerType, let offset):
-                return ("updateBotInlineQuery", [("flags", String(describing: flags)), ("queryId", String(describing: queryId)), ("userId", String(describing: userId)), ("query", String(describing: query)), ("geo", String(describing: geo)), ("peerType", String(describing: peerType)), ("offset", String(describing: offset))])
+                return ("updateBotInlineQuery", [("flags", flags as Any), ("queryId", queryId as Any), ("userId", userId as Any), ("query", query as Any), ("geo", geo as Any), ("peerType", peerType as Any), ("offset", offset as Any)])
                 case .updateBotInlineSend(let flags, let userId, let query, let geo, let id, let msgId):
-                return ("updateBotInlineSend", [("flags", String(describing: flags)), ("userId", String(describing: userId)), ("query", String(describing: query)), ("geo", String(describing: geo)), ("id", String(describing: id)), ("msgId", String(describing: msgId))])
+                return ("updateBotInlineSend", [("flags", flags as Any), ("userId", userId as Any), ("query", query as Any), ("geo", geo as Any), ("id", id as Any), ("msgId", msgId as Any)])
                 case .updateBotMenuButton(let botId, let button):
-                return ("updateBotMenuButton", [("botId", String(describing: botId)), ("button", String(describing: button))])
+                return ("updateBotMenuButton", [("botId", botId as Any), ("button", button as Any)])
                 case .updateBotPrecheckoutQuery(let flags, let queryId, let userId, let payload, let info, let shippingOptionId, let currency, let totalAmount):
-                return ("updateBotPrecheckoutQuery", [("flags", String(describing: flags)), ("queryId", String(describing: queryId)), ("userId", String(describing: userId)), ("payload", String(describing: payload)), ("info", String(describing: info)), ("shippingOptionId", String(describing: shippingOptionId)), ("currency", String(describing: currency)), ("totalAmount", String(describing: totalAmount))])
+                return ("updateBotPrecheckoutQuery", [("flags", flags as Any), ("queryId", queryId as Any), ("userId", userId as Any), ("payload", payload as Any), ("info", info as Any), ("shippingOptionId", shippingOptionId as Any), ("currency", currency as Any), ("totalAmount", totalAmount as Any)])
                 case .updateBotShippingQuery(let queryId, let userId, let payload, let shippingAddress):
-                return ("updateBotShippingQuery", [("queryId", String(describing: queryId)), ("userId", String(describing: userId)), ("payload", String(describing: payload)), ("shippingAddress", String(describing: shippingAddress))])
+                return ("updateBotShippingQuery", [("queryId", queryId as Any), ("userId", userId as Any), ("payload", payload as Any), ("shippingAddress", shippingAddress as Any)])
                 case .updateBotStopped(let userId, let date, let stopped, let qts):
-                return ("updateBotStopped", [("userId", String(describing: userId)), ("date", String(describing: date)), ("stopped", String(describing: stopped)), ("qts", String(describing: qts))])
+                return ("updateBotStopped", [("userId", userId as Any), ("date", date as Any), ("stopped", stopped as Any), ("qts", qts as Any)])
                 case .updateBotWebhookJSON(let data):
-                return ("updateBotWebhookJSON", [("data", String(describing: data))])
+                return ("updateBotWebhookJSON", [("data", data as Any)])
                 case .updateBotWebhookJSONQuery(let queryId, let data, let timeout):
-                return ("updateBotWebhookJSONQuery", [("queryId", String(describing: queryId)), ("data", String(describing: data)), ("timeout", String(describing: timeout))])
+                return ("updateBotWebhookJSONQuery", [("queryId", queryId as Any), ("data", data as Any), ("timeout", timeout as Any)])
                 case .updateChannel(let channelId):
-                return ("updateChannel", [("channelId", String(describing: channelId))])
+                return ("updateChannel", [("channelId", channelId as Any)])
                 case .updateChannelAvailableMessages(let channelId, let availableMinId):
-                return ("updateChannelAvailableMessages", [("channelId", String(describing: channelId)), ("availableMinId", String(describing: availableMinId))])
+                return ("updateChannelAvailableMessages", [("channelId", channelId as Any), ("availableMinId", availableMinId as Any)])
                 case .updateChannelMessageForwards(let channelId, let id, let forwards):
-                return ("updateChannelMessageForwards", [("channelId", String(describing: channelId)), ("id", String(describing: id)), ("forwards", String(describing: forwards))])
+                return ("updateChannelMessageForwards", [("channelId", channelId as Any), ("id", id as Any), ("forwards", forwards as Any)])
                 case .updateChannelMessageViews(let channelId, let id, let views):
-                return ("updateChannelMessageViews", [("channelId", String(describing: channelId)), ("id", String(describing: id)), ("views", String(describing: views))])
+                return ("updateChannelMessageViews", [("channelId", channelId as Any), ("id", id as Any), ("views", views as Any)])
                 case .updateChannelParticipant(let flags, let channelId, let date, let actorId, let userId, let prevParticipant, let newParticipant, let invite, let qts):
-                return ("updateChannelParticipant", [("flags", String(describing: flags)), ("channelId", String(describing: channelId)), ("date", String(describing: date)), ("actorId", String(describing: actorId)), ("userId", String(describing: userId)), ("prevParticipant", String(describing: prevParticipant)), ("newParticipant", String(describing: newParticipant)), ("invite", String(describing: invite)), ("qts", String(describing: qts))])
-                case .updateChannelReadMessagesContents(let channelId, let messages):
-                return ("updateChannelReadMessagesContents", [("channelId", String(describing: channelId)), ("messages", String(describing: messages))])
+                return ("updateChannelParticipant", [("flags", flags as Any), ("channelId", channelId as Any), ("date", date as Any), ("actorId", actorId as Any), ("userId", userId as Any), ("prevParticipant", prevParticipant as Any), ("newParticipant", newParticipant as Any), ("invite", invite as Any), ("qts", qts as Any)])
+                case .updateChannelPinnedTopic(let flags, let channelId, let topicId):
+                return ("updateChannelPinnedTopic", [("flags", flags as Any), ("channelId", channelId as Any), ("topicId", topicId as Any)])
+                case .updateChannelPinnedTopics(let flags, let channelId, let order):
+                return ("updateChannelPinnedTopics", [("flags", flags as Any), ("channelId", channelId as Any), ("order", order as Any)])
+                case .updateChannelReadMessagesContents(let flags, let channelId, let topMsgId, let messages):
+                return ("updateChannelReadMessagesContents", [("flags", flags as Any), ("channelId", channelId as Any), ("topMsgId", topMsgId as Any), ("messages", messages as Any)])
                 case .updateChannelTooLong(let flags, let channelId, let pts):
-                return ("updateChannelTooLong", [("flags", String(describing: flags)), ("channelId", String(describing: channelId)), ("pts", String(describing: pts))])
+                return ("updateChannelTooLong", [("flags", flags as Any), ("channelId", channelId as Any), ("pts", pts as Any)])
                 case .updateChannelUserTyping(let flags, let channelId, let topMsgId, let fromId, let action):
-                return ("updateChannelUserTyping", [("flags", String(describing: flags)), ("channelId", String(describing: channelId)), ("topMsgId", String(describing: topMsgId)), ("fromId", String(describing: fromId)), ("action", String(describing: action))])
+                return ("updateChannelUserTyping", [("flags", flags as Any), ("channelId", channelId as Any), ("topMsgId", topMsgId as Any), ("fromId", fromId as Any), ("action", action as Any)])
                 case .updateChannelWebPage(let channelId, let webpage, let pts, let ptsCount):
-                return ("updateChannelWebPage", [("channelId", String(describing: channelId)), ("webpage", String(describing: webpage)), ("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount))])
+                return ("updateChannelWebPage", [("channelId", channelId as Any), ("webpage", webpage as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateChat(let chatId):
-                return ("updateChat", [("chatId", String(describing: chatId))])
+                return ("updateChat", [("chatId", chatId as Any)])
                 case .updateChatDefaultBannedRights(let peer, let defaultBannedRights, let version):
-                return ("updateChatDefaultBannedRights", [("peer", String(describing: peer)), ("defaultBannedRights", String(describing: defaultBannedRights)), ("version", String(describing: version))])
+                return ("updateChatDefaultBannedRights", [("peer", peer as Any), ("defaultBannedRights", defaultBannedRights as Any), ("version", version as Any)])
                 case .updateChatParticipant(let flags, let chatId, let date, let actorId, let userId, let prevParticipant, let newParticipant, let invite, let qts):
-                return ("updateChatParticipant", [("flags", String(describing: flags)), ("chatId", String(describing: chatId)), ("date", String(describing: date)), ("actorId", String(describing: actorId)), ("userId", String(describing: userId)), ("prevParticipant", String(describing: prevParticipant)), ("newParticipant", String(describing: newParticipant)), ("invite", String(describing: invite)), ("qts", String(describing: qts))])
+                return ("updateChatParticipant", [("flags", flags as Any), ("chatId", chatId as Any), ("date", date as Any), ("actorId", actorId as Any), ("userId", userId as Any), ("prevParticipant", prevParticipant as Any), ("newParticipant", newParticipant as Any), ("invite", invite as Any), ("qts", qts as Any)])
                 case .updateChatParticipantAdd(let chatId, let userId, let inviterId, let date, let version):
-                return ("updateChatParticipantAdd", [("chatId", String(describing: chatId)), ("userId", String(describing: userId)), ("inviterId", String(describing: inviterId)), ("date", String(describing: date)), ("version", String(describing: version))])
+                return ("updateChatParticipantAdd", [("chatId", chatId as Any), ("userId", userId as Any), ("inviterId", inviterId as Any), ("date", date as Any), ("version", version as Any)])
                 case .updateChatParticipantAdmin(let chatId, let userId, let isAdmin, let version):
-                return ("updateChatParticipantAdmin", [("chatId", String(describing: chatId)), ("userId", String(describing: userId)), ("isAdmin", String(describing: isAdmin)), ("version", String(describing: version))])
+                return ("updateChatParticipantAdmin", [("chatId", chatId as Any), ("userId", userId as Any), ("isAdmin", isAdmin as Any), ("version", version as Any)])
                 case .updateChatParticipantDelete(let chatId, let userId, let version):
-                return ("updateChatParticipantDelete", [("chatId", String(describing: chatId)), ("userId", String(describing: userId)), ("version", String(describing: version))])
+                return ("updateChatParticipantDelete", [("chatId", chatId as Any), ("userId", userId as Any), ("version", version as Any)])
                 case .updateChatParticipants(let participants):
-                return ("updateChatParticipants", [("participants", String(describing: participants))])
+                return ("updateChatParticipants", [("participants", participants as Any)])
                 case .updateChatUserTyping(let chatId, let fromId, let action):
-                return ("updateChatUserTyping", [("chatId", String(describing: chatId)), ("fromId", String(describing: fromId)), ("action", String(describing: action))])
+                return ("updateChatUserTyping", [("chatId", chatId as Any), ("fromId", fromId as Any), ("action", action as Any)])
                 case .updateConfig:
                 return ("updateConfig", [])
                 case .updateContactsReset:
                 return ("updateContactsReset", [])
                 case .updateDcOptions(let dcOptions):
-                return ("updateDcOptions", [("dcOptions", String(describing: dcOptions))])
+                return ("updateDcOptions", [("dcOptions", dcOptions as Any)])
                 case .updateDeleteChannelMessages(let channelId, let messages, let pts, let ptsCount):
-                return ("updateDeleteChannelMessages", [("channelId", String(describing: channelId)), ("messages", String(describing: messages)), ("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount))])
+                return ("updateDeleteChannelMessages", [("channelId", channelId as Any), ("messages", messages as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateDeleteMessages(let messages, let pts, let ptsCount):
-                return ("updateDeleteMessages", [("messages", String(describing: messages)), ("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount))])
+                return ("updateDeleteMessages", [("messages", messages as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateDeleteScheduledMessages(let peer, let messages):
-                return ("updateDeleteScheduledMessages", [("peer", String(describing: peer)), ("messages", String(describing: messages))])
+                return ("updateDeleteScheduledMessages", [("peer", peer as Any), ("messages", messages as Any)])
                 case .updateDialogFilter(let flags, let id, let filter):
-                return ("updateDialogFilter", [("flags", String(describing: flags)), ("id", String(describing: id)), ("filter", String(describing: filter))])
+                return ("updateDialogFilter", [("flags", flags as Any), ("id", id as Any), ("filter", filter as Any)])
                 case .updateDialogFilterOrder(let order):
-                return ("updateDialogFilterOrder", [("order", String(describing: order))])
+                return ("updateDialogFilterOrder", [("order", order as Any)])
                 case .updateDialogFilters:
                 return ("updateDialogFilters", [])
                 case .updateDialogPinned(let flags, let folderId, let peer):
-                return ("updateDialogPinned", [("flags", String(describing: flags)), ("folderId", String(describing: folderId)), ("peer", String(describing: peer))])
+                return ("updateDialogPinned", [("flags", flags as Any), ("folderId", folderId as Any), ("peer", peer as Any)])
                 case .updateDialogUnreadMark(let flags, let peer):
-                return ("updateDialogUnreadMark", [("flags", String(describing: flags)), ("peer", String(describing: peer))])
-                case .updateDraftMessage(let peer, let draft):
-                return ("updateDraftMessage", [("peer", String(describing: peer)), ("draft", String(describing: draft))])
+                return ("updateDialogUnreadMark", [("flags", flags as Any), ("peer", peer as Any)])
+                case .updateDraftMessage(let flags, let peer, let topMsgId, let draft):
+                return ("updateDraftMessage", [("flags", flags as Any), ("peer", peer as Any), ("topMsgId", topMsgId as Any), ("draft", draft as Any)])
                 case .updateEditChannelMessage(let message, let pts, let ptsCount):
-                return ("updateEditChannelMessage", [("message", String(describing: message)), ("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount))])
+                return ("updateEditChannelMessage", [("message", message as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateEditMessage(let message, let pts, let ptsCount):
-                return ("updateEditMessage", [("message", String(describing: message)), ("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount))])
+                return ("updateEditMessage", [("message", message as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateEncryptedChatTyping(let chatId):
-                return ("updateEncryptedChatTyping", [("chatId", String(describing: chatId))])
+                return ("updateEncryptedChatTyping", [("chatId", chatId as Any)])
                 case .updateEncryptedMessagesRead(let chatId, let maxDate, let date):
-                return ("updateEncryptedMessagesRead", [("chatId", String(describing: chatId)), ("maxDate", String(describing: maxDate)), ("date", String(describing: date))])
+                return ("updateEncryptedMessagesRead", [("chatId", chatId as Any), ("maxDate", maxDate as Any), ("date", date as Any)])
                 case .updateEncryption(let chat, let date):
-                return ("updateEncryption", [("chat", String(describing: chat)), ("date", String(describing: date))])
+                return ("updateEncryption", [("chat", chat as Any), ("date", date as Any)])
                 case .updateFavedStickers:
                 return ("updateFavedStickers", [])
                 case .updateFolderPeers(let folderPeers, let pts, let ptsCount):
-                return ("updateFolderPeers", [("folderPeers", String(describing: folderPeers)), ("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount))])
+                return ("updateFolderPeers", [("folderPeers", folderPeers as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateGeoLiveViewed(let peer, let msgId):
-                return ("updateGeoLiveViewed", [("peer", String(describing: peer)), ("msgId", String(describing: msgId))])
+                return ("updateGeoLiveViewed", [("peer", peer as Any), ("msgId", msgId as Any)])
                 case .updateGroupCall(let chatId, let call):
-                return ("updateGroupCall", [("chatId", String(describing: chatId)), ("call", String(describing: call))])
+                return ("updateGroupCall", [("chatId", chatId as Any), ("call", call as Any)])
                 case .updateGroupCallConnection(let flags, let params):
-                return ("updateGroupCallConnection", [("flags", String(describing: flags)), ("params", String(describing: params))])
+                return ("updateGroupCallConnection", [("flags", flags as Any), ("params", params as Any)])
                 case .updateGroupCallParticipants(let call, let participants, let version):
-                return ("updateGroupCallParticipants", [("call", String(describing: call)), ("participants", String(describing: participants)), ("version", String(describing: version))])
+                return ("updateGroupCallParticipants", [("call", call as Any), ("participants", participants as Any), ("version", version as Any)])
                 case .updateInlineBotCallbackQuery(let flags, let queryId, let userId, let msgId, let chatInstance, let data, let gameShortName):
-                return ("updateInlineBotCallbackQuery", [("flags", String(describing: flags)), ("queryId", String(describing: queryId)), ("userId", String(describing: userId)), ("msgId", String(describing: msgId)), ("chatInstance", String(describing: chatInstance)), ("data", String(describing: data)), ("gameShortName", String(describing: gameShortName))])
+                return ("updateInlineBotCallbackQuery", [("flags", flags as Any), ("queryId", queryId as Any), ("userId", userId as Any), ("msgId", msgId as Any), ("chatInstance", chatInstance as Any), ("data", data as Any), ("gameShortName", gameShortName as Any)])
                 case .updateLangPack(let difference):
-                return ("updateLangPack", [("difference", String(describing: difference))])
+                return ("updateLangPack", [("difference", difference as Any)])
                 case .updateLangPackTooLong(let langCode):
-                return ("updateLangPackTooLong", [("langCode", String(describing: langCode))])
+                return ("updateLangPackTooLong", [("langCode", langCode as Any)])
                 case .updateLoginToken:
                 return ("updateLoginToken", [])
                 case .updateMessageExtendedMedia(let peer, let msgId, let extendedMedia):
-                return ("updateMessageExtendedMedia", [("peer", String(describing: peer)), ("msgId", String(describing: msgId)), ("extendedMedia", String(describing: extendedMedia))])
+                return ("updateMessageExtendedMedia", [("peer", peer as Any), ("msgId", msgId as Any), ("extendedMedia", extendedMedia as Any)])
                 case .updateMessageID(let id, let randomId):
-                return ("updateMessageID", [("id", String(describing: id)), ("randomId", String(describing: randomId))])
+                return ("updateMessageID", [("id", id as Any), ("randomId", randomId as Any)])
                 case .updateMessagePoll(let flags, let pollId, let poll, let results):
-                return ("updateMessagePoll", [("flags", String(describing: flags)), ("pollId", String(describing: pollId)), ("poll", String(describing: poll)), ("results", String(describing: results))])
+                return ("updateMessagePoll", [("flags", flags as Any), ("pollId", pollId as Any), ("poll", poll as Any), ("results", results as Any)])
                 case .updateMessagePollVote(let pollId, let userId, let options, let qts):
-                return ("updateMessagePollVote", [("pollId", String(describing: pollId)), ("userId", String(describing: userId)), ("options", String(describing: options)), ("qts", String(describing: qts))])
-                case .updateMessageReactions(let peer, let msgId, let reactions):
-                return ("updateMessageReactions", [("peer", String(describing: peer)), ("msgId", String(describing: msgId)), ("reactions", String(describing: reactions))])
+                return ("updateMessagePollVote", [("pollId", pollId as Any), ("userId", userId as Any), ("options", options as Any), ("qts", qts as Any)])
+                case .updateMessageReactions(let flags, let peer, let msgId, let topMsgId, let reactions):
+                return ("updateMessageReactions", [("flags", flags as Any), ("peer", peer as Any), ("msgId", msgId as Any), ("topMsgId", topMsgId as Any), ("reactions", reactions as Any)])
                 case .updateMoveStickerSetToTop(let flags, let stickerset):
-                return ("updateMoveStickerSetToTop", [("flags", String(describing: flags)), ("stickerset", String(describing: stickerset))])
+                return ("updateMoveStickerSetToTop", [("flags", flags as Any), ("stickerset", stickerset as Any)])
                 case .updateNewChannelMessage(let message, let pts, let ptsCount):
-                return ("updateNewChannelMessage", [("message", String(describing: message)), ("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount))])
+                return ("updateNewChannelMessage", [("message", message as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateNewEncryptedMessage(let message, let qts):
-                return ("updateNewEncryptedMessage", [("message", String(describing: message)), ("qts", String(describing: qts))])
+                return ("updateNewEncryptedMessage", [("message", message as Any), ("qts", qts as Any)])
                 case .updateNewMessage(let message, let pts, let ptsCount):
-                return ("updateNewMessage", [("message", String(describing: message)), ("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount))])
+                return ("updateNewMessage", [("message", message as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateNewScheduledMessage(let message):
-                return ("updateNewScheduledMessage", [("message", String(describing: message))])
+                return ("updateNewScheduledMessage", [("message", message as Any)])
                 case .updateNewStickerSet(let stickerset):
-                return ("updateNewStickerSet", [("stickerset", String(describing: stickerset))])
+                return ("updateNewStickerSet", [("stickerset", stickerset as Any)])
                 case .updateNotifySettings(let peer, let notifySettings):
-                return ("updateNotifySettings", [("peer", String(describing: peer)), ("notifySettings", String(describing: notifySettings))])
+                return ("updateNotifySettings", [("peer", peer as Any), ("notifySettings", notifySettings as Any)])
                 case .updatePeerBlocked(let peerId, let blocked):
-                return ("updatePeerBlocked", [("peerId", String(describing: peerId)), ("blocked", String(describing: blocked))])
+                return ("updatePeerBlocked", [("peerId", peerId as Any), ("blocked", blocked as Any)])
                 case .updatePeerHistoryTTL(let flags, let peer, let ttlPeriod):
-                return ("updatePeerHistoryTTL", [("flags", String(describing: flags)), ("peer", String(describing: peer)), ("ttlPeriod", String(describing: ttlPeriod))])
+                return ("updatePeerHistoryTTL", [("flags", flags as Any), ("peer", peer as Any), ("ttlPeriod", ttlPeriod as Any)])
                 case .updatePeerLocated(let peers):
-                return ("updatePeerLocated", [("peers", String(describing: peers))])
+                return ("updatePeerLocated", [("peers", peers as Any)])
                 case .updatePeerSettings(let peer, let settings):
-                return ("updatePeerSettings", [("peer", String(describing: peer)), ("settings", String(describing: settings))])
+                return ("updatePeerSettings", [("peer", peer as Any), ("settings", settings as Any)])
                 case .updatePendingJoinRequests(let peer, let requestsPending, let recentRequesters):
-                return ("updatePendingJoinRequests", [("peer", String(describing: peer)), ("requestsPending", String(describing: requestsPending)), ("recentRequesters", String(describing: recentRequesters))])
+                return ("updatePendingJoinRequests", [("peer", peer as Any), ("requestsPending", requestsPending as Any), ("recentRequesters", recentRequesters as Any)])
                 case .updatePhoneCall(let phoneCall):
-                return ("updatePhoneCall", [("phoneCall", String(describing: phoneCall))])
+                return ("updatePhoneCall", [("phoneCall", phoneCall as Any)])
                 case .updatePhoneCallSignalingData(let phoneCallId, let data):
-                return ("updatePhoneCallSignalingData", [("phoneCallId", String(describing: phoneCallId)), ("data", String(describing: data))])
+                return ("updatePhoneCallSignalingData", [("phoneCallId", phoneCallId as Any), ("data", data as Any)])
                 case .updatePinnedChannelMessages(let flags, let channelId, let messages, let pts, let ptsCount):
-                return ("updatePinnedChannelMessages", [("flags", String(describing: flags)), ("channelId", String(describing: channelId)), ("messages", String(describing: messages)), ("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount))])
+                return ("updatePinnedChannelMessages", [("flags", flags as Any), ("channelId", channelId as Any), ("messages", messages as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updatePinnedDialogs(let flags, let folderId, let order):
-                return ("updatePinnedDialogs", [("flags", String(describing: flags)), ("folderId", String(describing: folderId)), ("order", String(describing: order))])
+                return ("updatePinnedDialogs", [("flags", flags as Any), ("folderId", folderId as Any), ("order", order as Any)])
                 case .updatePinnedMessages(let flags, let peer, let messages, let pts, let ptsCount):
-                return ("updatePinnedMessages", [("flags", String(describing: flags)), ("peer", String(describing: peer)), ("messages", String(describing: messages)), ("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount))])
+                return ("updatePinnedMessages", [("flags", flags as Any), ("peer", peer as Any), ("messages", messages as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updatePrivacy(let key, let rules):
-                return ("updatePrivacy", [("key", String(describing: key)), ("rules", String(describing: rules))])
+                return ("updatePrivacy", [("key", key as Any), ("rules", rules as Any)])
                 case .updatePtsChanged:
                 return ("updatePtsChanged", [])
                 case .updateReadChannelDiscussionInbox(let flags, let channelId, let topMsgId, let readMaxId, let broadcastId, let broadcastPost):
-                return ("updateReadChannelDiscussionInbox", [("flags", String(describing: flags)), ("channelId", String(describing: channelId)), ("topMsgId", String(describing: topMsgId)), ("readMaxId", String(describing: readMaxId)), ("broadcastId", String(describing: broadcastId)), ("broadcastPost", String(describing: broadcastPost))])
+                return ("updateReadChannelDiscussionInbox", [("flags", flags as Any), ("channelId", channelId as Any), ("topMsgId", topMsgId as Any), ("readMaxId", readMaxId as Any), ("broadcastId", broadcastId as Any), ("broadcastPost", broadcastPost as Any)])
                 case .updateReadChannelDiscussionOutbox(let channelId, let topMsgId, let readMaxId):
-                return ("updateReadChannelDiscussionOutbox", [("channelId", String(describing: channelId)), ("topMsgId", String(describing: topMsgId)), ("readMaxId", String(describing: readMaxId))])
+                return ("updateReadChannelDiscussionOutbox", [("channelId", channelId as Any), ("topMsgId", topMsgId as Any), ("readMaxId", readMaxId as Any)])
                 case .updateReadChannelInbox(let flags, let folderId, let channelId, let maxId, let stillUnreadCount, let pts):
-                return ("updateReadChannelInbox", [("flags", String(describing: flags)), ("folderId", String(describing: folderId)), ("channelId", String(describing: channelId)), ("maxId", String(describing: maxId)), ("stillUnreadCount", String(describing: stillUnreadCount)), ("pts", String(describing: pts))])
+                return ("updateReadChannelInbox", [("flags", flags as Any), ("folderId", folderId as Any), ("channelId", channelId as Any), ("maxId", maxId as Any), ("stillUnreadCount", stillUnreadCount as Any), ("pts", pts as Any)])
                 case .updateReadChannelOutbox(let channelId, let maxId):
-                return ("updateReadChannelOutbox", [("channelId", String(describing: channelId)), ("maxId", String(describing: maxId))])
+                return ("updateReadChannelOutbox", [("channelId", channelId as Any), ("maxId", maxId as Any)])
                 case .updateReadFeaturedEmojiStickers:
                 return ("updateReadFeaturedEmojiStickers", [])
                 case .updateReadFeaturedStickers:
                 return ("updateReadFeaturedStickers", [])
                 case .updateReadHistoryInbox(let flags, let folderId, let peer, let maxId, let stillUnreadCount, let pts, let ptsCount):
-                return ("updateReadHistoryInbox", [("flags", String(describing: flags)), ("folderId", String(describing: folderId)), ("peer", String(describing: peer)), ("maxId", String(describing: maxId)), ("stillUnreadCount", String(describing: stillUnreadCount)), ("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount))])
+                return ("updateReadHistoryInbox", [("flags", flags as Any), ("folderId", folderId as Any), ("peer", peer as Any), ("maxId", maxId as Any), ("stillUnreadCount", stillUnreadCount as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateReadHistoryOutbox(let peer, let maxId, let pts, let ptsCount):
-                return ("updateReadHistoryOutbox", [("peer", String(describing: peer)), ("maxId", String(describing: maxId)), ("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount))])
+                return ("updateReadHistoryOutbox", [("peer", peer as Any), ("maxId", maxId as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateReadMessagesContents(let messages, let pts, let ptsCount):
-                return ("updateReadMessagesContents", [("messages", String(describing: messages)), ("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount))])
+                return ("updateReadMessagesContents", [("messages", messages as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateRecentEmojiStatuses:
                 return ("updateRecentEmojiStatuses", [])
                 case .updateRecentReactions:
@@ -1875,31 +1930,31 @@ public extension Api {
                 case .updateSavedRingtones:
                 return ("updateSavedRingtones", [])
                 case .updateServiceNotification(let flags, let inboxDate, let type, let message, let media, let entities):
-                return ("updateServiceNotification", [("flags", String(describing: flags)), ("inboxDate", String(describing: inboxDate)), ("type", String(describing: type)), ("message", String(describing: message)), ("media", String(describing: media)), ("entities", String(describing: entities))])
+                return ("updateServiceNotification", [("flags", flags as Any), ("inboxDate", inboxDate as Any), ("type", type as Any), ("message", message as Any), ("media", media as Any), ("entities", entities as Any)])
                 case .updateStickerSets(let flags):
-                return ("updateStickerSets", [("flags", String(describing: flags))])
+                return ("updateStickerSets", [("flags", flags as Any)])
                 case .updateStickerSetsOrder(let flags, let order):
-                return ("updateStickerSetsOrder", [("flags", String(describing: flags)), ("order", String(describing: order))])
+                return ("updateStickerSetsOrder", [("flags", flags as Any), ("order", order as Any)])
                 case .updateTheme(let theme):
-                return ("updateTheme", [("theme", String(describing: theme))])
+                return ("updateTheme", [("theme", theme as Any)])
                 case .updateTranscribedAudio(let flags, let peer, let msgId, let transcriptionId, let text):
-                return ("updateTranscribedAudio", [("flags", String(describing: flags)), ("peer", String(describing: peer)), ("msgId", String(describing: msgId)), ("transcriptionId", String(describing: transcriptionId)), ("text", String(describing: text))])
+                return ("updateTranscribedAudio", [("flags", flags as Any), ("peer", peer as Any), ("msgId", msgId as Any), ("transcriptionId", transcriptionId as Any), ("text", text as Any)])
+                case .updateUser(let userId):
+                return ("updateUser", [("userId", userId as Any)])
                 case .updateUserEmojiStatus(let userId, let emojiStatus):
-                return ("updateUserEmojiStatus", [("userId", String(describing: userId)), ("emojiStatus", String(describing: emojiStatus))])
-                case .updateUserName(let userId, let firstName, let lastName, let username):
-                return ("updateUserName", [("userId", String(describing: userId)), ("firstName", String(describing: firstName)), ("lastName", String(describing: lastName)), ("username", String(describing: username))])
+                return ("updateUserEmojiStatus", [("userId", userId as Any), ("emojiStatus", emojiStatus as Any)])
+                case .updateUserName(let userId, let firstName, let lastName, let usernames):
+                return ("updateUserName", [("userId", userId as Any), ("firstName", firstName as Any), ("lastName", lastName as Any), ("usernames", usernames as Any)])
                 case .updateUserPhone(let userId, let phone):
-                return ("updateUserPhone", [("userId", String(describing: userId)), ("phone", String(describing: phone))])
-                case .updateUserPhoto(let userId, let date, let photo, let previous):
-                return ("updateUserPhoto", [("userId", String(describing: userId)), ("date", String(describing: date)), ("photo", String(describing: photo)), ("previous", String(describing: previous))])
+                return ("updateUserPhone", [("userId", userId as Any), ("phone", phone as Any)])
                 case .updateUserStatus(let userId, let status):
-                return ("updateUserStatus", [("userId", String(describing: userId)), ("status", String(describing: status))])
+                return ("updateUserStatus", [("userId", userId as Any), ("status", status as Any)])
                 case .updateUserTyping(let userId, let action):
-                return ("updateUserTyping", [("userId", String(describing: userId)), ("action", String(describing: action))])
+                return ("updateUserTyping", [("userId", userId as Any), ("action", action as Any)])
                 case .updateWebPage(let webpage, let pts, let ptsCount):
-                return ("updateWebPage", [("webpage", String(describing: webpage)), ("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount))])
+                return ("updateWebPage", [("webpage", webpage as Any), ("pts", pts as Any), ("ptsCount", ptsCount as Any)])
                 case .updateWebViewResultSent(let queryId):
-                return ("updateWebViewResultSent", [("queryId", String(describing: queryId))])
+                return ("updateWebViewResultSent", [("queryId", queryId as Any)])
     }
     }
     
@@ -2280,17 +2335,59 @@ public extension Api {
                 return nil
             }
         }
+        public static func parse_updateChannelPinnedTopic(_ reader: BufferReader) -> Update? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: Int32?
+            _3 = reader.readInt32()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateChannelPinnedTopic(flags: _1!, channelId: _2!, topicId: _3!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_updateChannelPinnedTopics(_ reader: BufferReader) -> Update? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: [Int32]?
+            if Int(_1!) & Int(1 << 0) != 0 {if let _ = reader.readInt32() {
+                _3 = Api.parseVector(reader, elementSignature: -1471112230, elementType: Int32.self)
+            } }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateChannelPinnedTopics(flags: _1!, channelId: _2!, order: _3)
+            }
+            else {
+                return nil
+            }
+        }
         public static func parse_updateChannelReadMessagesContents(_ reader: BufferReader) -> Update? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: [Int32]?
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: Int32?
+            if Int(_1!) & Int(1 << 0) != 0 {_3 = reader.readInt32() }
+            var _4: [Int32]?
             if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: -1471112230, elementType: Int32.self)
+                _4 = Api.parseVector(reader, elementSignature: -1471112230, elementType: Int32.self)
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.Update.updateChannelReadMessagesContents(channelId: _1!, messages: _2!)
+            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateChannelReadMessagesContents(flags: _1!, channelId: _2!, topMsgId: _3, messages: _4!)
             }
             else {
                 return nil
@@ -2680,18 +2777,24 @@ public extension Api {
             }
         }
         public static func parse_updateDraftMessage(_ reader: BufferReader) -> Update? {
-            var _1: Api.Peer?
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.Peer?
             if let signature = reader.readInt32() {
-                _1 = Api.parse(reader, signature: signature) as? Api.Peer
+                _2 = Api.parse(reader, signature: signature) as? Api.Peer
             }
-            var _2: Api.DraftMessage?
+            var _3: Int32?
+            if Int(_1!) & Int(1 << 0) != 0 {_3 = reader.readInt32() }
+            var _4: Api.DraftMessage?
             if let signature = reader.readInt32() {
-                _2 = Api.parse(reader, signature: signature) as? Api.DraftMessage
+                _4 = Api.parse(reader, signature: signature) as? Api.DraftMessage
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.Update.updateDraftMessage(peer: _1!, draft: _2!)
+            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateDraftMessage(flags: _1!, peer: _2!, topMsgId: _3, draft: _4!)
             }
             else {
                 return nil
@@ -3010,21 +3113,27 @@ public extension Api {
             }
         }
         public static func parse_updateMessageReactions(_ reader: BufferReader) -> Update? {
-            var _1: Api.Peer?
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.Peer?
             if let signature = reader.readInt32() {
-                _1 = Api.parse(reader, signature: signature) as? Api.Peer
+                _2 = Api.parse(reader, signature: signature) as? Api.Peer
             }
-            var _2: Int32?
-            _2 = reader.readInt32()
-            var _3: Api.MessageReactions?
+            var _3: Int32?
+            _3 = reader.readInt32()
+            var _4: Int32?
+            if Int(_1!) & Int(1 << 0) != 0 {_4 = reader.readInt32() }
+            var _5: Api.MessageReactions?
             if let signature = reader.readInt32() {
-                _3 = Api.parse(reader, signature: signature) as? Api.MessageReactions
+                _5 = Api.parse(reader, signature: signature) as? Api.MessageReactions
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.Update.updateMessageReactions(peer: _1!, msgId: _2!, reactions: _3!)
+            let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
+            let _c5 = _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.Update.updateMessageReactions(flags: _1!, peer: _2!, msgId: _3!, topMsgId: _4, reactions: _5!)
             }
             else {
                 return nil
@@ -3621,6 +3730,17 @@ public extension Api {
                 return nil
             }
         }
+        public static func parse_updateUser(_ reader: BufferReader) -> Update? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.Update.updateUser(userId: _1!)
+            }
+            else {
+                return nil
+            }
+        }
         public static func parse_updateUserEmojiStatus(_ reader: BufferReader) -> Update? {
             var _1: Int64?
             _1 = reader.readInt64()
@@ -3644,14 +3764,16 @@ public extension Api {
             _2 = parseString(reader)
             var _3: String?
             _3 = parseString(reader)
-            var _4: String?
-            _4 = parseString(reader)
+            var _4: [Api.Username]?
+            if let _ = reader.readInt32() {
+                _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Username.self)
+            }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
-                return Api.Update.updateUserName(userId: _1!, firstName: _2!, lastName: _3!, username: _4!)
+                return Api.Update.updateUserName(userId: _1!, firstName: _2!, lastName: _3!, usernames: _4!)
             }
             else {
                 return nil
@@ -3666,30 +3788,6 @@ public extension Api {
             let _c2 = _2 != nil
             if _c1 && _c2 {
                 return Api.Update.updateUserPhone(userId: _1!, phone: _2!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_updateUserPhoto(_ reader: BufferReader) -> Update? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: Int32?
-            _2 = reader.readInt32()
-            var _3: Api.UserProfilePhoto?
-            if let signature = reader.readInt32() {
-                _3 = Api.parse(reader, signature: signature) as? Api.UserProfilePhoto
-            }
-            var _4: Api.Bool?
-            if let signature = reader.readInt32() {
-                _4 = Api.parse(reader, signature: signature) as? Api.Bool
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.Update.updateUserPhoto(userId: _1!, date: _2!, photo: _3!, previous: _4!)
             }
             else {
                 return nil

@@ -464,13 +464,16 @@ private struct NotificationContent: CustomStringConvertible {
         return string
     }
 
-    mutating func addSenderInfo(mediaBox: MediaBox, accountPeerId: PeerId, peer: Peer, contactIdentifier: String?) {
+    mutating func addSenderInfo(mediaBox: MediaBox, accountPeerId: PeerId, peer: Peer, topicTitle: String?, contactIdentifier: String?) {
         if #available(iOS 15.0, *) {
             let image = peerAvatar(mediaBox: mediaBox, accountPeerId: accountPeerId, peer: peer)
 
             self.senderImage = image
 
             var displayName: String = peer.debugDisplayTitle
+            if let topicTitle {
+                displayName = "\(topicTitle) (\(displayName))"
+            }
             if self.silent {
                 displayName = "\(displayName) 🔕"
             }
@@ -493,6 +496,8 @@ private struct NotificationContent: CustomStringConvertible {
 
     func generate() -> UNNotificationContent {
         var content = UNMutableNotificationContent()
+        
+        //Logger.shared.log("NotificationService", "Generating final content: \(self.description)")
 
         if let title = self.title {
             if self.silent {
@@ -613,6 +618,7 @@ private final class NotificationServiceHandler {
     private let pollDisposable = MetaDisposable()
 
     init?(queue: Queue, updateCurrentContent: @escaping (NotificationContent) -> Void, completed: @escaping () -> Void, payload: [AnyHashable: Any]) {
+        //debug_linker_fail_test()
         self.queue = queue
 
         let episode = String(UInt32.random(in: 0 ..< UInt32.max), radix: 16)
@@ -828,6 +834,7 @@ private final class NotificationServiceHandler {
                     var downloadNotificationSound: (file: TelegramMediaFile, path: String, fileName: String)?
 
                     var interactionAuthorId: PeerId?
+                    var topicTitle: String?
 
                     struct CallData {
                         var id: Int64
@@ -939,7 +946,16 @@ private final class NotificationServiceHandler {
                         if let aps = payloadJson["aps"] as? [String: Any], let peerId = peerId {
                             var content: NotificationContent = NotificationContent(isLockedMessage: isLockedMessage)
                             if let alert = aps["alert"] as? [String: Any] {
-                                content.title = alert["title"] as? String
+                                if let topicTitleValue = payloadJson["topic_title"] as? String {
+                                    topicTitle = topicTitleValue
+                                    if let title = alert["title"] as? String {
+                                        content.title = "\(topicTitleValue) (\(title))"
+                                    } else {
+                                        content.title = topicTitleValue
+                                    }
+                                } else {
+                                    content.title = alert["title"] as? String
+                                }
                                 content.subtitle = alert["subtitle"] as? String
                                 content.body = alert["body"] as? String
                             } else if let alert = aps["alert"] as? String {
@@ -986,6 +1002,12 @@ private final class NotificationServiceHandler {
 
                             if let threadId = aps["thread-id"] as? String {
                                 content.threadId = threadId
+                            }
+                            if let topicIdValue = payloadJson["topic_id"] as? String, let topicId = Int(topicIdValue) {
+                                if let threadId = content.threadId {
+                                    content.threadId = "\(threadId):\(topicId)"
+                                }
+                                content.userInfo["threadId"] = Int32(clamping: topicId)
                             }
 
                             if let ringtoneString = aps["ringtone"] as? String, let fileId = Int64(ringtoneString) {
@@ -1120,14 +1142,20 @@ private final class NotificationServiceHandler {
 
                                         var fetchMediaSignal: Signal<Data?, NoError> = .single(nil)
                                         if let mediaAttachment = mediaAttachment {
+                                            var contentType: MediaResourceUserContentType = .other
                                             var fetchResource: TelegramMultipartFetchableResource?
                                             if let image = mediaAttachment as? TelegramMediaImage, let representation = largestImageRepresentation(image.representations), let resource = representation.resource as? TelegramMultipartFetchableResource {
                                                 fetchResource = resource
+                                                contentType = .image
                                             } else if let file = mediaAttachment as? TelegramMediaFile {
                                                 if file.isSticker {
                                                     fetchResource = file.resource as? TelegramMultipartFetchableResource
+                                                    contentType = .other
                                                 } else if file.isVideo {
                                                     fetchResource = file.previewRepresentations.first?.resource as? TelegramMultipartFetchableResource
+                                                    contentType = .video
+                                                } else {
+                                                    contentType = .file
                                                 }
                                             }
 
@@ -1147,6 +1175,13 @@ private final class NotificationServiceHandler {
                                                             parameters: MediaResourceFetchParameters(
                                                                 tag: nil,
                                                                 info: resourceFetchInfo(resource: resource),
+                                                                location: messageId.flatMap { messageId in
+                                                                    return MediaResourceStorageLocation(
+                                                                        peerId: peerId,
+                                                                        messageId: messageId
+                                                                    )
+                                                                },
+                                                                contentType: contentType,
                                                                 isRandomAccessAllowed: true
                                                             ),
                                                             encryptionKey: nil,
@@ -1198,6 +1233,8 @@ private final class NotificationServiceHandler {
                                                             parameters: MediaResourceFetchParameters(
                                                                 tag: nil,
                                                                 info: resourceFetchInfo(resource: resource),
+                                                                location: nil,
+                                                                contentType: .other,
                                                                 isRandomAccessAllowed: true
                                                             ),
                                                             encryptionKey: nil,
@@ -1338,6 +1375,7 @@ private final class NotificationServiceHandler {
                                     Logger.shared.log("NotificationService \(episode)", "Will poll channel \(peerId)")
 
                                     pollSignal = standalonePollChannelOnce(
+                                        accountPeerId: stateManager.accountPeerId,
                                         postbox: stateManager.postbox,
                                         network: stateManager.network,
                                         peerId: peerId,
@@ -1385,7 +1423,7 @@ private final class NotificationServiceHandler {
                                                     return true
                                                 })
                                                 
-                                                content.addSenderInfo(mediaBox: stateManager.postbox.mediaBox, accountPeerId: stateManager.accountPeerId, peer: peer, contactIdentifier: foundLocalId)
+                                                content.addSenderInfo(mediaBox: stateManager.postbox.mediaBox, accountPeerId: stateManager.accountPeerId, peer: peer, topicTitle: topicTitle, contactIdentifier: foundLocalId)
                                             }
                                         }
                                         

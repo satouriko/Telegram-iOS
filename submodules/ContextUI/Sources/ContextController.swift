@@ -52,7 +52,7 @@ public enum ContextMenuActionResult {
 public enum ContextMenuActionItemFont {
     case regular
     case small
-    case custom(UIFont)
+    case custom(font: UIFont, height: CGFloat?, verticalOffset: CGFloat?)
 }
 
 public struct ContextMenuActionItemIconSource {
@@ -102,7 +102,9 @@ public final class ContextMenuActionItem {
     public let badge: ContextMenuActionBadge?
     public let icon: (PresentationTheme) -> UIImage?
     public let iconSource: ContextMenuActionItemIconSource?
+    public let animationName: String?
     public let textIcon: (PresentationTheme) -> UIImage?
+    public let textLinkAction: () -> Void
     public let action: ((Action) -> Void)?
     
     convenience public init(
@@ -115,7 +117,9 @@ public final class ContextMenuActionItem {
         badge: ContextMenuActionBadge? = nil,
         icon: @escaping (PresentationTheme) -> UIImage?,
         iconSource: ContextMenuActionItemIconSource? = nil,
+        animationName: String? = nil,
         textIcon: @escaping (PresentationTheme) -> UIImage? = { _ in return nil },
+        textLinkAction: @escaping () -> Void = {},
         action: ((ContextControllerProtocol, @escaping (ContextMenuActionResult) -> Void) -> Void)?
     ) {
         self.init(
@@ -128,7 +132,9 @@ public final class ContextMenuActionItem {
             badge: badge,
             icon: icon,
             iconSource: iconSource,
+            animationName: animationName,
             textIcon: textIcon,
+            textLinkAction: textLinkAction,
             action: action.flatMap { action in
                 return { impl in
                     action(impl.controller, impl.dismissWithResult)
@@ -147,7 +153,9 @@ public final class ContextMenuActionItem {
         badge: ContextMenuActionBadge? = nil,
         icon: @escaping (PresentationTheme) -> UIImage?,
         iconSource: ContextMenuActionItemIconSource? = nil,
+        animationName: String? = nil,
         textIcon: @escaping (PresentationTheme) -> UIImage? = { _ in return nil },
+        textLinkAction: @escaping () -> Void = {},
         action: ((Action) -> Void)?
     ) {
         self.id = id
@@ -159,7 +167,9 @@ public final class ContextMenuActionItem {
         self.badge = badge
         self.icon = icon
         self.iconSource = iconSource
+        self.animationName = animationName
         self.textIcon = textIcon
+        self.textLinkAction = textLinkAction
         self.action = action
     }
 }
@@ -1606,7 +1616,7 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
                     let isInitialLayout = self.actionsContainerNode.frame.size.width.isZero
                     let previousContainerFrame = self.view.convert(self.contentContainerNode.frame, from: self.scrollNode.view)
                     
-                    let realActionsSize = self.actionsContainerNode.updateLayout(widthClass: layout.metrics.widthClass, constrainedWidth: layout.size.width - actionsSideInset * 2.0, constrainedHeight: layout.size.height, transition: actionsContainerTransition)
+                    let realActionsSize = self.actionsContainerNode.updateLayout(widthClass: layout.metrics.widthClass, presentation: .inline, constrainedWidth: layout.size.width - actionsSideInset * 2.0, constrainedHeight: layout.size.height, transition: actionsContainerTransition)
                     let adjustedActionsSize = realActionsSize
 
                     self.actionsContainerNode.updateSize(containerSize: realActionsSize, contentSize: realActionsSize)
@@ -1708,7 +1718,7 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
                         constrainedActionsBottomInset = 0.0
                     }
                     
-                    let realActionsSize = self.actionsContainerNode.updateLayout(widthClass: layout.metrics.widthClass, constrainedWidth: layout.size.width - actionsSideInset * 2.0, constrainedHeight: constrainedActionsHeight, transition: actionsContainerTransition)
+                    let realActionsSize = self.actionsContainerNode.updateLayout(widthClass: layout.metrics.widthClass, presentation: .inline, constrainedWidth: layout.size.width - actionsSideInset * 2.0, constrainedHeight: constrainedActionsHeight, transition: actionsContainerTransition)
                     let adjustedActionsSize = realActionsSize
 
                     self.actionsContainerNode.updateSize(containerSize: realActionsSize, contentSize: realActionsSize)
@@ -1867,7 +1877,7 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
                         constrainedWidth = floor(layout.size.width / 2.0)
                     }
                     
-                    let actionsSize = self.actionsContainerNode.updateLayout(widthClass: layout.metrics.widthClass, constrainedWidth: constrainedWidth - actionsSideInset * 2.0, constrainedHeight: layout.size.height, transition: actionsContainerTransition)
+                    let actionsSize = self.actionsContainerNode.updateLayout(widthClass: layout.metrics.widthClass, presentation: .inline, constrainedWidth: constrainedWidth - actionsSideInset * 2.0, constrainedHeight: layout.size.height, transition: actionsContainerTransition)
                     let contentScale = (constrainedWidth - actionsSideInset * 2.0) / constrainedWidth
                     var contentUnscaledSize: CGSize
                     if case .compact = layout.metrics.widthClass {
@@ -2357,7 +2367,8 @@ public final class ContextController: ViewController, StandalonePresentableContr
         case textSelection
         case messageViewsPrivacy
         case messageCopyProtection(isChannel: Bool)
-        case animatedEmoji(text: String?, arguments: TextNodeWithEntities.Arguments?,  file: TelegramMediaFile?, action: (() -> Void)?)
+        case animatedEmoji(text: String?, arguments: TextNodeWithEntities.Arguments?, file: TelegramMediaFile?, action: (() -> Void)?)
+        case notificationTopicExceptions(text: String, action: (() -> Void)?)
         
         public static func ==(lhs: Tip, rhs: Tip) -> Bool {
             switch lhs {
@@ -2387,6 +2398,12 @@ public final class ContextController: ViewController, StandalonePresentableContr
                     if file?.fileId != rhsFile?.fileId {
                         return false
                     }
+                    return true
+                } else {
+                    return false
+                }
+            case let .notificationTopicExceptions(text, _):
+                if case .notificationTopicExceptions(text, _) = rhs {
                     return true
                 } else {
                     return false

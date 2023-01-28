@@ -7,6 +7,7 @@ import SwiftSignalKit
 import TelegramPresentationData
 import AccountContext
 import WallpaperBackgroundNode
+import ChatControllerInteraction
 
 private let titleFont = UIFont.systemFont(ofSize: 13.0)
 
@@ -167,10 +168,7 @@ class ChatUnreadItemNode: ListViewItemNode {
                         strongSelf.backgroundNode.isHidden = true
                         backgroundContent.frame = strongSelf.backgroundNode.frame
                         if let (rect, containerSize) = strongSelf.absolutePosition {
-                            var backgroundFrame = backgroundContent.frame
-                            backgroundFrame.origin.x += rect.minX
-                            backgroundFrame.origin.y += rect.minY
-                            backgroundContent.update(rect: backgroundFrame, within: containerSize, transition: .immediate)
+                            strongSelf.updateAbsoluteRect(rect, within: containerSize)
                         }
                     } else {
                         strongSelf.backgroundNode.isHidden = false

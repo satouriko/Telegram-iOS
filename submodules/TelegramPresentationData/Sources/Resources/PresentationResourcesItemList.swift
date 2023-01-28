@@ -33,6 +33,12 @@ public struct PresentationResourcesItemList {
         })
     }
     
+    public static func disclosureOptionArrowsImage(_ theme: PresentationTheme) -> UIImage? {
+        return theme.image(PresentationResourceKey.disclosureOptionArrowsImage.rawValue, { theme in
+            return generateTintedImage(image: UIImage(bundleImageName: "Item List/ContextDisclosureArrow"), color: theme.list.disclosureArrowColor)
+        })
+    }
+    
     public static func disclosureLockedImage(_ theme: PresentationTheme) -> UIImage? {
         return theme.image(PresentationResourceKey.itemListDisclosureLocked.rawValue, { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Stickers/SmallLock"), color: theme.list.disclosureArrowColor)
@@ -160,6 +166,12 @@ public struct PresentationResourcesItemList {
                 context.fillEllipse(in: CGRect(origin: CGPoint(x: 2, y: 2), size: CGSize(width: size.width - 4.0, height: size.height - 4.0)))
                 context.draw(image.cgImage!, in: CGRect(origin: CGPoint(), size: size))
             })
+        })
+    }
+    
+    public static func addPhotoIcon(_ theme: PresentationTheme) -> UIImage? {
+        return theme.image(PresentationResourceKey.itemListAddPhotoIcon.rawValue, { theme in
+            return generateTintedImage(image: UIImage(bundleImageName: "Settings/SetAvatar"), color: theme.list.itemAccentColor)
         })
     }
     
@@ -297,6 +309,12 @@ public struct PresentationResourcesItemList {
     public static func uploadToneIcon(_ theme: PresentationTheme) -> UIImage? {
         return theme.image(PresentationResourceKey.uploadToneIcon.rawValue, { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "Settings/UploadTone"), color: theme.list.itemAccentColor)
+        })
+    }
+    
+    public static func topicArrowDescriptionIcon(_ theme: PresentationTheme) -> UIImage? {
+        return theme.image(PresentationResourceKey.itemListTopicArrowIcon.rawValue, { theme in
+            return generateTintedImage(image: UIImage(bundleImageName: "Chat List/TopicArrowIcon"), color: theme.list.itemSecondaryTextColor)
         })
     }
 }

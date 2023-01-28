@@ -14,18 +14,18 @@ public enum InternalUpdaterError {
 public func requestUpdatesXml(account: Account, source: String) -> Signal<Data, InternalUpdaterError> {
     return TelegramEngine(account: account).peers.resolvePeerByName(name: source)
         |> castError(InternalUpdaterError.self)
-        |> mapToSignal { peer -> Signal<Peer?, InternalUpdaterError> in
-            return .single(peer?._asPeer())
+        |> map { peer -> Peer? in
+            return peer?._asPeer()
         }
-        |> mapToSignal { peer in
+        |> mapToSignal { peer -> Signal<Data, InternalUpdaterError> in
             if let peer = peer, let inputPeer = apiInputPeer(peer) {
                 return account.network.request(Api.functions.messages.getHistory(peer: inputPeer, offsetId: 0, offsetDate: 0, addOffset: 0, limit: 1, maxId: Int32.max, minId: 0, hash: 0))
                     |> retryRequest
                     |> castError(InternalUpdaterError.self)
                     |> mapToSignal { result in
                         switch result {
-                        case let .channelMessages(_, _, _, _, apiMessages, apiChats, apiUsers):
-                            if let apiMessage = apiMessages.first, let storeMessage = StoreMessage(apiMessage: apiMessage) {
+                        case let .channelMessages(_, _, _, _, apiMessages, _, apiChats, apiUsers):
+                            if let apiMessage = apiMessages.first, let storeMessage = StoreMessage(apiMessage: apiMessage, peerIsForum: peer.isForum) {
                                 
                                 var peers: [PeerId: Peer] = [:]
                                 for chat in apiChats {
@@ -40,7 +40,7 @@ public func requestUpdatesXml(account: Account, source: String) -> Signal<Data, 
                                 
                                 if let message = locallyRenderedMessage(message: storeMessage, peers: peers), let media = message.media.first as? TelegramMediaFile {
                                     return Signal { subscriber in
-                                        let fetchDispsable = fetchedMediaResource(mediaBox: account.postbox.mediaBox, reference: MediaResourceReference.media(media: AnyMediaReference.message(message: MessageReference(message), media: media), resource: media.resource)).start()
+                                        let fetchDispsable = fetchedMediaResource(mediaBox: account.postbox.mediaBox, userLocation: .other, userContentType: .other, reference: MediaResourceReference.media(media: AnyMediaReference.message(message: MessageReference(message), media: media), resource: media.resource)).start()
                                         
                                         let dataDisposable = account.postbox.mediaBox.resourceData(media.resource, option: .complete(waitUntilFetchStatus: true)).start(next: { data in
                                             if data.complete {
@@ -67,7 +67,7 @@ public func requestUpdatesXml(account: Account, source: String) -> Signal<Data, 
             } else {
                 return .fail(.xmlLoad)
             }
-    }
+        }
 }
 
 public enum AppUpdateDownloadResult {
@@ -89,7 +89,7 @@ public func downloadAppUpdate(account: Account, source: String, messageId: Int32
                     |> castError(InternalUpdaterError.self)
                     |> mapToSignal { messages in
                         switch messages {
-                        case let .channelMessages(_, _, _, _, apiMessages, apiChats, apiUsers):
+                        case let .channelMessages(_, _, _, _, apiMessages, _, apiChats, apiUsers):
                             
                             var peers: [PeerId: Peer] = [:]
                             for chat in apiChats {
@@ -103,7 +103,7 @@ public func downloadAppUpdate(account: Account, source: String, messageId: Int32
                             }
                             
                             let messageAndFile:(Message, TelegramMediaFile)? = apiMessages.compactMap { value in
-                                return StoreMessage(apiMessage: value)
+                                return StoreMessage(apiMessage: value, peerIsForum: peer.isForum)
                                 }.compactMap { value in
                                     return locallyRenderedMessage(message: value, peers: peers)
                                 }.sorted(by: {
@@ -117,10 +117,10 @@ public func downloadAppUpdate(account: Account, source: String, messageId: Int32
                                     var dataDisposable: Disposable?
                                     var fetchDisposable: Disposable?
                                     var statusDisposable: Disposable?
-                                    let removeDisposable = account.postbox.mediaBox.removeCachedResources(Set([media.resource.id])).start(completed: {
+                                    let removeDisposable = account.postbox.mediaBox.removeCachedResources([media.resource.id]).start(completed: {
                                         let reference = MediaResourceReference.media(media: .message(message: MessageReference(message), media: media), resource: media.resource)
                                         
-                                        fetchDisposable = fetchedMediaResource(mediaBox: account.postbox.mediaBox, reference: reference).start()
+                                        fetchDisposable = fetchedMediaResource(mediaBox: account.postbox.mediaBox, userLocation: .other, userContentType: .other, reference: reference).start()
                                         statusDisposable = account.postbox.mediaBox.resourceStatus(media.resource).start(next: { status in
                                             switch status {
                                             case let .Fetching(_, progress):

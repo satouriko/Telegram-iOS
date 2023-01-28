@@ -83,9 +83,6 @@
 #import <LegacyComponents/TGChannelAdminRights.h>
 #import <LegacyComponents/TGChannelBannedRights.h>
 #import <LegacyComponents/TGCheckButtonView.h>
-#import <LegacyComponents/TGClipboardGalleryMixin.h>
-#import <LegacyComponents/TGClipboardGalleryPhotoItem.h>
-#import <LegacyComponents/TGClipboardMenu.h>
 #import <LegacyComponents/TGContactMediaAttachment.h>
 #import <LegacyComponents/TGConversation.h>
 #import <LegacyComponents/TGDataResource.h>
@@ -214,7 +211,6 @@
 #import <LegacyComponents/TGOverlayControllerWindow.h>
 #import <LegacyComponents/TGPIPAblePlayerView.h>
 #import <LegacyComponents/TGPaintShader.h>
-#import <LegacyComponents/TGPaintUndoManager.h>
 #import <LegacyComponents/TGPaintUtils.h>
 #import <LegacyComponents/TGPaintingData.h>
 #import <LegacyComponents/TGPassportAttachMenu.h>
@@ -231,10 +227,6 @@
 #import <LegacyComponents/TGPhotoEditorSliderView.h>
 #import <LegacyComponents/TGPhotoEditorToolView.h>
 #import <LegacyComponents/TGPhotoEditorUtils.h>
-#import <LegacyComponents/TGPhotoMaskPosition.h>
-#import <LegacyComponents/TGPhotoPaintEntity.h>
-#import <LegacyComponents/TGPhotoPaintStickerEntity.h>
-#import <LegacyComponents/TGPhotoPaintTextEntity.h>
 #import <LegacyComponents/TGPhotoPaintStickersContext.h>
 #import <LegacyComponents/TGPhotoToolbarView.h>
 #import <LegacyComponents/TGPhotoVideoEditor.h>

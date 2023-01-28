@@ -5,7 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "TelegramCore",
-    platforms: [.macOS(.v10_11)],
+    platforms: [.macOS(.v10_12)],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
         .library(
@@ -22,6 +22,7 @@ let package = Package(
         .package(name: "CryptoUtils", path: "../CryptoUtils"),
         .package(name: "NetworkLogging", path: "../NetworkLogging"),
         .package(name: "Reachability", path: "../Reachability"),
+        .package(name: "DarwinDirStat", path: "../Utils/DarwinDirStat"),
         .package(name: "EncryptionProvider", path: "../EncryptionProvider"),
     ],
     targets: [
@@ -35,6 +36,7 @@ let package = Package(
                            .product(name: "TelegramApi", package: "TelegramApi", condition: nil),
                            .product(name: "CryptoUtils", package: "CryptoUtils", condition: nil),
                            .product(name: "NetworkLogging", package: "NetworkLogging", condition: nil),
+                           .product(name: "DarwinDirStat", package: "DarwinDirStat", condition: nil),
                            .product(name: "Reachability", package: "Reachability", condition: nil),
                            .product(name: "EncryptionProvider", package: "EncryptionProvider", condition: nil)],
             path: "Sources"),

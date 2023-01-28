@@ -65,11 +65,11 @@ public func peerAvatarImageData(account: Account, peerReference: PeerReference?,
                     })
                     var fetchedDataDisposable: Disposable?
                     if let peerReference = peerReference {
-                        fetchedDataDisposable = fetchedMediaResource(mediaBox: account.postbox.mediaBox, reference: .avatar(peer: peerReference, resource: smallProfileImage.resource), statsCategory: .generic).start()
+                        fetchedDataDisposable = fetchedMediaResource(mediaBox: account.postbox.mediaBox, userLocation: .other, userContentType: .avatar, reference: .avatar(peer: peerReference, resource: smallProfileImage.resource), statsCategory: .generic).start()
                     } else if let authorOfMessage = authorOfMessage {
-                        fetchedDataDisposable = fetchedMediaResource(mediaBox: account.postbox.mediaBox, reference: .messageAuthorAvatar(message: authorOfMessage, resource: smallProfileImage.resource), statsCategory: .generic).start()
+                        fetchedDataDisposable = fetchedMediaResource(mediaBox: account.postbox.mediaBox, userLocation: .other, userContentType: .avatar, reference: .messageAuthorAvatar(message: authorOfMessage, resource: smallProfileImage.resource), statsCategory: .generic).start()
                     } else {
-                        fetchedDataDisposable = fetchedMediaResource(mediaBox: account.postbox.mediaBox, reference: .standalone(resource: smallProfileImage.resource), statsCategory: .generic).start()
+                        fetchedDataDisposable = fetchedMediaResource(mediaBox: account.postbox.mediaBox, userLocation: .other, userContentType: .avatar, reference: .standalone(resource: smallProfileImage.resource), statsCategory: .generic).start()
                     }
                     return ActionDisposable {
                         resourceDataDisposable.dispose()
@@ -84,9 +84,28 @@ public func peerAvatarImageData(account: Account, peerReference: PeerReference?,
     }
 }
 
-public func peerAvatarCompleteImage(account: Account, peer: EnginePeer, size: CGSize, round: Bool = true, font: UIFont = avatarPlaceholderFont(size: 13.0), drawLetters: Bool = true, fullSize: Bool = false, blurred: Bool = false) -> Signal<UIImage?, NoError> {
+public func peerAvatarCompleteImage(account: Account, peer: EnginePeer, forceProvidedRepresentation: Bool = false, representation: TelegramMediaImageRepresentation? = nil, size: CGSize, round: Bool = true, font: UIFont = avatarPlaceholderFont(size: 13.0), drawLetters: Bool = true, fullSize: Bool = false, blurred: Bool = false) -> Signal<UIImage?, NoError> {
     let iconSignal: Signal<UIImage?, NoError>
-    if let signal = peerAvatarImage(account: account, peerReference: PeerReference(peer._asPeer()), authorOfMessage: nil, representation: peer.profileImageRepresentations.first, displayDimensions: size, round: round, blurred: blurred, inset: 0.0, emptyColor: nil, synchronousLoad: fullSize) {
+    
+    let clipStyle: AvatarNodeClipStyle
+    if round {
+        if case let .channel(channel) = peer, channel.flags.contains(.isForum) {
+            clipStyle = .roundedRect
+        } else {
+            clipStyle = .round
+        }
+    } else {
+        clipStyle = .none
+    }
+    
+    let thumbnailRepresentation: TelegramMediaImageRepresentation?
+    if forceProvidedRepresentation {
+        thumbnailRepresentation = representation
+    } else {
+        thumbnailRepresentation = peer.profileImageRepresentations.first
+    }
+    
+    if let signal = peerAvatarImage(account: account, peerReference: PeerReference(peer._asPeer()), authorOfMessage: nil, representation: thumbnailRepresentation, displayDimensions: size, clipStyle: clipStyle, blurred: blurred, inset: 0.0, emptyColor: nil, synchronousLoad: fullSize) {
         if fullSize, let fullSizeSignal = peerAvatarImage(account: account, peerReference: PeerReference(peer._asPeer()), authorOfMessage: nil, representation: peer.profileImageRepresentations.last, displayDimensions: size, emptyColor: nil, synchronousLoad: true) {
             iconSignal = combineLatest(.single(nil) |> then(signal), .single(nil) |> then(fullSizeSignal))
             |> mapToSignal { thumbnailImage, fullSizeImage -> Signal<UIImage?, NoError> in
@@ -131,7 +150,7 @@ public func peerAvatarCompleteImage(account: Account, peer: EnginePeer, size: CG
     return iconSignal
 }
 
-public func peerAvatarImage(account: Account, peerReference: PeerReference?, authorOfMessage: MessageReference?, representation: TelegramMediaImageRepresentation?, displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0), round: Bool = true, blurred: Bool = false, inset: CGFloat = 0.0, emptyColor: UIColor? = nil, synchronousLoad: Bool = false, provideUnrounded: Bool = false) -> Signal<(UIImage, UIImage)?, NoError>? {
+public func peerAvatarImage(account: Account, peerReference: PeerReference?, authorOfMessage: MessageReference?, representation: TelegramMediaImageRepresentation?, displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0), clipStyle: AvatarNodeClipStyle = .round, blurred: Bool = false, inset: CGFloat = 0.0, emptyColor: UIColor? = nil, synchronousLoad: Bool = false, provideUnrounded: Bool = false) -> Signal<(UIImage, UIImage)?, NoError>? {
     if let imageData = peerAvatarImageData(account: account, peerReference: peerReference, authorOfMessage: authorOfMessage, representation: representation, synchronousLoad: synchronousLoad) {
         return imageData
         |> mapToSignal { data -> Signal<(UIImage, UIImage)?, NoError> in
@@ -145,8 +164,16 @@ public func peerAvatarImage(account: Account, peerReference: PeerReference?, aut
                             context.clear(CGRect(origin: CGPoint(), size: displayDimensions))
                             context.setBlendMode(.copy)
                             
-                            if round && displayDimensions.width != 60.0 {
-                                context.addEllipse(in: CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
+                            switch clipStyle {
+                            case .none:
+                                break
+                            case .round:
+                                if displayDimensions.width != 60.0 {
+                                    context.addEllipse(in: CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
+                                    context.clip()
+                                }
+                            case .roundedRect:
+                                context.addPath(UIBezierPath(roundedRect: CGRect(x: 0.0, y: 0.0, width: displayDimensions.width, height: displayDimensions.height).insetBy(dx: inset, dy: inset), cornerRadius: floor(displayDimensions.width * 0.25)).cgPath)
                                 context.clip()
                             }
 
@@ -158,25 +185,26 @@ public func peerAvatarImage(account: Account, peerReference: PeerReference?, aut
                             }
                             if shouldBlur {
                                 let imageContextSize = size.width > 200.0 ? CGSize(width: 192.0, height: 192.0) : CGSize(width: 64.0, height: 64.0)
-                                let imageContext = DrawingContext(size: imageContextSize, scale: 1.0, clear: true)
-                                imageContext.withFlippedContext { c in
-                                    c.draw(dataImage, in: CGRect(origin: CGPoint(), size: imageContextSize))
+                                if let imageContext = DrawingContext(size: imageContextSize, scale: 1.0, clear: true) {
+                                    imageContext.withFlippedContext { c in
+                                        c.draw(dataImage, in: CGRect(origin: CGPoint(), size: imageContextSize))
+                                        
+                                        context.setBlendMode(.saturation)
+                                        context.setFillColor(UIColor(rgb: 0xffffff, alpha: 1.0).cgColor)
+                                        context.fill(CGRect(origin: CGPoint(), size: size))
+                                        context.setBlendMode(.copy)
+                                    }
                                     
-                                    context.setBlendMode(.saturation)
-                                    context.setFillColor(UIColor(rgb: 0xffffff, alpha: 1.0).cgColor)
-                                    context.fill(CGRect(origin: CGPoint(), size: size))
-                                    context.setBlendMode(.copy)
+                                    telegramFastBlurMore(Int32(imageContext.size.width * imageContext.scale), Int32(imageContext.size.height * imageContext.scale), Int32(imageContext.bytesPerRow), imageContext.bytes)
+                                    if size.width > 200.0 {
+                                        telegramFastBlurMore(Int32(imageContext.size.width * imageContext.scale), Int32(imageContext.size.height * imageContext.scale), Int32(imageContext.bytesPerRow), imageContext.bytes)
+                                        telegramFastBlurMore(Int32(imageContext.size.width * imageContext.scale), Int32(imageContext.size.height * imageContext.scale), Int32(imageContext.bytesPerRow), imageContext.bytes)
+                                        telegramFastBlurMore(Int32(imageContext.size.width * imageContext.scale), Int32(imageContext.size.height * imageContext.scale), Int32(imageContext.bytesPerRow), imageContext.bytes)
+                                        telegramFastBlurMore(Int32(imageContext.size.width * imageContext.scale), Int32(imageContext.size.height * imageContext.scale), Int32(imageContext.bytesPerRow), imageContext.bytes)
+                                    }
+                                    
+                                    dataImage = imageContext.generateImage()!.cgImage!
                                 }
-
-                                telegramFastBlurMore(Int32(imageContext.size.width * imageContext.scale), Int32(imageContext.size.height * imageContext.scale), Int32(imageContext.bytesPerRow), imageContext.bytes)
-                                if size.width > 200.0 {
-                                    telegramFastBlurMore(Int32(imageContext.size.width * imageContext.scale), Int32(imageContext.size.height * imageContext.scale), Int32(imageContext.bytesPerRow), imageContext.bytes)
-                                    telegramFastBlurMore(Int32(imageContext.size.width * imageContext.scale), Int32(imageContext.size.height * imageContext.scale), Int32(imageContext.bytesPerRow), imageContext.bytes)
-                                    telegramFastBlurMore(Int32(imageContext.size.width * imageContext.scale), Int32(imageContext.size.height * imageContext.scale), Int32(imageContext.bytesPerRow), imageContext.bytes)
-                                    telegramFastBlurMore(Int32(imageContext.size.width * imageContext.scale), Int32(imageContext.size.height * imageContext.scale), Int32(imageContext.bytesPerRow), imageContext.bytes)
-                                }
-                                
-                                dataImage = imageContext.generateImage()!.cgImage!
                             }
                             
                             context.draw(dataImage, in: CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
@@ -186,30 +214,46 @@ public func peerAvatarImage(account: Account, peerReference: PeerReference?, aut
                                 context.fill(CGRect(origin: CGPoint(), size: size))
                                 context.setBlendMode(.copy)
                             }
-                            if round {
+                            switch clipStyle {
+                            case .none:
+                                break
+                            case .round:
                                 if displayDimensions.width == 60.0 {
                                     context.setBlendMode(.destinationOut)
                                     context.draw(roundCorners.cgImage!, in: CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
                                 }
+                            case .roundedRect:
+                                break
                             }
                         } else {
                             if let emptyColor = emptyColor {
                                 context.clear(CGRect(origin: CGPoint(), size: displayDimensions))
                                 context.setFillColor(emptyColor.cgColor)
-                                  if round {
-                                    context.fillEllipse(in: CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
-                                } else {
+                                switch clipStyle {
+                                case .none:
                                     context.fill(CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
+                                case .round:
+                                    context.fillEllipse(in: CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
+                                case .roundedRect:
+                                    context.beginPath()
+                                    context.addPath(UIBezierPath(roundedRect: CGRect(x: 0.0, y: 0.0, width: displayDimensions.width, height: displayDimensions.height).insetBy(dx: inset, dy: inset), cornerRadius: floor(displayDimensions.width * 0.25)).cgPath)
+                                    context.fillPath()
                                 }
                             }
                         }
                     } else if let emptyColor = emptyColor {
                         context.clear(CGRect(origin: CGPoint(), size: displayDimensions))
                         context.setFillColor(emptyColor.cgColor)
-                        if round {
-                            context.fillEllipse(in: CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
-                        } else {
+                        
+                        switch clipStyle {
+                        case .none:
                             context.fill(CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
+                        case .round:
+                            context.fillEllipse(in: CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
+                        case .roundedRect:
+                            context.beginPath()
+                            context.addPath(UIBezierPath(roundedRect: CGRect(x: 0.0, y: 0.0, width: displayDimensions.width, height: displayDimensions.height).insetBy(dx: inset, dy: inset), cornerRadius: floor(displayDimensions.width * 0.25)).cgPath)
+                            context.fillPath()
                         }
                     }
                 })
@@ -232,10 +276,15 @@ public func peerAvatarImage(account: Account, peerReference: PeerReference?, aut
                         } else if let emptyColor = emptyColor {
                             context.clear(CGRect(origin: CGPoint(), size: displayDimensions))
                             context.setFillColor(emptyColor.cgColor)
-                            if round {
-                                context.fillEllipse(in: CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
-                            } else {
+                            switch clipStyle {
+                            case .none:
                                 context.fill(CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
+                            case .round:
+                                context.fillEllipse(in: CGRect(origin: CGPoint(), size: displayDimensions).insetBy(dx: inset, dy: inset))
+                            case .roundedRect:
+                                context.beginPath()
+                                context.addPath(UIBezierPath(roundedRect: CGRect(x: 0.0, y: 0.0, width: displayDimensions.width, height: displayDimensions.height).insetBy(dx: inset, dy: inset), cornerRadius: floor(displayDimensions.width * 0.25)).cgPath)
+                                context.fillPath()
                             }
                         }
                     })

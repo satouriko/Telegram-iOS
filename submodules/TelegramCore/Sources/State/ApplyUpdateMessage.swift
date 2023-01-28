@@ -46,8 +46,31 @@ func applyUpdateMessage(postbox: Postbox, stateManager: AccountStateManager, mes
         let messageId: Int32?
         var apiMessage: Api.Message?
         
+        var correspondingMessageId: Int32?
+        
+        for update in result.allUpdates {
+            switch update {
+            case let .updateMessageID(id, randomId):
+                for attribute in message.attributes {
+                    if let attribute = attribute as? OutgoingMessageInfoAttribute {
+                        if attribute.uniqueId == randomId {
+                            correspondingMessageId = id
+                            break
+                        }
+                    }
+                }
+            default:
+                break
+            }
+        }
+        
         for resultMessage in result.messages {
             if let id = resultMessage.id() {
+                if let correspondingMessageId = correspondingMessageId {
+                    if id.id != correspondingMessageId {
+                        continue
+                    }
+                }
                 if id.peerId == message.id.peerId {
                     apiMessage = resultMessage
                     break
@@ -119,13 +142,13 @@ func applyUpdateMessage(postbox: Postbox, stateManager: AccountStateManager, mes
             var attributes: [MessageAttribute]
             let text: String
             let forwardInfo: StoreMessageForwardInfo?
-            if let apiMessage = apiMessage, let updatedMessage = StoreMessage(apiMessage: apiMessage) {
+            if let apiMessage = apiMessage, let apiMessagePeerId = apiMessage.peerId, let updatedMessage = StoreMessage(apiMessage: apiMessage, peerIsForum: transaction.getPeer(apiMessagePeerId)?.isForum ?? false) {
                 media = updatedMessage.media
                 attributes = updatedMessage.attributes
                 text = updatedMessage.text
                 forwardInfo = updatedMessage.forwardInfo
             } else if case let .updateShortSentMessage(_, _, _, _, _, apiMedia, entities, ttlPeriod) = result {
-                let (mediaValue, _, nonPremium) = textMediaAndExpirationTimerFromApiMedia(apiMedia, currentMessage.id.peerId)
+                let (mediaValue, _, nonPremium, hasSpoiler) = textMediaAndExpirationTimerFromApiMedia(apiMedia, currentMessage.id.peerId)
                 if let mediaValue = mediaValue {
                     media = [mediaValue]
                 } else {
@@ -151,6 +174,10 @@ func applyUpdateMessage(postbox: Postbox, stateManager: AccountStateManager, mes
                 updatedAttributes = updatedAttributes.filter({ !($0 is NonPremiumMessageAttribute) })
                 if let nonPremium = nonPremium, nonPremium {
                     updatedAttributes.append(NonPremiumMessageAttribute())
+                }
+                
+                if let hasSpoiler = hasSpoiler, hasSpoiler {
+                    updatedAttributes.append(MediaSpoilerMessageAttribute())
                 }
                 
                 if Namespaces.Message.allScheduled.contains(message.id.namespace) && updatedId.namespace == Namespaces.Message.Cloud {
@@ -294,7 +321,14 @@ func applyUpdateGroupMessages(postbox: Postbox, stateManager: AccountStateManage
         
         var resultMessages: [MessageId: StoreMessage] = [:]
         for apiMessage in result.messages {
-            if let resultMessage = StoreMessage(apiMessage: apiMessage, namespace: namespace), case let .Id(id) = resultMessage.id {
+            var peerIsForum = false
+            if let apiMessagePeerId = apiMessage.peerId, let peer = transaction.getPeer(apiMessagePeerId) {
+                if peer.isForum {
+                    peerIsForum = true
+                }
+            }
+            
+            if let resultMessage = StoreMessage(apiMessage: apiMessage, peerIsForum: peerIsForum, namespace: namespace), case let .Id(id) = resultMessage.id {
                 resultMessages[id] = resultMessage
             }
         }

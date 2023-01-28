@@ -1,3 +1,53 @@
+public extension Api.payments {
+    enum ValidatedRequestedInfo: TypeConstructorDescription {
+        case validatedRequestedInfo(flags: Int32, id: String?, shippingOptions: [Api.ShippingOption]?)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .validatedRequestedInfo(let flags, let id, let shippingOptions):
+                    if boxed {
+                        buffer.appendInt32(-784000893)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeString(id!, buffer: buffer, boxed: false)}
+                    if Int(flags) & Int(1 << 1) != 0 {buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(shippingOptions!.count))
+                    for item in shippingOptions! {
+                        item.serialize(buffer, true)
+                    }}
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .validatedRequestedInfo(let flags, let id, let shippingOptions):
+                return ("validatedRequestedInfo", [("flags", flags as Any), ("id", id as Any), ("shippingOptions", shippingOptions as Any)])
+    }
+    }
+    
+        public static func parse_validatedRequestedInfo(_ reader: BufferReader) -> ValidatedRequestedInfo? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            if Int(_1!) & Int(1 << 0) != 0 {_2 = parseString(reader) }
+            var _3: [Api.ShippingOption]?
+            if Int(_1!) & Int(1 << 1) != 0 {if let _ = reader.readInt32() {
+                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.ShippingOption.self)
+            } }
+            let _c1 = _1 != nil
+            let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
+            let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.payments.ValidatedRequestedInfo.validatedRequestedInfo(flags: _1!, id: _2, shippingOptions: _3)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
 public extension Api.phone {
     enum ExportedGroupCallInvite: TypeConstructorDescription {
         case exportedGroupCallInvite(link: String)
@@ -16,7 +66,7 @@ public extension Api.phone {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .exportedGroupCallInvite(let link):
-                return ("exportedGroupCallInvite", [("link", String(describing: link))])
+                return ("exportedGroupCallInvite", [("link", link as Any)])
     }
     }
     
@@ -68,7 +118,7 @@ public extension Api.phone {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .groupCall(let call, let participants, let participantsNextOffset, let chats, let users):
-                return ("groupCall", [("call", String(describing: call)), ("participants", String(describing: participants)), ("participantsNextOffset", String(describing: participantsNextOffset)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("groupCall", [("call", call as Any), ("participants", participants as Any), ("participantsNextOffset", participantsNextOffset as Any), ("chats", chats as Any), ("users", users as Any)])
     }
     }
     
@@ -128,7 +178,7 @@ public extension Api.phone {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .groupCallStreamChannels(let channels):
-                return ("groupCallStreamChannels", [("channels", String(describing: channels))])
+                return ("groupCallStreamChannels", [("channels", channels as Any)])
     }
     }
     
@@ -167,7 +217,7 @@ public extension Api.phone {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .groupCallStreamRtmpUrl(let url, let key):
-                return ("groupCallStreamRtmpUrl", [("url", String(describing: url)), ("key", String(describing: key))])
+                return ("groupCallStreamRtmpUrl", [("url", url as Any), ("key", key as Any)])
     }
     }
     
@@ -223,7 +273,7 @@ public extension Api.phone {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .groupParticipants(let count, let participants, let nextOffset, let chats, let users, let version):
-                return ("groupParticipants", [("count", String(describing: count)), ("participants", String(describing: participants)), ("nextOffset", String(describing: nextOffset)), ("chats", String(describing: chats)), ("users", String(describing: users)), ("version", String(describing: version))])
+                return ("groupParticipants", [("count", count as Any), ("participants", participants as Any), ("nextOffset", nextOffset as Any), ("chats", chats as Any), ("users", users as Any), ("version", version as Any)])
     }
     }
     
@@ -294,7 +344,7 @@ public extension Api.phone {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .joinAsPeers(let peers, let chats, let users):
-                return ("joinAsPeers", [("peers", String(describing: peers)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("joinAsPeers", [("peers", peers as Any), ("chats", chats as Any), ("users", users as Any)])
     }
     }
     
@@ -347,7 +397,7 @@ public extension Api.phone {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .phoneCall(let phoneCall, let users):
-                return ("phoneCall", [("phoneCall", String(describing: phoneCall)), ("users", String(describing: users))])
+                return ("phoneCall", [("phoneCall", phoneCall as Any), ("users", users as Any)])
     }
     }
     
@@ -395,7 +445,7 @@ public extension Api.photos {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .photo(let photo, let users):
-                return ("photo", [("photo", String(describing: photo)), ("users", String(describing: users))])
+                return ("photo", [("photo", photo as Any), ("users", users as Any)])
     }
     }
     
@@ -464,9 +514,9 @@ public extension Api.photos {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .photos(let photos, let users):
-                return ("photos", [("photos", String(describing: photos)), ("users", String(describing: users))])
+                return ("photos", [("photos", photos as Any), ("users", users as Any)])
                 case .photosSlice(let count, let photos, let users):
-                return ("photosSlice", [("count", String(describing: count)), ("photos", String(describing: photos)), ("users", String(describing: users))])
+                return ("photosSlice", [("count", count as Any), ("photos", photos as Any), ("users", users as Any)])
     }
     }
     
@@ -548,7 +598,7 @@ public extension Api.stats {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .broadcastStats(let period, let followers, let viewsPerPost, let sharesPerPost, let enabledNotifications, let growthGraph, let followersGraph, let muteGraph, let topHoursGraph, let interactionsGraph, let ivInteractionsGraph, let viewsBySourceGraph, let newFollowersBySourceGraph, let languagesGraph, let recentMessageInteractions):
-                return ("broadcastStats", [("period", String(describing: period)), ("followers", String(describing: followers)), ("viewsPerPost", String(describing: viewsPerPost)), ("sharesPerPost", String(describing: sharesPerPost)), ("enabledNotifications", String(describing: enabledNotifications)), ("growthGraph", String(describing: growthGraph)), ("followersGraph", String(describing: followersGraph)), ("muteGraph", String(describing: muteGraph)), ("topHoursGraph", String(describing: topHoursGraph)), ("interactionsGraph", String(describing: interactionsGraph)), ("ivInteractionsGraph", String(describing: ivInteractionsGraph)), ("viewsBySourceGraph", String(describing: viewsBySourceGraph)), ("newFollowersBySourceGraph", String(describing: newFollowersBySourceGraph)), ("languagesGraph", String(describing: languagesGraph)), ("recentMessageInteractions", String(describing: recentMessageInteractions))])
+                return ("broadcastStats", [("period", period as Any), ("followers", followers as Any), ("viewsPerPost", viewsPerPost as Any), ("sharesPerPost", sharesPerPost as Any), ("enabledNotifications", enabledNotifications as Any), ("growthGraph", growthGraph as Any), ("followersGraph", followersGraph as Any), ("muteGraph", muteGraph as Any), ("topHoursGraph", topHoursGraph as Any), ("interactionsGraph", interactionsGraph as Any), ("ivInteractionsGraph", ivInteractionsGraph as Any), ("viewsBySourceGraph", viewsBySourceGraph as Any), ("newFollowersBySourceGraph", newFollowersBySourceGraph as Any), ("languagesGraph", languagesGraph as Any), ("recentMessageInteractions", recentMessageInteractions as Any)])
     }
     }
     
@@ -688,7 +738,7 @@ public extension Api.stats {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .megagroupStats(let period, let members, let messages, let viewers, let posters, let growthGraph, let membersGraph, let newMembersBySourceGraph, let languagesGraph, let messagesGraph, let actionsGraph, let topHoursGraph, let weekdaysGraph, let topPosters, let topAdmins, let topInviters, let users):
-                return ("megagroupStats", [("period", String(describing: period)), ("members", String(describing: members)), ("messages", String(describing: messages)), ("viewers", String(describing: viewers)), ("posters", String(describing: posters)), ("growthGraph", String(describing: growthGraph)), ("membersGraph", String(describing: membersGraph)), ("newMembersBySourceGraph", String(describing: newMembersBySourceGraph)), ("languagesGraph", String(describing: languagesGraph)), ("messagesGraph", String(describing: messagesGraph)), ("actionsGraph", String(describing: actionsGraph)), ("topHoursGraph", String(describing: topHoursGraph)), ("weekdaysGraph", String(describing: weekdaysGraph)), ("topPosters", String(describing: topPosters)), ("topAdmins", String(describing: topAdmins)), ("topInviters", String(describing: topInviters)), ("users", String(describing: users))])
+                return ("megagroupStats", [("period", period as Any), ("members", members as Any), ("messages", messages as Any), ("viewers", viewers as Any), ("posters", posters as Any), ("growthGraph", growthGraph as Any), ("membersGraph", membersGraph as Any), ("newMembersBySourceGraph", newMembersBySourceGraph as Any), ("languagesGraph", languagesGraph as Any), ("messagesGraph", messagesGraph as Any), ("actionsGraph", actionsGraph as Any), ("topHoursGraph", topHoursGraph as Any), ("weekdaysGraph", weekdaysGraph as Any), ("topPosters", topPosters as Any), ("topAdmins", topAdmins as Any), ("topInviters", topInviters as Any), ("users", users as Any)])
     }
     }
     
@@ -806,7 +856,7 @@ public extension Api.stats {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .messageStats(let viewsGraph):
-                return ("messageStats", [("viewsGraph", String(describing: viewsGraph))])
+                return ("messageStats", [("viewsGraph", viewsGraph as Any)])
     }
     }
     
@@ -844,7 +894,7 @@ public extension Api.stickers {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .suggestedShortName(let shortName):
-                return ("suggestedShortName", [("shortName", String(describing: shortName))])
+                return ("suggestedShortName", [("shortName", shortName as Any)])
     }
     }
     
@@ -1071,11 +1121,11 @@ public extension Api.updates {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .channelDifference(let flags, let pts, let timeout, let newMessages, let otherUpdates, let chats, let users):
-                return ("channelDifference", [("flags", String(describing: flags)), ("pts", String(describing: pts)), ("timeout", String(describing: timeout)), ("newMessages", String(describing: newMessages)), ("otherUpdates", String(describing: otherUpdates)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("channelDifference", [("flags", flags as Any), ("pts", pts as Any), ("timeout", timeout as Any), ("newMessages", newMessages as Any), ("otherUpdates", otherUpdates as Any), ("chats", chats as Any), ("users", users as Any)])
                 case .channelDifferenceEmpty(let flags, let pts, let timeout):
-                return ("channelDifferenceEmpty", [("flags", String(describing: flags)), ("pts", String(describing: pts)), ("timeout", String(describing: timeout))])
+                return ("channelDifferenceEmpty", [("flags", flags as Any), ("pts", pts as Any), ("timeout", timeout as Any)])
                 case .channelDifferenceTooLong(let flags, let timeout, let dialog, let messages, let chats, let users):
-                return ("channelDifferenceTooLong", [("flags", String(describing: flags)), ("timeout", String(describing: timeout)), ("dialog", String(describing: dialog)), ("messages", String(describing: messages)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("channelDifferenceTooLong", [("flags", flags as Any), ("timeout", timeout as Any), ("dialog", dialog as Any), ("messages", messages as Any), ("chats", chats as Any), ("users", users as Any)])
     }
     }
     
@@ -1260,13 +1310,13 @@ public extension Api.updates {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .difference(let newMessages, let newEncryptedMessages, let otherUpdates, let chats, let users, let state):
-                return ("difference", [("newMessages", String(describing: newMessages)), ("newEncryptedMessages", String(describing: newEncryptedMessages)), ("otherUpdates", String(describing: otherUpdates)), ("chats", String(describing: chats)), ("users", String(describing: users)), ("state", String(describing: state))])
+                return ("difference", [("newMessages", newMessages as Any), ("newEncryptedMessages", newEncryptedMessages as Any), ("otherUpdates", otherUpdates as Any), ("chats", chats as Any), ("users", users as Any), ("state", state as Any)])
                 case .differenceEmpty(let date, let seq):
-                return ("differenceEmpty", [("date", String(describing: date)), ("seq", String(describing: seq))])
+                return ("differenceEmpty", [("date", date as Any), ("seq", seq as Any)])
                 case .differenceSlice(let newMessages, let newEncryptedMessages, let otherUpdates, let chats, let users, let intermediateState):
-                return ("differenceSlice", [("newMessages", String(describing: newMessages)), ("newEncryptedMessages", String(describing: newEncryptedMessages)), ("otherUpdates", String(describing: otherUpdates)), ("chats", String(describing: chats)), ("users", String(describing: users)), ("intermediateState", String(describing: intermediateState))])
+                return ("differenceSlice", [("newMessages", newMessages as Any), ("newEncryptedMessages", newEncryptedMessages as Any), ("otherUpdates", otherUpdates as Any), ("chats", chats as Any), ("users", users as Any), ("intermediateState", intermediateState as Any)])
                 case .differenceTooLong(let pts):
-                return ("differenceTooLong", [("pts", String(describing: pts))])
+                return ("differenceTooLong", [("pts", pts as Any)])
     }
     }
     
@@ -1366,58 +1416,6 @@ public extension Api.updates {
             let _c1 = _1 != nil
             if _c1 {
                 return Api.updates.Difference.differenceTooLong(pts: _1!)
-            }
-            else {
-                return nil
-            }
-        }
-    
-    }
-}
-public extension Api.updates {
-    enum State: TypeConstructorDescription {
-        case state(pts: Int32, qts: Int32, date: Int32, seq: Int32, unreadCount: Int32)
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .state(let pts, let qts, let date, let seq, let unreadCount):
-                    if boxed {
-                        buffer.appendInt32(-1519637954)
-                    }
-                    serializeInt32(pts, buffer: buffer, boxed: false)
-                    serializeInt32(qts, buffer: buffer, boxed: false)
-                    serializeInt32(date, buffer: buffer, boxed: false)
-                    serializeInt32(seq, buffer: buffer, boxed: false)
-                    serializeInt32(unreadCount, buffer: buffer, boxed: false)
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .state(let pts, let qts, let date, let seq, let unreadCount):
-                return ("state", [("pts", String(describing: pts)), ("qts", String(describing: qts)), ("date", String(describing: date)), ("seq", String(describing: seq)), ("unreadCount", String(describing: unreadCount))])
-    }
-    }
-    
-        public static func parse_state(_ reader: BufferReader) -> State? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Int32?
-            _2 = reader.readInt32()
-            var _3: Int32?
-            _3 = reader.readInt32()
-            var _4: Int32?
-            _4 = reader.readInt32()
-            var _5: Int32?
-            _5 = reader.readInt32()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = _4 != nil
-            let _c5 = _5 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.updates.State.state(pts: _1!, qts: _2!, date: _3!, seq: _4!, unreadCount: _5!)
             }
             else {
                 return nil

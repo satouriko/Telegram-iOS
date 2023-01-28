@@ -195,6 +195,7 @@ public final class ReactionListContextMenuContent: ContextControllerItemsContent
                 
                 let reactionLayer = InlineStickerItemLayer(
                     context: context,
+                    userLocation: .other,
                     attemptSynchronousLoad: false,
                     emoji: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: file.fileId.id, file: file),
                     file: file,
@@ -437,6 +438,7 @@ public final class ReactionListContextMenuContent: ContextControllerItemsContent
                 
                 let reactionLayer = InlineStickerItemLayer(
                     context: context,
+                    userLocation: .other,
                     attemptSynchronousLoad: false,
                     emoji: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: file.fileId.id, file: file),
                     file: file,
@@ -667,7 +669,7 @@ public final class ReactionListContextMenuContent: ContextControllerItemsContent
         let reaction: MessageReaction.Reaction?
         private let requestUpdate: (ReactionsTabNode, ContainedViewLayoutTransition) -> Void
         private let requestUpdateApparentHeight: (ReactionsTabNode, ContainedViewLayoutTransition) -> Void
-        private let openPeer: (PeerId) -> Void
+        private let openPeer: (EnginePeer) -> Void
         
         private var hasMore: Bool = false
         
@@ -699,7 +701,7 @@ public final class ReactionListContextMenuContent: ContextControllerItemsContent
             readStats: MessageReadStats?,
             requestUpdate: @escaping (ReactionsTabNode, ContainedViewLayoutTransition) -> Void,
             requestUpdateApparentHeight: @escaping (ReactionsTabNode, ContainedViewLayoutTransition) -> Void,
-            openPeer: @escaping (PeerId) -> Void
+            openPeer: @escaping (EnginePeer) -> Void
         ) {
             self.context = context
             self.availableReactions = availableReactions
@@ -800,9 +802,9 @@ public final class ReactionListContextMenuContent: ContextControllerItemsContent
                             itemNode = current
                         } else {
                             let openPeer = self.openPeer
-                            let peerId = item.peer.id
+                            let peer = item.peer
                             itemNode = ItemNode(context: self.context, availableReactions: self.availableReactions, animationCache: self.animationCache, animationRenderer: self.animationRenderer, action: {
-                                openPeer(peerId)
+                                openPeer(peer)
                             })
                             self.itemNodes[index] = itemNode
                             self.scrollNode.addSubnode(itemNode)
@@ -972,7 +974,7 @@ public final class ReactionListContextMenuContent: ContextControllerItemsContent
         }
         private var interactiveTransitionState: InteractiveTransitionState?
         
-        private let openPeer: (PeerId) -> Void
+        private let openPeer: (EnginePeer) -> Void
         
         private(set) var apparentHeight: CGFloat = 0.0
         
@@ -987,7 +989,7 @@ public final class ReactionListContextMenuContent: ContextControllerItemsContent
             requestUpdate: @escaping (ContainedViewLayoutTransition) -> Void,
             requestUpdateApparentHeight: @escaping (ContainedViewLayoutTransition) -> Void,
             back: (() -> Void)?,
-            openPeer: @escaping (PeerId) -> Void
+            openPeer: @escaping (EnginePeer) -> Void
         ) {
             self.context = context
             self.availableReactions = availableReactions
@@ -1334,7 +1336,7 @@ public final class ReactionListContextMenuContent: ContextControllerItemsContent
     let reaction: MessageReaction.Reaction?
     let readStats: MessageReadStats?
     let back: (() -> Void)?
-    let openPeer: (PeerId) -> Void
+    let openPeer: (EnginePeer) -> Void
     
     public init(
         context: AccountContext,
@@ -1345,7 +1347,7 @@ public final class ReactionListContextMenuContent: ContextControllerItemsContent
         reaction: MessageReaction.Reaction?,
         readStats: MessageReadStats?,
         back: (() -> Void)?,
-        openPeer: @escaping (PeerId) -> Void
+        openPeer: @escaping (EnginePeer) -> Void
     ) {
         self.context = context
         self.availableReactions = availableReactions

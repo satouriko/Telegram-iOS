@@ -1,3 +1,55 @@
+public extension Api.updates {
+    enum State: TypeConstructorDescription {
+        case state(pts: Int32, qts: Int32, date: Int32, seq: Int32, unreadCount: Int32)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .state(let pts, let qts, let date, let seq, let unreadCount):
+                    if boxed {
+                        buffer.appendInt32(-1519637954)
+                    }
+                    serializeInt32(pts, buffer: buffer, boxed: false)
+                    serializeInt32(qts, buffer: buffer, boxed: false)
+                    serializeInt32(date, buffer: buffer, boxed: false)
+                    serializeInt32(seq, buffer: buffer, boxed: false)
+                    serializeInt32(unreadCount, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .state(let pts, let qts, let date, let seq, let unreadCount):
+                return ("state", [("pts", pts as Any), ("qts", qts as Any), ("date", date as Any), ("seq", seq as Any), ("unreadCount", unreadCount as Any)])
+    }
+    }
+    
+        public static func parse_state(_ reader: BufferReader) -> State? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int32?
+            _2 = reader.readInt32()
+            var _3: Int32?
+            _3 = reader.readInt32()
+            var _4: Int32?
+            _4 = reader.readInt32()
+            var _5: Int32?
+            _5 = reader.readInt32()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.updates.State.state(pts: _1!, qts: _2!, date: _3!, seq: _4!, unreadCount: _5!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
 public extension Api.upload {
     enum CdnFile: TypeConstructorDescription {
         case cdnFile(bytes: Buffer)
@@ -23,9 +75,9 @@ public extension Api.upload {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .cdnFile(let bytes):
-                return ("cdnFile", [("bytes", String(describing: bytes))])
+                return ("cdnFile", [("bytes", bytes as Any)])
                 case .cdnFileReuploadNeeded(let requestToken):
-                return ("cdnFileReuploadNeeded", [("requestToken", String(describing: requestToken))])
+                return ("cdnFileReuploadNeeded", [("requestToken", requestToken as Any)])
     }
     }
     
@@ -89,9 +141,9 @@ public extension Api.upload {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .file(let type, let mtime, let bytes):
-                return ("file", [("type", String(describing: type)), ("mtime", String(describing: mtime)), ("bytes", String(describing: bytes))])
+                return ("file", [("type", type as Any), ("mtime", mtime as Any), ("bytes", bytes as Any)])
                 case .fileCdnRedirect(let dcId, let fileToken, let encryptionKey, let encryptionIv, let fileHashes):
-                return ("fileCdnRedirect", [("dcId", String(describing: dcId)), ("fileToken", String(describing: fileToken)), ("encryptionKey", String(describing: encryptionKey)), ("encryptionIv", String(describing: encryptionIv)), ("fileHashes", String(describing: fileHashes))])
+                return ("fileCdnRedirect", [("dcId", dcId as Any), ("fileToken", fileToken as Any), ("encryptionKey", encryptionKey as Any), ("encryptionIv", encryptionIv as Any), ("fileHashes", fileHashes as Any)])
     }
     }
     
@@ -164,7 +216,7 @@ public extension Api.upload {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .webFile(let size, let mimeType, let fileType, let mtime, let bytes):
-                return ("webFile", [("size", String(describing: size)), ("mimeType", String(describing: mimeType)), ("fileType", String(describing: fileType)), ("mtime", String(describing: mtime)), ("bytes", String(describing: bytes))])
+                return ("webFile", [("size", size as Any), ("mimeType", mimeType as Any), ("fileType", fileType as Any), ("mtime", mtime as Any), ("bytes", bytes as Any)])
     }
     }
     
@@ -224,7 +276,7 @@ public extension Api.users {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .userFull(let fullUser, let chats, let users):
-                return ("userFull", [("fullUser", String(describing: fullUser)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("userFull", [("fullUser", fullUser as Any), ("chats", chats as Any), ("users", users as Any)])
     }
     }
     

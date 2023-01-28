@@ -105,6 +105,11 @@ swift_library(
         "//submodules/InviteLinksUI:InviteLinksUI",
         "//submodules/HorizontalPeerItem:HorizontalPeerItem",
         "//submodules/TelegramUI/Components/EntityKeyboard:EntityKeyboard",
+        "//submodules/PersistentStringHash:PersistentStringHash",
+        "//submodules/TelegramUI/Components/NotificationPeerExceptionController",
+        "//submodules/TelegramUI/Components/ChatTimerScreen",
+        "//submodules/AnimatedAvatarSetNode",
+        "//submodules/TelegramUI/Components/StorageUsageScreen",
     ],
     visibility = [
         "//visibility:public",

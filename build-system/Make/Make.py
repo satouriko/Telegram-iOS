@@ -14,6 +14,7 @@ from ProjectGeneration import generate
 from BazelLocation import locate_bazel
 from BuildConfiguration import CodesigningSource, GitCodesigningSource, DirectoryCodesigningSource, BuildConfiguration, build_configuration_from_json
 import RemoteBuild
+import GenerateProfiles
 
 
 class ResolvedCodesigningData:
@@ -39,7 +40,9 @@ class BazelCommandLine:
         self.split_submodules = False
         self.custom_target = None
         self.continue_on_error = False
+        self.show_actions = False
         self.enable_sandbox = False
+        self.disable_provisioning_profiles = False
 
         self.common_args = [
             # https://docs.bazel.build/versions/master/command-line-reference.html
@@ -100,7 +103,8 @@ class BazelCommandLine:
             # --num-threads 0 forces swiftc to generate one object file per module; it:
             # 1. resolves issues with the linker caused by the swift-objc mixing.
             # 2. makes the resulting binaries significantly smaller (up to 9% for this project).
-            '--swiftcopt=-num-threads', '--swiftcopt=0',
+            '--swiftcopt=-num-threads', '--swiftcopt=1',
+            '--swiftcopt=-j1',
 
             # Strip unsused code.
             '--features=dead_strip',
@@ -128,6 +132,9 @@ class BazelCommandLine:
     def set_continue_on_error(self, continue_on_error):
         self.continue_on_error = continue_on_error
 
+    def set_show_actions(self, show_actions):
+        self.show_actions = show_actions
+
     def set_enable_sandbox(self, enable_sandbox):
         self.enable_sandbox = enable_sandbox
 
@@ -136,6 +143,9 @@ class BazelCommandLine:
 
     def set_configuration_path(self, path):
         self.configuration_path = path
+
+    def set_disable_provisioning_profiles(self):
+        self.disable_provisioning_profiles = True
 
     def set_configuration(self, configuration):
         if configuration == 'debug_universal':
@@ -164,6 +174,17 @@ class BazelCommandLine:
             self.configuration_args = [
                 # bazel debug build configuration
                 '-c', 'dbg',
+
+                # Build single-architecture binaries. It is almost 2 times faster is 32-bit support is not required.
+                '--ios_multi_cpus=sim_arm64',
+
+                # Always build universal Watch binaries.
+                '--watchos_cpus=arm64_32'
+            ] + self.common_debug_args
+        elif configuration == 'release_sim_arm64':
+            self.configuration_args = [
+                # bazel optimized build configuration
+                '-c', 'opt',
 
                 # Build single-architecture binaries. It is almost 2 times faster is 32-bit support is not required.
                 '--ios_multi_cpus=sim_arm64',
@@ -278,6 +299,8 @@ class BazelCommandLine:
 
         if self.continue_on_error:
             combined_arguments += ['--keep_going']
+        if self.show_actions:
+            combined_arguments += ['--subcommands']
 
         return combined_arguments
 
@@ -308,9 +331,14 @@ class BazelCommandLine:
 
         if self.continue_on_error:
             combined_arguments += ['--keep_going']
+        if self.show_actions:
+            combined_arguments += ['--subcommands']
 
         if self.enable_sandbox:
             combined_arguments += ['--spawn_strategy=sandboxed']
+
+        if self.disable_provisioning_profiles:
+            combined_arguments += ['--//Telegram:disableProvisioningProfiles']
 
         if self.configuration_path is None:
             raise Exception('configuration_path is not defined')
@@ -422,6 +450,8 @@ def resolve_codesigning(arguments, base_path, build_configuration, provisioning_
             team_id=build_configuration.team_id,
             bundle_id=build_configuration.bundle_id
         )
+    elif arguments.noCodesigning is not None:
+        return ResolvedCodesigningData(aps_environment='production')
     else:
         raise Exception('Neither gitCodesigningRepository nor codesigningInformationPath are set')
 
@@ -559,9 +589,13 @@ def build(bazel, arguments):
     bazel_command_line.set_build_number(arguments.buildNumber)
     bazel_command_line.set_custom_target(arguments.target)
     bazel_command_line.set_continue_on_error(arguments.continueOnError)
+    bazel_command_line.set_show_actions(arguments.showActions)
     bazel_command_line.set_enable_sandbox(arguments.sandbox)
 
-    bazel_command_line.set_split_swiftmodules(not arguments.disableParallelSwiftmoduleGeneration)
+    if arguments.noCodesigning is not None:
+        bazel_command_line.set_disable_provisioning_profiles()
+
+    bazel_command_line.set_split_swiftmodules(arguments.enableParallelSwiftmoduleGeneration)
 
     bazel_command_line.invoke_build()
 
@@ -646,6 +680,14 @@ def add_codesigning_common_arguments(current_parser: argparse.ArgumentParser):
     )
     codesigning_group.add_argument(
         '--codesigningInformationPath',
+        help='''
+            Use signing certificates and provisioning profiles from a local directory.
+            ''',
+        metavar='command'
+    )
+    codesigning_group.add_argument(
+        '--noCodesigning',
+        type=bool,
         help='''
             Use signing certificates and provisioning profiles from a local directory.
             ''',
@@ -824,6 +866,8 @@ if __name__ == '__main__':
             'debug_universal',
             'debug_arm64',
             'debug_armv7',
+            'debug_sim_arm64',
+            'release_sim_arm64',
             'release_arm64',
             'release_armv7',
             'release_universal'
@@ -832,7 +876,7 @@ if __name__ == '__main__':
         help='Build configuration'
     )
     buildParser.add_argument(
-        '--disableParallelSwiftmoduleGeneration',
+        '--enableParallelSwiftmoduleGeneration',
         action='store_true',
         default=False,
         help='Generate .swiftmodule files in parallel to building modules, can speed up compilation on multi-core '
@@ -849,6 +893,12 @@ if __name__ == '__main__':
         action='store_true',
         default=False,
         help='Continue build process after an error.',
+    )
+    buildParser.add_argument(
+        '--showActions',
+        action='store_true',
+        default=False,
+        help='Show bazel actions.',
     )
     buildParser.add_argument(
         '--sandbox',
@@ -872,6 +922,12 @@ if __name__ == '__main__':
         help='DarwinContainers host address.'
     )
     remote_build_parser.add_argument(
+        '--darwinContainers',
+        required=True,
+        type=str,
+        help='DarwinContainers script path.'
+    )
+    remote_build_parser.add_argument(
         '--configuration',
         choices=[
             'debug_universal',
@@ -891,12 +947,27 @@ if __name__ == '__main__':
         help='Bazel remote cache host address.'
     )
 
+    generate_profiles_build_parser = subparsers.add_parser('generate-verification-profiles', help='Generate provisioning profiles that can be used to build a veritication IPA.')
+    add_codesigning_common_arguments(generate_profiles_build_parser)
+    generate_profiles_build_parser.add_argument(
+        '--destination',
+        required=True,
+        type=str,
+        help='Path to the destination directory.'
+    )
+
     remote_upload_testflight_parser = subparsers.add_parser('remote-deploy-testflight', help='Build the app using a remote environment.')
     remote_upload_testflight_parser.add_argument(
         '--darwinContainersHost',
         required=True,
         type=str,
         help='DarwinContainers host address.'
+    )
+    remote_upload_testflight_parser.add_argument(
+        '--darwinContainers',
+        required=True,
+        type=str,
+        help='DarwinContainers script path.'
     )
     remote_upload_testflight_parser.add_argument(
         '--ipa',
@@ -917,6 +988,12 @@ if __name__ == '__main__':
         required=True,
         type=str,
         help='DarwinContainers host address.'
+    )
+    remote_ipadiff_parser.add_argument(
+        '--darwinContainers',
+        required=True,
+        type=str,
+        help='DarwinContainers script path.'
     )
     remote_ipadiff_parser.add_argument(
         '--ipa1',
@@ -975,11 +1052,33 @@ if __name__ == '__main__':
             shutil.copyfile(args.configurationPath, remote_input_path + '/configuration.json')
 
             RemoteBuild.remote_build(
+                darwin_containers_path=args.darwinContainers,
                 darwin_containers_host=args.darwinContainersHost,
                 bazel_cache_host=args.cacheHost,
                 configuration=args.configuration,
                 build_input_data_path=remote_input_path
             )
+        elif args.commandName == 'generate-verification-profiles':
+            base_path = os.getcwd()
+            remote_input_path = '{}/build-input/remote-input'.format(base_path)
+            if os.path.exists(remote_input_path):
+                shutil.rmtree(remote_input_path)
+            os.makedirs(remote_input_path)
+            os.makedirs(remote_input_path + '/certs')
+            os.makedirs(remote_input_path + '/profiles')
+
+            if os.path.exists(args.destination):
+                shutil.rmtree(args.destination)
+            os.makedirs(args.destination)
+
+            resolve_configuration(
+                base_path=os.getcwd(),
+                bazel_command_line=None,
+                arguments=args,
+                additional_codesigning_output_path=remote_input_path
+            )
+
+            GenerateProfiles.generate_provisioning_profiles(source_path=remote_input_path + '/profiles', destination_path=args.destination)
         elif args.commandName == 'remote-deploy-testflight':
             env = os.environ
             if 'APPSTORE_CONNECT_USERNAME' not in env:
@@ -990,6 +1089,7 @@ if __name__ == '__main__':
                 sys.exit(1)
 
             RemoteBuild.remote_deploy_testflight(
+                darwin_containers_path=args.darwinContainers,
                 darwin_containers_host=args.darwinContainersHost,
                 ipa_path=args.ipa,
                 dsyms_path=args.dsyms,
@@ -998,6 +1098,7 @@ if __name__ == '__main__':
             )
         elif args.commandName == 'remote-ipa-diff':
             RemoteBuild.remote_ipa_diff(
+                darwin_containers_path=args.darwinContainers,
                 darwin_containers_host=args.darwinContainersHost,
                 ipa1_path=args.ipa1,
                 ipa2_path=args.ipa2

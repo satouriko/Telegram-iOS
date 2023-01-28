@@ -1,4 +1,130 @@
 public extension Api {
+    indirect enum InputGame: TypeConstructorDescription {
+        case inputGameID(id: Int64, accessHash: Int64)
+        case inputGameShortName(botId: Api.InputUser, shortName: String)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .inputGameID(let id, let accessHash):
+                    if boxed {
+                        buffer.appendInt32(53231223)
+                    }
+                    serializeInt64(id, buffer: buffer, boxed: false)
+                    serializeInt64(accessHash, buffer: buffer, boxed: false)
+                    break
+                case .inputGameShortName(let botId, let shortName):
+                    if boxed {
+                        buffer.appendInt32(-1020139510)
+                    }
+                    botId.serialize(buffer, true)
+                    serializeString(shortName, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .inputGameID(let id, let accessHash):
+                return ("inputGameID", [("id", id as Any), ("accessHash", accessHash as Any)])
+                case .inputGameShortName(let botId, let shortName):
+                return ("inputGameShortName", [("botId", botId as Any), ("shortName", shortName as Any)])
+    }
+    }
+    
+        public static func parse_inputGameID(_ reader: BufferReader) -> InputGame? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.InputGame.inputGameID(id: _1!, accessHash: _2!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_inputGameShortName(_ reader: BufferReader) -> InputGame? {
+            var _1: Api.InputUser?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.InputUser
+            }
+            var _2: String?
+            _2 = parseString(reader)
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.InputGame.inputGameShortName(botId: _1!, shortName: _2!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api {
+    enum InputGeoPoint: TypeConstructorDescription {
+        case inputGeoPoint(flags: Int32, lat: Double, long: Double, accuracyRadius: Int32?)
+        case inputGeoPointEmpty
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .inputGeoPoint(let flags, let lat, let long, let accuracyRadius):
+                    if boxed {
+                        buffer.appendInt32(1210199983)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    serializeDouble(lat, buffer: buffer, boxed: false)
+                    serializeDouble(long, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeInt32(accuracyRadius!, buffer: buffer, boxed: false)}
+                    break
+                case .inputGeoPointEmpty:
+                    if boxed {
+                        buffer.appendInt32(-457104426)
+                    }
+                    
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .inputGeoPoint(let flags, let lat, let long, let accuracyRadius):
+                return ("inputGeoPoint", [("flags", flags as Any), ("lat", lat as Any), ("long", long as Any), ("accuracyRadius", accuracyRadius as Any)])
+                case .inputGeoPointEmpty:
+                return ("inputGeoPointEmpty", [])
+    }
+    }
+    
+        public static func parse_inputGeoPoint(_ reader: BufferReader) -> InputGeoPoint? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Double?
+            _2 = reader.readDouble()
+            var _3: Double?
+            _3 = reader.readDouble()
+            var _4: Int32?
+            if Int(_1!) & Int(1 << 0) != 0 {_4 = reader.readInt32() }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.InputGeoPoint.inputGeoPoint(flags: _1!, lat: _2!, long: _3!, accuracyRadius: _4)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_inputGeoPointEmpty(_ reader: BufferReader) -> InputGeoPoint? {
+            return Api.InputGeoPoint.inputGeoPointEmpty
+        }
+    
+    }
+}
+public extension Api {
     enum InputGroupCall: TypeConstructorDescription {
         case inputGroupCall(id: Int64, accessHash: Int64)
     
@@ -17,7 +143,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inputGroupCall(let id, let accessHash):
-                return ("inputGroupCall", [("id", String(describing: id)), ("accessHash", String(describing: accessHash))])
+                return ("inputGroupCall", [("id", id as Any), ("accessHash", accessHash as Any)])
     }
     }
     
@@ -64,9 +190,9 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inputInvoiceMessage(let peer, let msgId):
-                return ("inputInvoiceMessage", [("peer", String(describing: peer)), ("msgId", String(describing: msgId))])
+                return ("inputInvoiceMessage", [("peer", peer as Any), ("msgId", msgId as Any)])
                 case .inputInvoiceSlug(let slug):
-                return ("inputInvoiceSlug", [("slug", String(describing: slug))])
+                return ("inputInvoiceSlug", [("slug", slug as Any)])
     }
     }
     
@@ -279,35 +405,35 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inputMediaContact(let phoneNumber, let firstName, let lastName, let vcard):
-                return ("inputMediaContact", [("phoneNumber", String(describing: phoneNumber)), ("firstName", String(describing: firstName)), ("lastName", String(describing: lastName)), ("vcard", String(describing: vcard))])
+                return ("inputMediaContact", [("phoneNumber", phoneNumber as Any), ("firstName", firstName as Any), ("lastName", lastName as Any), ("vcard", vcard as Any)])
                 case .inputMediaDice(let emoticon):
-                return ("inputMediaDice", [("emoticon", String(describing: emoticon))])
+                return ("inputMediaDice", [("emoticon", emoticon as Any)])
                 case .inputMediaDocument(let flags, let id, let ttlSeconds, let query):
-                return ("inputMediaDocument", [("flags", String(describing: flags)), ("id", String(describing: id)), ("ttlSeconds", String(describing: ttlSeconds)), ("query", String(describing: query))])
+                return ("inputMediaDocument", [("flags", flags as Any), ("id", id as Any), ("ttlSeconds", ttlSeconds as Any), ("query", query as Any)])
                 case .inputMediaDocumentExternal(let flags, let url, let ttlSeconds):
-                return ("inputMediaDocumentExternal", [("flags", String(describing: flags)), ("url", String(describing: url)), ("ttlSeconds", String(describing: ttlSeconds))])
+                return ("inputMediaDocumentExternal", [("flags", flags as Any), ("url", url as Any), ("ttlSeconds", ttlSeconds as Any)])
                 case .inputMediaEmpty:
                 return ("inputMediaEmpty", [])
                 case .inputMediaGame(let id):
-                return ("inputMediaGame", [("id", String(describing: id))])
+                return ("inputMediaGame", [("id", id as Any)])
                 case .inputMediaGeoLive(let flags, let geoPoint, let heading, let period, let proximityNotificationRadius):
-                return ("inputMediaGeoLive", [("flags", String(describing: flags)), ("geoPoint", String(describing: geoPoint)), ("heading", String(describing: heading)), ("period", String(describing: period)), ("proximityNotificationRadius", String(describing: proximityNotificationRadius))])
+                return ("inputMediaGeoLive", [("flags", flags as Any), ("geoPoint", geoPoint as Any), ("heading", heading as Any), ("period", period as Any), ("proximityNotificationRadius", proximityNotificationRadius as Any)])
                 case .inputMediaGeoPoint(let geoPoint):
-                return ("inputMediaGeoPoint", [("geoPoint", String(describing: geoPoint))])
+                return ("inputMediaGeoPoint", [("geoPoint", geoPoint as Any)])
                 case .inputMediaInvoice(let flags, let title, let description, let photo, let invoice, let payload, let provider, let providerData, let startParam, let extendedMedia):
-                return ("inputMediaInvoice", [("flags", String(describing: flags)), ("title", String(describing: title)), ("description", String(describing: description)), ("photo", String(describing: photo)), ("invoice", String(describing: invoice)), ("payload", String(describing: payload)), ("provider", String(describing: provider)), ("providerData", String(describing: providerData)), ("startParam", String(describing: startParam)), ("extendedMedia", String(describing: extendedMedia))])
+                return ("inputMediaInvoice", [("flags", flags as Any), ("title", title as Any), ("description", description as Any), ("photo", photo as Any), ("invoice", invoice as Any), ("payload", payload as Any), ("provider", provider as Any), ("providerData", providerData as Any), ("startParam", startParam as Any), ("extendedMedia", extendedMedia as Any)])
                 case .inputMediaPhoto(let flags, let id, let ttlSeconds):
-                return ("inputMediaPhoto", [("flags", String(describing: flags)), ("id", String(describing: id)), ("ttlSeconds", String(describing: ttlSeconds))])
+                return ("inputMediaPhoto", [("flags", flags as Any), ("id", id as Any), ("ttlSeconds", ttlSeconds as Any)])
                 case .inputMediaPhotoExternal(let flags, let url, let ttlSeconds):
-                return ("inputMediaPhotoExternal", [("flags", String(describing: flags)), ("url", String(describing: url)), ("ttlSeconds", String(describing: ttlSeconds))])
+                return ("inputMediaPhotoExternal", [("flags", flags as Any), ("url", url as Any), ("ttlSeconds", ttlSeconds as Any)])
                 case .inputMediaPoll(let flags, let poll, let correctAnswers, let solution, let solutionEntities):
-                return ("inputMediaPoll", [("flags", String(describing: flags)), ("poll", String(describing: poll)), ("correctAnswers", String(describing: correctAnswers)), ("solution", String(describing: solution)), ("solutionEntities", String(describing: solutionEntities))])
+                return ("inputMediaPoll", [("flags", flags as Any), ("poll", poll as Any), ("correctAnswers", correctAnswers as Any), ("solution", solution as Any), ("solutionEntities", solutionEntities as Any)])
                 case .inputMediaUploadedDocument(let flags, let file, let thumb, let mimeType, let attributes, let stickers, let ttlSeconds):
-                return ("inputMediaUploadedDocument", [("flags", String(describing: flags)), ("file", String(describing: file)), ("thumb", String(describing: thumb)), ("mimeType", String(describing: mimeType)), ("attributes", String(describing: attributes)), ("stickers", String(describing: stickers)), ("ttlSeconds", String(describing: ttlSeconds))])
+                return ("inputMediaUploadedDocument", [("flags", flags as Any), ("file", file as Any), ("thumb", thumb as Any), ("mimeType", mimeType as Any), ("attributes", attributes as Any), ("stickers", stickers as Any), ("ttlSeconds", ttlSeconds as Any)])
                 case .inputMediaUploadedPhoto(let flags, let file, let stickers, let ttlSeconds):
-                return ("inputMediaUploadedPhoto", [("flags", String(describing: flags)), ("file", String(describing: file)), ("stickers", String(describing: stickers)), ("ttlSeconds", String(describing: ttlSeconds))])
+                return ("inputMediaUploadedPhoto", [("flags", flags as Any), ("file", file as Any), ("stickers", stickers as Any), ("ttlSeconds", ttlSeconds as Any)])
                 case .inputMediaVenue(let geoPoint, let title, let address, let provider, let venueId, let venueType):
-                return ("inputMediaVenue", [("geoPoint", String(describing: geoPoint)), ("title", String(describing: title)), ("address", String(describing: address)), ("provider", String(describing: provider)), ("venueId", String(describing: venueId)), ("venueType", String(describing: venueType))])
+                return ("inputMediaVenue", [("geoPoint", geoPoint as Any), ("title", title as Any), ("address", address as Any), ("provider", provider as Any), ("venueId", venueId as Any), ("venueType", venueType as Any)])
     }
     }
     
@@ -678,13 +804,13 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inputMessageCallbackQuery(let id, let queryId):
-                return ("inputMessageCallbackQuery", [("id", String(describing: id)), ("queryId", String(describing: queryId))])
+                return ("inputMessageCallbackQuery", [("id", id as Any), ("queryId", queryId as Any)])
                 case .inputMessageID(let id):
-                return ("inputMessageID", [("id", String(describing: id))])
+                return ("inputMessageID", [("id", id as Any)])
                 case .inputMessagePinned:
                 return ("inputMessagePinned", [])
                 case .inputMessageReplyTo(let id):
-                return ("inputMessageReplyTo", [("id", String(describing: id))])
+                return ("inputMessageReplyTo", [("id", id as Any)])
     }
     }
     
@@ -734,6 +860,7 @@ public extension Api {
     indirect enum InputNotifyPeer: TypeConstructorDescription {
         case inputNotifyBroadcasts
         case inputNotifyChats
+        case inputNotifyForumTopic(peer: Api.InputPeer, topMsgId: Int32)
         case inputNotifyPeer(peer: Api.InputPeer)
         case inputNotifyUsers
     
@@ -750,6 +877,13 @@ public extension Api {
                         buffer.appendInt32(1251338318)
                     }
                     
+                    break
+                case .inputNotifyForumTopic(let peer, let topMsgId):
+                    if boxed {
+                        buffer.appendInt32(1548122514)
+                    }
+                    peer.serialize(buffer, true)
+                    serializeInt32(topMsgId, buffer: buffer, boxed: false)
                     break
                 case .inputNotifyPeer(let peer):
                     if boxed {
@@ -772,8 +906,10 @@ public extension Api {
                 return ("inputNotifyBroadcasts", [])
                 case .inputNotifyChats:
                 return ("inputNotifyChats", [])
+                case .inputNotifyForumTopic(let peer, let topMsgId):
+                return ("inputNotifyForumTopic", [("peer", peer as Any), ("topMsgId", topMsgId as Any)])
                 case .inputNotifyPeer(let peer):
-                return ("inputNotifyPeer", [("peer", String(describing: peer))])
+                return ("inputNotifyPeer", [("peer", peer as Any)])
                 case .inputNotifyUsers:
                 return ("inputNotifyUsers", [])
     }
@@ -784,6 +920,22 @@ public extension Api {
         }
         public static func parse_inputNotifyChats(_ reader: BufferReader) -> InputNotifyPeer? {
             return Api.InputNotifyPeer.inputNotifyChats
+        }
+        public static func parse_inputNotifyForumTopic(_ reader: BufferReader) -> InputNotifyPeer? {
+            var _1: Api.InputPeer?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.InputPeer
+            }
+            var _2: Int32?
+            _2 = reader.readInt32()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.InputNotifyPeer.inputNotifyForumTopic(peer: _1!, topMsgId: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_inputNotifyPeer(_ reader: BufferReader) -> InputNotifyPeer? {
             var _1: Api.InputPeer?
@@ -845,13 +997,13 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inputPaymentCredentials(let flags, let data):
-                return ("inputPaymentCredentials", [("flags", String(describing: flags)), ("data", String(describing: data))])
+                return ("inputPaymentCredentials", [("flags", flags as Any), ("data", data as Any)])
                 case .inputPaymentCredentialsApplePay(let paymentData):
-                return ("inputPaymentCredentialsApplePay", [("paymentData", String(describing: paymentData))])
+                return ("inputPaymentCredentialsApplePay", [("paymentData", paymentData as Any)])
                 case .inputPaymentCredentialsGooglePay(let paymentToken):
-                return ("inputPaymentCredentialsGooglePay", [("paymentToken", String(describing: paymentToken))])
+                return ("inputPaymentCredentialsGooglePay", [("paymentToken", paymentToken as Any)])
                 case .inputPaymentCredentialsSaved(let id, let tmpPassword):
-                return ("inputPaymentCredentialsSaved", [("id", String(describing: id)), ("tmpPassword", String(describing: tmpPassword))])
+                return ("inputPaymentCredentialsSaved", [("id", id as Any), ("tmpPassword", tmpPassword as Any)])
     }
     }
     
@@ -906,174 +1058,6 @@ public extension Api {
             let _c2 = _2 != nil
             if _c1 && _c2 {
                 return Api.InputPaymentCredentials.inputPaymentCredentialsSaved(id: _1!, tmpPassword: _2!)
-            }
-            else {
-                return nil
-            }
-        }
-    
-    }
-}
-public extension Api {
-    indirect enum InputPeer: TypeConstructorDescription {
-        case inputPeerChannel(channelId: Int64, accessHash: Int64)
-        case inputPeerChannelFromMessage(peer: Api.InputPeer, msgId: Int32, channelId: Int64)
-        case inputPeerChat(chatId: Int64)
-        case inputPeerEmpty
-        case inputPeerSelf
-        case inputPeerUser(userId: Int64, accessHash: Int64)
-        case inputPeerUserFromMessage(peer: Api.InputPeer, msgId: Int32, userId: Int64)
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .inputPeerChannel(let channelId, let accessHash):
-                    if boxed {
-                        buffer.appendInt32(666680316)
-                    }
-                    serializeInt64(channelId, buffer: buffer, boxed: false)
-                    serializeInt64(accessHash, buffer: buffer, boxed: false)
-                    break
-                case .inputPeerChannelFromMessage(let peer, let msgId, let channelId):
-                    if boxed {
-                        buffer.appendInt32(-1121318848)
-                    }
-                    peer.serialize(buffer, true)
-                    serializeInt32(msgId, buffer: buffer, boxed: false)
-                    serializeInt64(channelId, buffer: buffer, boxed: false)
-                    break
-                case .inputPeerChat(let chatId):
-                    if boxed {
-                        buffer.appendInt32(900291769)
-                    }
-                    serializeInt64(chatId, buffer: buffer, boxed: false)
-                    break
-                case .inputPeerEmpty:
-                    if boxed {
-                        buffer.appendInt32(2134579434)
-                    }
-                    
-                    break
-                case .inputPeerSelf:
-                    if boxed {
-                        buffer.appendInt32(2107670217)
-                    }
-                    
-                    break
-                case .inputPeerUser(let userId, let accessHash):
-                    if boxed {
-                        buffer.appendInt32(-571955892)
-                    }
-                    serializeInt64(userId, buffer: buffer, boxed: false)
-                    serializeInt64(accessHash, buffer: buffer, boxed: false)
-                    break
-                case .inputPeerUserFromMessage(let peer, let msgId, let userId):
-                    if boxed {
-                        buffer.appendInt32(-1468331492)
-                    }
-                    peer.serialize(buffer, true)
-                    serializeInt32(msgId, buffer: buffer, boxed: false)
-                    serializeInt64(userId, buffer: buffer, boxed: false)
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .inputPeerChannel(let channelId, let accessHash):
-                return ("inputPeerChannel", [("channelId", String(describing: channelId)), ("accessHash", String(describing: accessHash))])
-                case .inputPeerChannelFromMessage(let peer, let msgId, let channelId):
-                return ("inputPeerChannelFromMessage", [("peer", String(describing: peer)), ("msgId", String(describing: msgId)), ("channelId", String(describing: channelId))])
-                case .inputPeerChat(let chatId):
-                return ("inputPeerChat", [("chatId", String(describing: chatId))])
-                case .inputPeerEmpty:
-                return ("inputPeerEmpty", [])
-                case .inputPeerSelf:
-                return ("inputPeerSelf", [])
-                case .inputPeerUser(let userId, let accessHash):
-                return ("inputPeerUser", [("userId", String(describing: userId)), ("accessHash", String(describing: accessHash))])
-                case .inputPeerUserFromMessage(let peer, let msgId, let userId):
-                return ("inputPeerUserFromMessage", [("peer", String(describing: peer)), ("msgId", String(describing: msgId)), ("userId", String(describing: userId))])
-    }
-    }
-    
-        public static func parse_inputPeerChannel(_ reader: BufferReader) -> InputPeer? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: Int64?
-            _2 = reader.readInt64()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.InputPeer.inputPeerChannel(channelId: _1!, accessHash: _2!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_inputPeerChannelFromMessage(_ reader: BufferReader) -> InputPeer? {
-            var _1: Api.InputPeer?
-            if let signature = reader.readInt32() {
-                _1 = Api.parse(reader, signature: signature) as? Api.InputPeer
-            }
-            var _2: Int32?
-            _2 = reader.readInt32()
-            var _3: Int64?
-            _3 = reader.readInt64()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.InputPeer.inputPeerChannelFromMessage(peer: _1!, msgId: _2!, channelId: _3!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_inputPeerChat(_ reader: BufferReader) -> InputPeer? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            let _c1 = _1 != nil
-            if _c1 {
-                return Api.InputPeer.inputPeerChat(chatId: _1!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_inputPeerEmpty(_ reader: BufferReader) -> InputPeer? {
-            return Api.InputPeer.inputPeerEmpty
-        }
-        public static func parse_inputPeerSelf(_ reader: BufferReader) -> InputPeer? {
-            return Api.InputPeer.inputPeerSelf
-        }
-        public static func parse_inputPeerUser(_ reader: BufferReader) -> InputPeer? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: Int64?
-            _2 = reader.readInt64()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.InputPeer.inputPeerUser(userId: _1!, accessHash: _2!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_inputPeerUserFromMessage(_ reader: BufferReader) -> InputPeer? {
-            var _1: Api.InputPeer?
-            if let signature = reader.readInt32() {
-                _1 = Api.parse(reader, signature: signature) as? Api.InputPeer
-            }
-            var _2: Int32?
-            _2 = reader.readInt32()
-            var _3: Int64?
-            _3 = reader.readInt64()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.InputPeer.inputPeerUserFromMessage(peer: _1!, msgId: _2!, userId: _3!)
             }
             else {
                 return nil

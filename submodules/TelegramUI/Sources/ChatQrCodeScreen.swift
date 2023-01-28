@@ -33,6 +33,7 @@ import TelegramUniversalVideoContent
 import GalleryUI
 import SaveToCameraRoll
 import SegmentedControlNode
+import AnimatedCountLabelNode
 
 private func closeButtonImage(theme: PresentationTheme) -> UIImage? {
     return generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
@@ -512,7 +513,7 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
                         animatedStickerNode.autoplay = true
                         animatedStickerNode.visibility = strongSelf.visibilityStatus
                         
-                        strongSelf.stickerFetchedDisposable.set(fetchedMediaResource(mediaBox: item.context.account.postbox.mediaBox, reference: MediaResourceReference.media(media: .standalone(media: file), resource: file.resource)).start())
+                        strongSelf.stickerFetchedDisposable.set(fetchedMediaResource(mediaBox: item.context.account.postbox.mediaBox, userLocation: .other, userContentType: .sticker, reference: MediaResourceReference.media(media: .standalone(media: file), resource: file.resource)).start())
                         
                         let thumbnailDimensions = PixelDimensions(width: 512, height: 512)
                         strongSelf.placeholderNode.update(backgroundColor: nil, foregroundColor: UIColor(rgb: 0xffffff, alpha: 0.2), shimmeringColor: UIColor(rgb: 0xffffff, alpha: 0.3), data: file.immediateThumbnailData, size: emojiFrame.size, imageSize: thumbnailDimensions.cgSize)
@@ -564,19 +565,24 @@ final class ChatQrCodeScreen: ViewController {
     static let themeCrossfadeDelay: Double = 0.05
     
     enum Subject {
-        case peer(Peer)
+        case peer(peer: Peer, threadId: Int64?, temporary: Bool)
         case messages([Message])
         
         var fileName: String {
             switch self {
-            case let .peer(peer):
+            case let .peer(peer, threadId, _):
+                var result: String
                 if let addressName = peer.addressName, !addressName.isEmpty {
-                    return "t_me-\(peer.addressName ?? "")"
+                    result = "t_me-\(peer.addressName ?? "")"
                 } else if let peer = peer as? TelegramUser {
-                    return "t_me-\(peer.phone ?? "")"
+                    result = "t_me-\(peer.phone ?? "")"
                 } else {
-                    return "t_me-\(Int32.random(in: 0 ..< Int32.max))"
+                    result = "t_me-\(Int32.random(in: 0 ..< Int32.max))"
                 }
+                if let threadId = threadId, threadId != 0 {
+                    result.append("-\(threadId)")
+                }
+                return result
             case let .messages(messages):
                 if let message = messages.first, let chatPeer = message.peers[message.id.peerId] as? TelegramChannel, message.id.namespace == Namespaces.Message.Cloud, let addressName = chatPeer.addressName, !addressName.isEmpty {
                     return "t_me-\(addressName)-\(message.id.id)"
@@ -782,6 +788,8 @@ private class ChatQrCodeScreenNode: ViewControllerTracingNode, UIScrollViewDeleg
     private var containerLayout: (ContainerViewLayout, CGFloat)?
     
     private let disposable = MetaDisposable()
+    private let contactDisposable = MetaDisposable()
+    private var currentContactToken: ExportedContactToken?
     
     var present: ((ViewController) -> Void)?
     var previewTheme: ((String?, Bool?, PresentationTheme) -> Void)?
@@ -800,8 +808,8 @@ private class ChatQrCodeScreenNode: ViewControllerTracingNode, UIScrollViewDeleg
         self.wrappingScrollNode.view.canCancelContentTouches = true
                 
         switch controller.subject {
-            case let .peer(peer):
-                self.contentNode = QrContentNode(context: context, peer: peer, isStatic: false)
+            case let .peer(peer, threadId, temporary):
+                self.contentNode = QrContentNode(context: context, peer: peer, threadId: threadId, isStatic: false, temporary: temporary)
             case let .messages(messages):
                 self.contentNode = MessageContentNode(context: context, messages: messages)
         }
@@ -994,7 +1002,7 @@ private class ChatQrCodeScreenNode: ViewControllerTracingNode, UIScrollViewDeleg
         let initiallySelectedEmoticon: Signal<String, NoError>
         let sharedData = self.context.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.presentationThemeSettings])
         |> take(1)
-        if case let .peer(peer) = controller.subject, peer.id != self.context.account.peerId {
+        if case let .peer(peer, _, _) = controller.subject, peer.id != self.context.account.peerId {
             let themeEmoticon = self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.ThemeEmoticon(id: peer.id))
             initiallySelectedEmoticon = combineLatest(themeEmoticon, sharedData)
             |> map { themeEmoticon, sharedData -> String in
@@ -1114,7 +1122,7 @@ private class ChatQrCodeScreenNode: ViewControllerTracingNode, UIScrollViewDeleg
                             let accountFullSizeData = Signal<(Data?, Bool), NoError> { subscriber in
                                 let accountResource = account.postbox.mediaBox.cachedResourceRepresentation(file.file.resource, representation: CachedPreparedPatternWallpaperRepresentation(), complete: false, fetch: true)
                                 
-                                let fetchedFullSize = fetchedMediaResource(mediaBox: account.postbox.mediaBox, reference: .media(media: .standalone(media: file.file), resource: file.file.resource))
+                                let fetchedFullSize = fetchedMediaResource(mediaBox: account.postbox.mediaBox, userLocation: .other, userContentType: MediaResourceUserContentType(file: file.file), reference: .media(media: .standalone(media: file.file), resource: file.file.resource))
                                 let fetchedFullSizeDisposable = fetchedFullSize.start()
                                 let fullSizeDisposable = accountResource.start(next: { next in
                                     subscriber.putNext((next.size == 0 ? nil : try? Data(contentsOf: URL(fileURLWithPath: next.path), options: []), next.complete))
@@ -1149,6 +1157,43 @@ private class ChatQrCodeScreenNode: ViewControllerTracingNode, UIScrollViewDeleg
         }
         
         self.ready.set(self.contentNode.isReady)
+        
+        if case let .peer(_, _, temporary) = controller.subject, temporary {
+            self.contactDisposable.set(
+                (context.engine.peers.exportContactToken()
+                 |> deliverOnMainQueue).start(next: { [weak self] token in
+                     if let strongSelf = self {
+                         strongSelf.currentContactToken = token
+                         if let contentNode = strongSelf.contentNode as? QrContentNode, let token = token {
+                             contentNode.setContactToken(token, animated: true)
+                         }
+                     }
+                 })
+            )
+            
+            if let contentNode = self.contentNode as? QrContentNode {
+                contentNode.requestNextToken = { [weak self] in
+                    if let strongSelf = self {
+                        strongSelf.contactDisposable.set(
+                            (context.engine.peers.exportContactToken()
+                             |> deliverOnMainQueue).start(next: { [weak self] token in
+                                 if let strongSelf = self {
+                                     strongSelf.currentContactToken = token
+                                     if let contentNode = strongSelf.contentNode as? QrContentNode, let token = token {
+                                         contentNode.setContactToken(token, animated: true)
+                                     }
+                                 }
+                             })
+                        )
+                    }
+                }
+            }
+        }
+    }
+    
+    deinit {
+        self.disposable.dispose()
+        self.contactDisposable.dispose()
     }
     
     private func enqueueTransition(_ transition: ThemeSettingsThemeItemNodeTransition) {
@@ -1434,7 +1479,9 @@ private protocol ContentNode: ASDisplayNode {
 private class QrContentNode: ASDisplayNode, ContentNode {
     private let context: AccountContext
     private let peer: Peer
+    private let threadId: Int64?
     private let isStatic: Bool
+    private let temporary: Bool
     
     fileprivate let containerNode: ASDisplayNode
     fileprivate let wallpaperBackgroundNode: WallpaperBackgroundNode
@@ -1444,7 +1491,11 @@ private class QrContentNode: ASDisplayNode, ContentNode {
     private var codeForegroundDimNode: ASDisplayNode
     private let codeMaskNode: ASDisplayNode
     private let codeTextNode: ImmediateTextNode
+    private let codeCountdownNode: ImmediateAnimatedCountLabelNode
     private let codeImageNode: TransformImageNode
+    private let codeMarkersNode: TransformImageNode
+    private var codeSnapshotView: UIView?
+    private var codePlaceholderNode: AnimatedStickerNode
     private let codeIconBackgroundNode: ASImageNode
     private let codeStaticIconNode: ASImageNode?
     private let codeAnimatedIconNode: AnimatedStickerNode?
@@ -1463,11 +1514,19 @@ private class QrContentNode: ASDisplayNode, ContentNode {
         return false
     }
     
-    init(context: AccountContext, peer: Peer, isStatic: Bool = false) {
+    private var timer: SwiftSignalKit.Timer?
+    private var token: ExportedContactToken?
+    private var gettingNextToken = false
+    private var tokenUpdated = false
+    var requestNextToken: () -> Void = {}
+    
+    init(context: AccountContext, peer: Peer, threadId: Int64?, isStatic: Bool = false, temporary: Bool) {
         self.context = context
         self.peer = peer
+        self.threadId = threadId
         self.isStatic = isStatic
-        
+        self.temporary = temporary
+                
         self.containerNode = ASDisplayNode()
         
         self.wallpaperBackgroundNode = createWallpaperBackgroundNode(context: context, forChatDisplay: true, useSharedAnimationPhase: false, useExperimentalImplementation: context.sharedContext.immediateExperimentalUISettings.experimentalBackground)
@@ -1489,7 +1548,10 @@ private class QrContentNode: ASDisplayNode, ContentNode {
         self.codeMaskNode = ASDisplayNode()
         
         self.codeImageNode = TransformImageNode()
+        self.codeMarkersNode = TransformImageNode()
         self.codeIconBackgroundNode = ASImageNode()
+        
+        self.codePlaceholderNode = DefaultAnimatedStickerNodeImpl()
         
         if isStatic {
             let codeStaticIconNode = ASImageNode()
@@ -1506,21 +1568,42 @@ private class QrContentNode: ASDisplayNode, ContentNode {
             self.codeStaticIconNode = nil
         }
         
-        let codeText: String
+        var codeText: String
         if let addressName = peer.addressName, !addressName.isEmpty {
             codeText = "@\(peer.addressName ?? "")".uppercased()
         } else {
             codeText = peer.debugDisplayTitle.uppercased()
         }
+        if let threadId = self.threadId, threadId != 0 {
+            codeText += "/\(threadId)"
+        }
+        
+        let codeFont = Font.with(size: 23.0, design: .round, weight: .bold, traits: [.monospacedNumbers])
         
         self.codeTextNode = ImmediateTextNode()
         self.codeTextNode.displaysAsynchronously = false
-        self.codeTextNode.attributedText = NSAttributedString(string: codeText, font: Font.with(size: 23.0, design: .round, weight: .bold, traits: []), textColor: .black)
+        self.codeTextNode.attributedText = NSAttributedString(string: codeText, font: codeFont, textColor: .black)
         self.codeTextNode.truncationMode = .byCharWrapping
         self.codeTextNode.maximumNumberOfLines = 2
         self.codeTextNode.textAlignment = .center
+        
+        self.codeCountdownNode = ImmediateAnimatedCountLabelNode()
+        self.codeCountdownNode.alwaysOneDirection = true
+
         if isStatic {
+            if temporary {
+                self.codeCountdownNode.isHidden = true
+            }
             self.codeTextNode.setNeedsDisplayAtScale(3.0)
+        } else if temporary {
+            self.codeTextNode.isHidden = true
+            
+            self.codeCountdownNode.segments = [
+                .number(Int(5), NSAttributedString(string: "5", font: codeFont, textColor: .black)),
+                .text(0, NSAttributedString(string: ":", font: codeFont, textColor: .black)),
+                .number(Int(0), NSAttributedString(string: "0", font: codeFont, textColor: .black)),
+                .number(Int(0), NSAttributedString(string: "0", font: codeFont, textColor: .black))
+            ]
         }
         
         self.avatarNode = ImageNode()
@@ -1539,8 +1622,13 @@ private class QrContentNode: ASDisplayNode, ContentNode {
         self.codeForegroundNode.addSubnode(self.codeForegroundDimNode)
         
         self.codeMaskNode.addSubnode(self.codeImageNode)
+        self.codeMaskNode.addSubnode(self.codeMarkersNode)
+        if temporary {
+            self.codeMaskNode.addSubnode(self.codePlaceholderNode)
+        }
         self.codeMaskNode.addSubnode(self.codeIconBackgroundNode)
         self.codeMaskNode.addSubnode(self.codeTextNode)
+        self.codeMaskNode.addSubnode(self.codeCountdownNode)
         
         self.containerNode.addSubnode(self.avatarNode)
         
@@ -1550,13 +1638,18 @@ private class QrContentNode: ASDisplayNode, ContentNode {
             self.addSubnode(codeAnimatedIconNode)
         }
         
-        let codeLink: String
+        var codeLink: String
         if let addressName = peer.addressName, !addressName.isEmpty {
             codeLink = "https://t.me/\(peer.addressName ?? "")"
         } else if let peer = peer as? TelegramUser {
             codeLink = "https://t.me/+\(peer.phone ?? "")"
+        } else if let _ = peer as? TelegramChannel {
+            codeLink = "https://t.me/c/\(peer.id.id._internalGetInt64Value())"
         } else {
             codeLink = ""
+        }
+        if let threadId = threadId {
+            codeLink += "/\(threadId)"
         }
         
         let codeReadyPromise = ValuePromise<Bool>()
@@ -1575,12 +1668,112 @@ private class QrContentNode: ASDisplayNode, ContentNode {
         |> map { codeReady, wallpaperReady in
             return codeReady && wallpaperReady
         })
+        
+        if temporary {
+            self.timer = Timer(timeout: 0.5, repeat: true, completion: { [weak self] in
+                self?.tick()
+            }, queue: Queue.mainQueue())
+            self.timer?.start()
+            
+            self.codePlaceholderNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "QrDataRain"), width: 512, height: 512, playbackMode: .loop, mode: .direct(cachePathPrefix: nil))
+            self.codePlaceholderNode.visibility = true
+            
+            self.codeImageNode.alpha = 0.0
+            
+            self.codeMarkersNode.setSignal(qrCode(string: "https://t.me/contact/000000:abcdef", color: .black, backgroundColor: nil, icon: .cutout, ecl: "Q", onlyMarkers: true) |> map { $0.1 }, attemptSynchronously: true)
+        }
+    }
+    
+    deinit {
+        self.timer?.invalidate()
     }
     
     override func didLoad() {
         super.didLoad()
         
         self.codeForegroundNode.view.mask = self.codeMaskNode.view
+    }
+    
+    private func tick() {
+        let currentTime =  Int32(Date().timeIntervalSince1970)
+        let elapsed: Int32
+        if let token = self.token {
+            elapsed = token.expires - currentTime
+        } else {
+            elapsed = 300
+        }
+        
+        let string = stringForDuration(max(0, elapsed))
+        
+        let codeFont = Font.with(size: 23.0, design: .round, weight: .bold, traits: [.monospacedNumbers])
+        
+        var segments: [AnimatedCountLabelNode.Segment] = []
+        for char in string {
+            if let intValue = Int(String(char)) {
+                segments.append(.number(intValue, NSAttributedString(string: String(char), font: codeFont, textColor: .black)))
+            } else {
+                segments.append(.text(0, NSAttributedString(string: String(char), font: codeFont, textColor: .black)))
+            }
+        }
+        self.codeCountdownNode.segments = segments
+        
+        if let (size, topInset, bottomInset) = self.validLayout {
+            self.updateLayout(size: size, topInset: topInset, bottomInset: bottomInset, transition: .immediate)
+        }
+        
+        if elapsed <= 1 {
+            if !self.gettingNextToken {
+                self.gettingNextToken = true
+                self.requestNextToken()
+                
+                let codeSnapshotView = UIImageView(image: self.codeImageNode.image)
+                codeSnapshotView.frame = self.codeImageNode.frame
+                self.codeImageNode.view.superview?.addSubview(codeSnapshotView)
+                self.codeSnapshotView = codeSnapshotView
+                
+                self.codeImageNode.isHidden = true
+            }
+        }
+        if self.tokenUpdated {
+            self.tokenUpdated = false
+            
+            self.codeImageNode.isHidden = false
+            self.codeImageNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
+            if let codeSnapshotView = self.codeSnapshotView {
+                self.codeSnapshotView = nil
+                codeSnapshotView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false, completion: { [weak codeSnapshotView] _ in
+                    codeSnapshotView?.removeFromSuperview()
+                })
+            }
+        }
+    }
+    
+    func setContactToken(_ token: ExportedContactToken, animated: Bool) {
+        self.token = token
+        if self.gettingNextToken {
+            self.gettingNextToken = false
+            self.tokenUpdated = true
+        }
+            
+        self.codeImageNode.setSignal(qrCode(string: token.url, color: .black, backgroundColor: nil, icon: .cutout, ecl: "Q") |> beforeNext { [weak self] size, _ in
+            guard let strongSelf = self else {
+                return
+            }
+            strongSelf.qrCodeSize = size
+            if let (size, topInset, bottomInset) = strongSelf.validLayout {
+                strongSelf.updateLayout(size: size, topInset: topInset, bottomInset: bottomInset, transition: .immediate)
+            }
+            
+            if strongSelf.codePlaceholderNode.visibility {
+                strongSelf.codeImageNode.alpha = 1.0
+                strongSelf.codeImageNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                strongSelf.codePlaceholderNode.alpha = 0.0
+                strongSelf.codePlaceholderNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak self] _ in
+                    self?.codePlaceholderNode.visibility = false
+                })
+            }
+            
+        } |> map { $0.1 }, attemptSynchronously: true)
     }
     
     func generateImage(completion: @escaping (UIImage?) -> Void) {
@@ -1591,7 +1784,10 @@ private class QrContentNode: ASDisplayNode, ContentNode {
         let size = CGSize(width: 390.0, height: 844.0)
         let scale: CGFloat = 3.0
         
-        let copyNode = QrContentNode(context: self.context, peer: self.peer, isStatic: true)
+        let copyNode = QrContentNode(context: self.context, peer: self.peer, threadId: self.threadId, isStatic: true, temporary: false)
+        if let token = self.token {
+            copyNode.setContactToken(token, animated: false)
+        }
         
         func prepare(view: UIView, scale: CGFloat) {
             view.contentScaleFactor = scale
@@ -1693,7 +1889,7 @@ private class QrContentNode: ASDisplayNode, ContentNode {
             }
         }
         
-        self.codeTextNode.attributedText = NSAttributedString(string: self.codeTextNode.attributedText?.string ?? "", font: Font.with(size: fontSize, design: .round, weight: .bold, traits: []), textColor: .black)
+        self.codeTextNode.attributedText = NSAttributedString(string: self.codeTextNode.attributedText?.string ?? "", font: Font.with(size: fontSize, design: .round, weight: .bold, traits: [.monospacedNumbers]), textColor: .black)
         
         let codeBackgroundWidth = min(300.0, size.width - codeInset * 2.0)
         let codeBackgroundHeight = floor(codeBackgroundWidth * 1.1)
@@ -1715,9 +1911,22 @@ private class QrContentNode: ASDisplayNode, ContentNode {
         
         let imageFrame = CGRect(origin: CGPoint(x: floor((codeBackgroundFrame.width - imageSize.width) / 2.0), y: floor((codeBackgroundFrame.width - imageSize.height) / 2.0)), size: imageSize)
         transition.updateFrame(node: self.codeImageNode, frame: imageFrame)
-
+        
+        let makeMarkersLayout = self.codeMarkersNode.asyncLayout()
+        let markersApply = makeMarkersLayout(TransformImageArguments(corners: ImageCorners(), imageSize: imageSize, boundingSize: imageSize, intrinsicInsets: UIEdgeInsets(), emptyColor: nil, scale: self.isStatic ? 3.0 : nil ))
+        let _ = markersApply()
+        
+        transition.updateFrame(node: self.codeMarkersNode, frame: imageFrame)
+        
+        let codePlaceholderFrame = imageFrame.insetBy(dx: 10.0, dy: 10.0)
+        self.codePlaceholderNode.updateLayout(size: codePlaceholderFrame.size)
+        self.codePlaceholderNode.frame = codePlaceholderFrame
+        
         let codeTextSize = self.codeTextNode.updateLayout(CGSize(width: codeBackgroundFrame.width - floor(imageFrame.minX * 1.2), height: codeBackgroundFrame.height))
         transition.updateFrame(node: self.codeTextNode, frame: CGRect(origin: CGPoint(x: floor((codeBackgroundFrame.width - codeTextSize.width) / 2.0), y: imageFrame.maxY + floor((codeBackgroundHeight - imageFrame.maxY - codeTextSize.height) / 2.0) - 5.0), size: codeTextSize))
+        
+        let codeCountdownSize = self.codeCountdownNode.updateLayout(size: CGSize(width: codeBackgroundFrame.width - floor(imageFrame.minX * 1.2), height: codeBackgroundFrame.height), animated: true)
+        transition.updateFrame(node: self.codeCountdownNode, frame: CGRect(origin: CGPoint(x: floor((codeBackgroundFrame.width - codeCountdownSize.width) / 2.0), y: imageFrame.maxY + floor((codeBackgroundHeight - imageFrame.maxY - codeCountdownSize.height) / 2.0) - 5.0), size: codeCountdownSize))
         
         transition.updateFrame(node: self.avatarNode, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - avatarSize.width) / 2.0), y: codeBackgroundFrame.minY - floor(avatarSize.height * 0.7)), size: avatarSize))
         
@@ -1941,7 +2150,7 @@ private class MessageContentNode: ASDisplayNode, ContentNode {
             guard let image = image, let videoFrame = videoFrame else {
                 return
             }
-            renderVideo(context: context, backgroundImage: image, media: media, videoFrame: videoFrame, completion: { url in
+            renderVideo(context: context, backgroundImage: image, userLocation: .peer(message.id.peerId), media: media, videoFrame: videoFrame, completion: { url in
                 if let url = url {
                     completion(url)
                 }
@@ -2029,7 +2238,7 @@ private class MessageContentNode: ASDisplayNode, ContentNode {
                     mediaFrame = CGRect(origin: CGPoint(x: 3.0, y: 63.0), size: mediaSize)
                     
                     if !wasInitialized {
-                        self.imageNode.setSignal(chatMessagePhoto(postbox: self.context.account.postbox, photoReference: .message(message: MessageReference(message), media: image), synchronousLoad: true, highQuality: true))
+                        self.imageNode.setSignal(chatMessagePhoto(postbox: self.context.account.postbox, userLocation: .peer(message.id.peerId), photoReference: .message(message: MessageReference(message), media: image), synchronousLoad: true, highQuality: true))
                         let imageLayout = self.imageNode.asyncLayout()
                         
                         let arguments = TransformImageArguments(corners: ImageCorners(radius: 0.0), imageSize: mediaSize, boundingSize: mediaSize, intrinsicInsets: UIEdgeInsets(), resizeMode: .blurBackground, emptyColor: .black, custom: nil)
@@ -2052,7 +2261,7 @@ private class MessageContentNode: ASDisplayNode, ContentNode {
                                 videoSnapshotView.frame = mediaFrame
                             }
                         } else {
-                            let videoContent = NativeVideoContent(id: .message(message.stableId, video.fileId), fileReference: .message(message: MessageReference(message), media: video), streamVideo: .conservative, loopVideo: true, enableSound: false, fetchAutomatically: false, onlyFullSizeThumbnail: self.isStatic, continuePlayingWithoutSoundOnLostAudioSession: true, placeholderColor: .clear, captureProtected: false)
+                            let videoContent = NativeVideoContent(id: .message(message.stableId, video.fileId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: video), streamVideo: .conservative, loopVideo: true, enableSound: false, fetchAutomatically: false, onlyFullSizeThumbnail: self.isStatic, continuePlayingWithoutSoundOnLostAudioSession: true, placeholderColor: .clear, captureProtected: false)
                             let videoNode = UniversalVideoNode(postbox: self.context.account.postbox, audioSession: self.context.sharedContext.mediaManager.audioSession, manager: self.context.sharedContext.mediaManager.universalVideoManager, decoration: GalleryVideoDecoration(), content: videoContent, priority: .overlay, autoplay: !self.isStatic)
                             
                             self.videoStatusDisposable.set((videoNode.status
@@ -2185,8 +2394,8 @@ private enum RenderVideoResult {
     case error
 }
 
-private func renderVideo(context: AccountContext, backgroundImage: UIImage, media: TelegramMediaFile, videoFrame: CGRect, completion: @escaping (URL?) -> Void) {
-    let _ = (fetchMediaData(context: context, postbox: context.account.postbox, mediaReference: AnyMediaReference.standalone(media: media))
+private func renderVideo(context: AccountContext, backgroundImage: UIImage, userLocation: MediaResourceUserLocation, media: TelegramMediaFile, videoFrame: CGRect, completion: @escaping (URL?) -> Void) {
+    let _ = (fetchMediaData(context: context, postbox: context.account.postbox, userLocation: userLocation, mediaReference: AnyMediaReference.standalone(media: media))
     |> deliverOnMainQueue).start(next: { value, isImage in
         guard case let .data(data) = value, data.complete else {
             return

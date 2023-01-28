@@ -352,6 +352,7 @@ swift_library(
         "//submodules/PasswordSetupUI:PasswordSetupUIResources",
         "//submodules/PasswordSetupUI:PasswordSetupUIAssets",
         "//submodules/PremiumUI:PremiumUIResources",
+        "//submodules/DrawingUI:DrawingUIResources",
         "//submodules/TelegramUI:TelegramUIResources",
         "//submodules/TelegramUI:TelegramUIAssets",
         ":GeneratedPresentationStrings/Resources/PresentationStrings.data",
@@ -420,6 +421,9 @@ official_apple_pay_merchants = [
     "merchant.org.telegram.Best2pay.test",
     "merchant.psbank.test.telegramios",
     "merchant.psbank.prod.telegramios",
+    "merchant.org.telegram.billinenet.test",
+    "merchant.org.telegram.billinenet.prod",
+    "merchant.org.telegram.portmone.test",
 ]
 
 official_bundle_ids = [
@@ -987,6 +991,9 @@ ios_framework(
     deps = [
         "//submodules/TelegramCore:TelegramCore",
     ],
+    visibility = [
+        "//visibility:public",
+    ]
 )
 
 plist_fragment(
@@ -1473,6 +1480,9 @@ ios_extension(
         ":PostboxFramework",
         ":TelegramCoreFramework",
     ],
+    visibility = [
+        "//visibility:public",
+    ]
 )
 
 plist_fragment(
@@ -1790,6 +1800,7 @@ plist_fragment(
     <key>BGTaskSchedulerPermittedIdentifiers</key>
     <array>
         <string>{telegram_bundle_id}.refresh</string>
+        <string>{telegram_bundle_id}.cleanup</string>
     </array>
     <key>CFBundleAllowMixedLocalizations</key>
     <true/>
@@ -1890,6 +1901,7 @@ plist_fragment(
         <string>location</string>
         <string>remote-notification</string>
         <string>voip</string>
+        <string>processing</string>
     </array>
     <key>UIDeviceFamily</key>
     <array>
@@ -2065,4 +2077,54 @@ ios_application(
     deps = [
         "//third-party/libvpx:vpx",
     ],
+)
+
+swift_library(
+    name = "TelegramCoreBuildTestLib",
+    module_name = "TelegramCoreBuildTestLib",
+    srcs = glob([
+        "Tests/TelegramCoreBuildTest/**/*.swift",
+    ]),
+    copts = [
+        "-warnings-as-errors",
+    ],
+    data = [
+        ":WidgetAssets",
+    ],
+    deps = [
+        "//submodules/BuildConfig:BuildConfig",
+        "//submodules/WidgetItems:WidgetItems_iOS14",
+        "//submodules/WidgetItemsUtils:WidgetItemsUtils",
+        "//submodules/AppLockState:AppLockState",
+        "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
+        "//submodules/Postbox:Postbox",
+        "//submodules/TelegramCore:TelegramCore",
+        "//submodules/OpenSSLEncryptionProvider:OpenSSLEncryptionProvider",
+        "//Telegram:GeneratedSources",
+    ],
+)
+
+ios_application(
+    name = "TelegramCoreBuildTest",
+    bundle_id = "{telegram_bundle_id}".format(
+        telegram_bundle_id = telegram_bundle_id,
+    ),
+    families = ["iphone", "ipad"],
+    minimum_os_version = minimum_os_version,
+    provisioning_profile = select({
+        ":disableProvisioningProfilesSetting": None,
+        "//conditions:default": "@build_configuration//provisioning:Telegram.mobileprovision",
+    }),
+    entitlements = ":TelegramEntitlements.entitlements",
+    infoplists = [
+        ":TelegramInfoPlist",
+        ":BuildNumberInfoPlist",
+        ":VersionInfoPlist",
+        ":RequiredDeviceCapabilitiesPlist",
+        ":UrlTypesInfoPlist",
+    ],
+    frameworks = [
+        ":TelegramCoreFramework",
+    ],
+    deps = [":TelegramCoreBuildTestLib"],
 )

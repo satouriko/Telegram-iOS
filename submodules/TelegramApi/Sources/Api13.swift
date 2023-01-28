@@ -18,7 +18,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .messagePeerReaction(let flags, let peerId, let reaction):
-                return ("messagePeerReaction", [("flags", String(describing: flags)), ("peerId", String(describing: peerId)), ("reaction", String(describing: reaction))])
+                return ("messagePeerReaction", [("flags", flags as Any), ("peerId", peerId as Any), ("reaction", reaction as Any)])
     }
     }
     
@@ -65,7 +65,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .messageRange(let minId, let maxId):
-                return ("messageRange", [("minId", String(describing: minId)), ("maxId", String(describing: maxId))])
+                return ("messageRange", [("minId", minId as Any), ("maxId", maxId as Any)])
     }
     }
     
@@ -114,7 +114,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .messageReactions(let flags, let results, let recentReactions):
-                return ("messageReactions", [("flags", String(describing: flags)), ("results", String(describing: results)), ("recentReactions", String(describing: recentReactions))])
+                return ("messageReactions", [("flags", flags as Any), ("results", results as Any), ("recentReactions", recentReactions as Any)])
     }
     }
     
@@ -170,7 +170,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .messageReplies(let flags, let replies, let repliesPts, let recentRepliers, let channelId, let maxId, let readMaxId):
-                return ("messageReplies", [("flags", String(describing: flags)), ("replies", String(describing: replies)), ("repliesPts", String(describing: repliesPts)), ("recentRepliers", String(describing: recentRepliers)), ("channelId", String(describing: channelId)), ("maxId", String(describing: maxId)), ("readMaxId", String(describing: readMaxId))])
+                return ("messageReplies", [("flags", flags as Any), ("replies", replies as Any), ("repliesPts", repliesPts as Any), ("recentRepliers", recentRepliers as Any), ("channelId", channelId as Any), ("maxId", maxId as Any), ("readMaxId", readMaxId as Any)])
     }
     }
     
@@ -229,7 +229,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .messageReplyHeader(let flags, let replyToMsgId, let replyToPeerId, let replyToTopId):
-                return ("messageReplyHeader", [("flags", String(describing: flags)), ("replyToMsgId", String(describing: replyToMsgId)), ("replyToPeerId", String(describing: replyToPeerId)), ("replyToTopId", String(describing: replyToTopId))])
+                return ("messageReplyHeader", [("flags", flags as Any), ("replyToMsgId", replyToMsgId as Any), ("replyToPeerId", replyToPeerId as Any), ("replyToTopId", replyToTopId as Any)])
     }
     }
     
@@ -299,11 +299,11 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .messageUserVote(let userId, let option, let date):
-                return ("messageUserVote", [("userId", String(describing: userId)), ("option", String(describing: option)), ("date", String(describing: date))])
+                return ("messageUserVote", [("userId", userId as Any), ("option", option as Any), ("date", date as Any)])
                 case .messageUserVoteInputOption(let userId, let date):
-                return ("messageUserVoteInputOption", [("userId", String(describing: userId)), ("date", String(describing: date))])
+                return ("messageUserVoteInputOption", [("userId", userId as Any), ("date", date as Any)])
                 case .messageUserVoteMultiple(let userId, let options, let date):
-                return ("messageUserVoteMultiple", [("userId", String(describing: userId)), ("options", String(describing: options)), ("date", String(describing: date))])
+                return ("messageUserVoteMultiple", [("userId", userId as Any), ("options", options as Any), ("date", date as Any)])
     }
     }
     
@@ -381,7 +381,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .messageViews(let flags, let views, let forwards, let replies):
-                return ("messageViews", [("flags", String(describing: flags)), ("views", String(describing: views)), ("forwards", String(describing: forwards)), ("replies", String(describing: replies))])
+                return ("messageViews", [("flags", flags as Any), ("views", views as Any), ("forwards", forwards as Any), ("replies", replies as Any)])
     }
     }
     
@@ -556,7 +556,7 @@ public extension Api {
                 case .inputMessagesFilterMyMentions:
                 return ("inputMessagesFilterMyMentions", [])
                 case .inputMessagesFilterPhoneCalls(let flags):
-                return ("inputMessagesFilterPhoneCalls", [("flags", String(describing: flags))])
+                return ("inputMessagesFilterPhoneCalls", [("flags", flags as Any)])
                 case .inputMessagesFilterPhotoVideo:
                 return ("inputMessagesFilterPhotoVideo", [])
                 case .inputMessagesFilterPhotos:
@@ -658,7 +658,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .nearestDc(let country, let thisDc, let nearestDc):
-                return ("nearestDc", [("country", String(describing: country)), ("thisDc", String(describing: thisDc)), ("nearestDc", String(describing: nearestDc))])
+                return ("nearestDc", [("country", country as Any), ("thisDc", thisDc as Any), ("nearestDc", nearestDc as Any)])
     }
     }
     
@@ -724,11 +724,11 @@ public extension Api {
                 case .notificationSoundDefault:
                 return ("notificationSoundDefault", [])
                 case .notificationSoundLocal(let title, let data):
-                return ("notificationSoundLocal", [("title", String(describing: title)), ("data", String(describing: data))])
+                return ("notificationSoundLocal", [("title", title as Any), ("data", data as Any)])
                 case .notificationSoundNone:
                 return ("notificationSoundNone", [])
                 case .notificationSoundRingtone(let id):
-                return ("notificationSoundRingtone", [("id", String(describing: id))])
+                return ("notificationSoundRingtone", [("id", id as Any)])
     }
     }
     
@@ -770,6 +770,7 @@ public extension Api {
     enum NotifyPeer: TypeConstructorDescription {
         case notifyBroadcasts
         case notifyChats
+        case notifyForumTopic(peer: Api.Peer, topMsgId: Int32)
         case notifyPeer(peer: Api.Peer)
         case notifyUsers
     
@@ -786,6 +787,13 @@ public extension Api {
                         buffer.appendInt32(-1073230141)
                     }
                     
+                    break
+                case .notifyForumTopic(let peer, let topMsgId):
+                    if boxed {
+                        buffer.appendInt32(577659656)
+                    }
+                    peer.serialize(buffer, true)
+                    serializeInt32(topMsgId, buffer: buffer, boxed: false)
                     break
                 case .notifyPeer(let peer):
                     if boxed {
@@ -808,8 +816,10 @@ public extension Api {
                 return ("notifyBroadcasts", [])
                 case .notifyChats:
                 return ("notifyChats", [])
+                case .notifyForumTopic(let peer, let topMsgId):
+                return ("notifyForumTopic", [("peer", peer as Any), ("topMsgId", topMsgId as Any)])
                 case .notifyPeer(let peer):
-                return ("notifyPeer", [("peer", String(describing: peer))])
+                return ("notifyPeer", [("peer", peer as Any)])
                 case .notifyUsers:
                 return ("notifyUsers", [])
     }
@@ -820,6 +830,22 @@ public extension Api {
         }
         public static func parse_notifyChats(_ reader: BufferReader) -> NotifyPeer? {
             return Api.NotifyPeer.notifyChats
+        }
+        public static func parse_notifyForumTopic(_ reader: BufferReader) -> NotifyPeer? {
+            var _1: Api.Peer?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.Peer
+            }
+            var _2: Int32?
+            _2 = reader.readInt32()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.NotifyPeer.notifyForumTopic(peer: _1!, topMsgId: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_notifyPeer(_ reader: BufferReader) -> NotifyPeer? {
             var _1: Api.Peer?

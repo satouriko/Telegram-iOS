@@ -66,10 +66,6 @@ public final class CodeInputView: ASDisplayNode, UITextFieldDelegate {
                 self.borderColorValue = borderColor
                 
                 let previousColor = self.backgroundView.layer.borderColor
-                self.backgroundView.layer.cornerRadius = 15.0
-                if #available(iOS 13.0, *) {
-                    self.backgroundView.layer.cornerCurve = .continuous
-                }
                 self.backgroundView.layer.borderColor = UIColor(argb: borderColor).cgColor
                 self.backgroundView.layer.borderWidth = 1.0 + UIScreenPixel
                 if let previousColor = previousColor {
@@ -98,6 +94,11 @@ public final class CodeInputView: ASDisplayNode, UITextFieldDelegate {
                 }
             }
             
+            self.backgroundView.layer.cornerRadius = size.height == 28.0 ? 12.0 : 15.0
+            if #available(iOS 13.0, *) {
+                self.backgroundView.layer.cornerCurve = .continuous
+            }
+            
             if #available(iOS 13.0, *) {
                 self.textNode.attributedText = NSAttributedString(string: text, font: UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular), textColor: UIColor(argb: textColor))
             } else {
@@ -117,6 +118,7 @@ public final class CodeInputView: ASDisplayNode, UITextFieldDelegate {
     private var itemViews: [ItemView] = []
     
     public var updated: (() -> Void)?
+    public var longPressed: (() -> Void)?
     
     private var theme: Theme?
     private var count: Int?
@@ -165,6 +167,18 @@ public final class CodeInputView: ASDisplayNode, UITextFieldDelegate {
     @objc private func tapGesture(_ recognizer: UITapGestureRecognizer) {
         if case .ended = recognizer.state {
             self.textField.becomeFirstResponder()
+        }
+    }
+    
+    public override func didLoad() {
+        super.didLoad()
+        
+        self.view.addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(self.handleLongPress(_:))))
+    }
+    
+    @objc func handleLongPress(_ gestureRecognizer: UILongPressGestureRecognizer) {
+        if case .ended = gestureRecognizer.state {
+            self.longPressed?()
         }
     }
     

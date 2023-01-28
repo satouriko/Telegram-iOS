@@ -1,3 +1,89 @@
+public extension Api.contacts {
+    enum TopPeers: TypeConstructorDescription {
+        case topPeers(categories: [Api.TopPeerCategoryPeers], chats: [Api.Chat], users: [Api.User])
+        case topPeersDisabled
+        case topPeersNotModified
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .topPeers(let categories, let chats, let users):
+                    if boxed {
+                        buffer.appendInt32(1891070632)
+                    }
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(categories.count))
+                    for item in categories {
+                        item.serialize(buffer, true)
+                    }
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(chats.count))
+                    for item in chats {
+                        item.serialize(buffer, true)
+                    }
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(users.count))
+                    for item in users {
+                        item.serialize(buffer, true)
+                    }
+                    break
+                case .topPeersDisabled:
+                    if boxed {
+                        buffer.appendInt32(-1255369827)
+                    }
+                    
+                    break
+                case .topPeersNotModified:
+                    if boxed {
+                        buffer.appendInt32(-567906571)
+                    }
+                    
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .topPeers(let categories, let chats, let users):
+                return ("topPeers", [("categories", categories as Any), ("chats", chats as Any), ("users", users as Any)])
+                case .topPeersDisabled:
+                return ("topPeersDisabled", [])
+                case .topPeersNotModified:
+                return ("topPeersNotModified", [])
+    }
+    }
+    
+        public static func parse_topPeers(_ reader: BufferReader) -> TopPeers? {
+            var _1: [Api.TopPeerCategoryPeers]?
+            if let _ = reader.readInt32() {
+                _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.TopPeerCategoryPeers.self)
+            }
+            var _2: [Api.Chat]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Chat.self)
+            }
+            var _3: [Api.User]?
+            if let _ = reader.readInt32() {
+                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.contacts.TopPeers.topPeers(categories: _1!, chats: _2!, users: _3!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_topPeersDisabled(_ reader: BufferReader) -> TopPeers? {
+            return Api.contacts.TopPeers.topPeersDisabled
+        }
+        public static func parse_topPeersNotModified(_ reader: BufferReader) -> TopPeers? {
+            return Api.contacts.TopPeers.topPeersNotModified
+        }
+    
+    }
+}
 public extension Api.help {
     enum AppUpdate: TypeConstructorDescription {
         case appUpdate(flags: Int32, id: Int32, version: String, text: String, entities: [Api.MessageEntity], document: Api.Document?, url: String?, sticker: Api.Document?)
@@ -34,7 +120,7 @@ public extension Api.help {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .appUpdate(let flags, let id, let version, let text, let entities, let document, let url, let sticker):
-                return ("appUpdate", [("flags", String(describing: flags)), ("id", String(describing: id)), ("version", String(describing: version)), ("text", String(describing: text)), ("entities", String(describing: entities)), ("document", String(describing: document)), ("url", String(describing: url)), ("sticker", String(describing: sticker))])
+                return ("appUpdate", [("flags", flags as Any), ("id", id as Any), ("version", version as Any), ("text", text as Any), ("entities", entities as Any), ("document", document as Any), ("url", url as Any), ("sticker", sticker as Any)])
                 case .noAppUpdate:
                 return ("noAppUpdate", [])
     }
@@ -114,7 +200,7 @@ public extension Api.help {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .countriesList(let countries, let hash):
-                return ("countriesList", [("countries", String(describing: countries)), ("hash", String(describing: hash))])
+                return ("countriesList", [("countries", countries as Any), ("hash", hash as Any)])
                 case .countriesListNotModified:
                 return ("countriesListNotModified", [])
     }
@@ -168,7 +254,7 @@ public extension Api.help {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .country(let flags, let iso2, let defaultName, let name, let countryCodes):
-                return ("country", [("flags", String(describing: flags)), ("iso2", String(describing: iso2)), ("defaultName", String(describing: defaultName)), ("name", String(describing: name)), ("countryCodes", String(describing: countryCodes))])
+                return ("country", [("flags", flags as Any), ("iso2", iso2 as Any), ("defaultName", defaultName as Any), ("name", name as Any), ("countryCodes", countryCodes as Any)])
     }
     }
     
@@ -229,7 +315,7 @@ public extension Api.help {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .countryCode(let flags, let countryCode, let prefixes, let patterns):
-                return ("countryCode", [("flags", String(describing: flags)), ("countryCode", String(describing: countryCode)), ("prefixes", String(describing: prefixes)), ("patterns", String(describing: patterns))])
+                return ("countryCode", [("flags", flags as Any), ("countryCode", countryCode as Any), ("prefixes", prefixes as Any), ("patterns", patterns as Any)])
     }
     }
     
@@ -291,7 +377,7 @@ public extension Api.help {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .deepLinkInfo(let flags, let message, let entities):
-                return ("deepLinkInfo", [("flags", String(describing: flags)), ("message", String(describing: message)), ("entities", String(describing: entities))])
+                return ("deepLinkInfo", [("flags", flags as Any), ("message", message as Any), ("entities", entities as Any)])
                 case .deepLinkInfoEmpty:
                 return ("deepLinkInfoEmpty", [])
     }
@@ -340,7 +426,7 @@ public extension Api.help {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inviteText(let message):
-                return ("inviteText", [("message", String(describing: message))])
+                return ("inviteText", [("message", message as Any)])
     }
     }
     
@@ -384,7 +470,7 @@ public extension Api.help {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .passportConfig(let hash, let countriesLangs):
-                return ("passportConfig", [("hash", String(describing: hash)), ("countriesLangs", String(describing: countriesLangs))])
+                return ("passportConfig", [("hash", hash as Any), ("countriesLangs", countriesLangs as Any)])
                 case .passportConfigNotModified:
                 return ("passportConfigNotModified", [])
     }
@@ -455,7 +541,7 @@ public extension Api.help {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .premiumPromo(let statusText, let statusEntities, let videoSections, let videos, let periodOptions, let users):
-                return ("premiumPromo", [("statusText", String(describing: statusText)), ("statusEntities", String(describing: statusEntities)), ("videoSections", String(describing: videoSections)), ("videos", String(describing: videos)), ("periodOptions", String(describing: periodOptions)), ("users", String(describing: users))])
+                return ("premiumPromo", [("statusText", statusText as Any), ("statusEntities", statusEntities as Any), ("videoSections", videoSections as Any), ("videos", videos as Any), ("periodOptions", periodOptions as Any), ("users", users as Any)])
     }
     }
     
@@ -537,9 +623,9 @@ public extension Api.help {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .promoData(let flags, let expires, let peer, let chats, let users, let psaType, let psaMessage):
-                return ("promoData", [("flags", String(describing: flags)), ("expires", String(describing: expires)), ("peer", String(describing: peer)), ("chats", String(describing: chats)), ("users", String(describing: users)), ("psaType", String(describing: psaType)), ("psaMessage", String(describing: psaMessage))])
+                return ("promoData", [("flags", flags as Any), ("expires", expires as Any), ("peer", peer as Any), ("chats", chats as Any), ("users", users as Any), ("psaType", psaType as Any), ("psaMessage", psaMessage as Any)])
                 case .promoDataEmpty(let expires):
-                return ("promoDataEmpty", [("expires", String(describing: expires))])
+                return ("promoDataEmpty", [("expires", expires as Any)])
     }
     }
     
@@ -624,7 +710,7 @@ public extension Api.help {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .recentMeUrls(let urls, let chats, let users):
-                return ("recentMeUrls", [("urls", String(describing: urls)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("recentMeUrls", [("urls", urls as Any), ("chats", chats as Any), ("users", users as Any)])
     }
     }
     
@@ -673,7 +759,7 @@ public extension Api.help {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .support(let phoneNumber, let user):
-                return ("support", [("phoneNumber", String(describing: phoneNumber)), ("user", String(describing: user))])
+                return ("support", [("phoneNumber", phoneNumber as Any), ("user", user as Any)])
     }
     }
     
@@ -714,7 +800,7 @@ public extension Api.help {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .supportName(let name):
-                return ("supportName", [("name", String(describing: name))])
+                return ("supportName", [("name", name as Any)])
     }
     }
     
@@ -758,7 +844,7 @@ public extension Api.help {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .termsOfService(let flags, let id, let text, let entities, let minAgeConfirm):
-                return ("termsOfService", [("flags", String(describing: flags)), ("id", String(describing: id)), ("text", String(describing: text)), ("entities", String(describing: entities)), ("minAgeConfirm", String(describing: minAgeConfirm))])
+                return ("termsOfService", [("flags", flags as Any), ("id", id as Any), ("text", text as Any), ("entities", entities as Any), ("minAgeConfirm", minAgeConfirm as Any)])
     }
     }
     
@@ -818,9 +904,9 @@ public extension Api.help {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .termsOfServiceUpdate(let expires, let termsOfService):
-                return ("termsOfServiceUpdate", [("expires", String(describing: expires)), ("termsOfService", String(describing: termsOfService))])
+                return ("termsOfServiceUpdate", [("expires", expires as Any), ("termsOfService", termsOfService as Any)])
                 case .termsOfServiceUpdateEmpty(let expires):
-                return ("termsOfServiceUpdateEmpty", [("expires", String(describing: expires))])
+                return ("termsOfServiceUpdateEmpty", [("expires", expires as Any)])
     }
     }
     
@@ -886,7 +972,7 @@ public extension Api.help {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .userInfo(let message, let entities, let author, let date):
-                return ("userInfo", [("message", String(describing: message)), ("entities", String(describing: entities)), ("author", String(describing: author)), ("date", String(describing: date))])
+                return ("userInfo", [("message", message as Any), ("entities", entities as Any), ("author", author as Any), ("date", date as Any)])
                 case .userInfoEmpty:
                 return ("userInfoEmpty", [])
     }
@@ -945,7 +1031,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .affectedFoundMessages(let pts, let ptsCount, let offset, let messages):
-                return ("affectedFoundMessages", [("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount)), ("offset", String(describing: offset)), ("messages", String(describing: messages))])
+                return ("affectedFoundMessages", [("pts", pts as Any), ("ptsCount", ptsCount as Any), ("offset", offset as Any), ("messages", messages as Any)])
     }
     }
     
@@ -994,7 +1080,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .affectedHistory(let pts, let ptsCount, let offset):
-                return ("affectedHistory", [("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount)), ("offset", String(describing: offset))])
+                return ("affectedHistory", [("pts", pts as Any), ("ptsCount", ptsCount as Any), ("offset", offset as Any)])
     }
     }
     
@@ -1037,7 +1123,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .affectedMessages(let pts, let ptsCount):
-                return ("affectedMessages", [("pts", String(describing: pts)), ("ptsCount", String(describing: ptsCount))])
+                return ("affectedMessages", [("pts", pts as Any), ("ptsCount", ptsCount as Any)])
     }
     }
     
@@ -1088,7 +1174,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .allStickers(let hash, let sets):
-                return ("allStickers", [("hash", String(describing: hash)), ("sets", String(describing: sets))])
+                return ("allStickers", [("hash", hash as Any), ("sets", sets as Any)])
                 case .allStickersNotModified:
                 return ("allStickersNotModified", [])
     }
@@ -1139,7 +1225,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .archivedStickers(let count, let sets):
-                return ("archivedStickers", [("count", String(describing: count)), ("sets", String(describing: sets))])
+                return ("archivedStickers", [("count", count as Any), ("sets", sets as Any)])
     }
     }
     
@@ -1192,7 +1278,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .availableReactions(let hash, let reactions):
-                return ("availableReactions", [("hash", String(describing: hash)), ("reactions", String(describing: reactions))])
+                return ("availableReactions", [("hash", hash as Any), ("reactions", reactions as Any)])
                 case .availableReactionsNotModified:
                 return ("availableReactionsNotModified", [])
     }
@@ -1216,128 +1302,6 @@ public extension Api.messages {
         }
         public static func parse_availableReactionsNotModified(_ reader: BufferReader) -> AvailableReactions? {
             return Api.messages.AvailableReactions.availableReactionsNotModified
-        }
-    
-    }
-}
-public extension Api.messages {
-    enum BotCallbackAnswer: TypeConstructorDescription {
-        case botCallbackAnswer(flags: Int32, message: String?, url: String?, cacheTime: Int32)
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .botCallbackAnswer(let flags, let message, let url, let cacheTime):
-                    if boxed {
-                        buffer.appendInt32(911761060)
-                    }
-                    serializeInt32(flags, buffer: buffer, boxed: false)
-                    if Int(flags) & Int(1 << 0) != 0 {serializeString(message!, buffer: buffer, boxed: false)}
-                    if Int(flags) & Int(1 << 2) != 0 {serializeString(url!, buffer: buffer, boxed: false)}
-                    serializeInt32(cacheTime, buffer: buffer, boxed: false)
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .botCallbackAnswer(let flags, let message, let url, let cacheTime):
-                return ("botCallbackAnswer", [("flags", String(describing: flags)), ("message", String(describing: message)), ("url", String(describing: url)), ("cacheTime", String(describing: cacheTime))])
-    }
-    }
-    
-        public static func parse_botCallbackAnswer(_ reader: BufferReader) -> BotCallbackAnswer? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: String?
-            if Int(_1!) & Int(1 << 0) != 0 {_2 = parseString(reader) }
-            var _3: String?
-            if Int(_1!) & Int(1 << 2) != 0 {_3 = parseString(reader) }
-            var _4: Int32?
-            _4 = reader.readInt32()
-            let _c1 = _1 != nil
-            let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 2) == 0) || _3 != nil
-            let _c4 = _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.messages.BotCallbackAnswer.botCallbackAnswer(flags: _1!, message: _2, url: _3, cacheTime: _4!)
-            }
-            else {
-                return nil
-            }
-        }
-    
-    }
-}
-public extension Api.messages {
-    enum BotResults: TypeConstructorDescription {
-        case botResults(flags: Int32, queryId: Int64, nextOffset: String?, switchPm: Api.InlineBotSwitchPM?, results: [Api.BotInlineResult], cacheTime: Int32, users: [Api.User])
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .botResults(let flags, let queryId, let nextOffset, let switchPm, let results, let cacheTime, let users):
-                    if boxed {
-                        buffer.appendInt32(-1803769784)
-                    }
-                    serializeInt32(flags, buffer: buffer, boxed: false)
-                    serializeInt64(queryId, buffer: buffer, boxed: false)
-                    if Int(flags) & Int(1 << 1) != 0 {serializeString(nextOffset!, buffer: buffer, boxed: false)}
-                    if Int(flags) & Int(1 << 2) != 0 {switchPm!.serialize(buffer, true)}
-                    buffer.appendInt32(481674261)
-                    buffer.appendInt32(Int32(results.count))
-                    for item in results {
-                        item.serialize(buffer, true)
-                    }
-                    serializeInt32(cacheTime, buffer: buffer, boxed: false)
-                    buffer.appendInt32(481674261)
-                    buffer.appendInt32(Int32(users.count))
-                    for item in users {
-                        item.serialize(buffer, true)
-                    }
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .botResults(let flags, let queryId, let nextOffset, let switchPm, let results, let cacheTime, let users):
-                return ("botResults", [("flags", String(describing: flags)), ("queryId", String(describing: queryId)), ("nextOffset", String(describing: nextOffset)), ("switchPm", String(describing: switchPm)), ("results", String(describing: results)), ("cacheTime", String(describing: cacheTime)), ("users", String(describing: users))])
-    }
-    }
-    
-        public static func parse_botResults(_ reader: BufferReader) -> BotResults? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Int64?
-            _2 = reader.readInt64()
-            var _3: String?
-            if Int(_1!) & Int(1 << 1) != 0 {_3 = parseString(reader) }
-            var _4: Api.InlineBotSwitchPM?
-            if Int(_1!) & Int(1 << 2) != 0 {if let signature = reader.readInt32() {
-                _4 = Api.parse(reader, signature: signature) as? Api.InlineBotSwitchPM
-            } }
-            var _5: [Api.BotInlineResult]?
-            if let _ = reader.readInt32() {
-                _5 = Api.parseVector(reader, elementSignature: 0, elementType: Api.BotInlineResult.self)
-            }
-            var _6: Int32?
-            _6 = reader.readInt32()
-            var _7: [Api.User]?
-            if let _ = reader.readInt32() {
-                _7 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 2) == 0) || _4 != nil
-            let _c5 = _5 != nil
-            let _c6 = _6 != nil
-            let _c7 = _7 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
-                return Api.messages.BotResults.botResults(flags: _1!, queryId: _2!, nextOffset: _3, switchPm: _4, results: _5!, cacheTime: _6!, users: _7!)
-            }
-            else {
-                return nil
-            }
         }
     
     }

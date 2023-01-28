@@ -77,6 +77,8 @@ private enum DebugControllerEntry: ItemListNodeEntry {
     case resetDatabaseAndCache(PresentationTheme)
     case resetHoles(PresentationTheme)
     case reindexUnread(PresentationTheme)
+    case resetCacheIndex
+    case reindexCache
     case resetBiometricsData(PresentationTheme)
     case resetWebViewCache(PresentationTheme)
     case optimizeDatabase(PresentationTheme)
@@ -86,11 +88,12 @@ private enum DebugControllerEntry: ItemListNodeEntry {
     case enableDebugDataDisplay(Bool)
     case acceleratedStickers(Bool)
     case experimentalBackground(Bool)
-    case inlineStickers(Bool)
+    case inlineForums(Bool)
     case localTranscription(Bool)
     case enableReactionOverrides(Bool)
     case playerEmbedding(Bool)
     case playlistPlayback(Bool)
+    case enableQuickReactionSwitch(Bool)
     case voiceConference
     case preferredVideoCodec(Int, String, String?, Bool)
     case disableVideoAspectScaling(Bool)
@@ -111,7 +114,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return DebugControllerSection.logging.rawValue
         case .enableRaiseToSpeak, .keepChatNavigationStack, .skipReadHistory, .crashOnSlowQueries:
             return DebugControllerSection.experiments.rawValue
-        case .clearTips, .crash, .resetData, .resetDatabase, .resetDatabaseAndCache, .resetHoles, .reindexUnread, .resetBiometricsData, .resetWebViewCache, .optimizeDatabase, .photoPreview, .knockoutWallpaper, .playerEmbedding, .playlistPlayback, .voiceConference, .experimentalCompatibility, .enableDebugDataDisplay, .acceleratedStickers, .experimentalBackground, .inlineStickers, .localTranscription, . enableReactionOverrides, .restorePurchases:
+        case .clearTips, .crash, .resetData, .resetDatabase, .resetDatabaseAndCache, .resetHoles, .reindexUnread, .resetCacheIndex, .reindexCache, .resetBiometricsData, .resetWebViewCache, .optimizeDatabase, .photoPreview, .knockoutWallpaper, .playerEmbedding, .playlistPlayback, .enableQuickReactionSwitch, .voiceConference, .experimentalCompatibility, .enableDebugDataDisplay, .acceleratedStickers, .experimentalBackground, .inlineForums, .localTranscription, . enableReactionOverrides, .restorePurchases:
             return DebugControllerSection.experiments.rawValue
         case .preferredVideoCodec:
             return DebugControllerSection.videoExperiments.rawValue
@@ -170,40 +173,46 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return 21
         case .reindexUnread:
             return 22
-        case .resetBiometricsData:
+        case .resetCacheIndex:
             return 23
-        case .resetWebViewCache:
+        case .reindexCache:
             return 24
-        case .optimizeDatabase:
+        case .resetBiometricsData:
             return 25
-        case .photoPreview:
+        case .resetWebViewCache:
             return 26
-        case .knockoutWallpaper:
+        case .optimizeDatabase:
             return 27
-        case .experimentalCompatibility:
+        case .photoPreview:
             return 28
-        case .enableDebugDataDisplay:
+        case .knockoutWallpaper:
             return 29
-        case .acceleratedStickers:
+        case .experimentalCompatibility:
             return 30
-        case .experimentalBackground:
+        case .enableDebugDataDisplay:
             return 31
-        case .inlineStickers:
+        case .acceleratedStickers:
             return 32
-        case .localTranscription:
+        case .experimentalBackground:
             return 33
-        case .enableReactionOverrides:
+        case .inlineForums:
             return 34
-        case .restorePurchases:
+        case .localTranscription:
             return 35
-        case .playerEmbedding:
+        case .enableReactionOverrides:
             return 36
-        case .playlistPlayback:
+        case .restorePurchases:
             return 37
-        case .voiceConference:
+        case .playerEmbedding:
             return 38
+        case .playlistPlayback:
+            return 39
+        case .enableQuickReactionSwitch:
+            return 40
+        case .voiceConference:
+            return 41
         case let .preferredVideoCodec(index, _, _, _):
-            return 39 + index
+            return 42 + index
         case .disableVideoAspectScaling:
             return 100
         case .enableVoipTcp:
@@ -251,7 +260,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                             actionSheet?.dismissAnimated()
 
                             let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.onlyWriteable, .excludeDisabled]))
-                            controller.peerSelected = { [weak controller] peer in
+                            controller.peerSelected = { [weak controller] peer, _ in
                                 let peerId = peer.id
 
                                 if let strongController = controller {
@@ -335,7 +344,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                                 actionSheet?.dismissAnimated()
                                 
                                 let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.onlyWriteable, .excludeDisabled]))
-                                controller.peerSelected = { [weak controller] peer in
+                                controller.peerSelected = { [weak controller] peer, _ in
                                     let peerId = peer.id
                                     
                                     if let strongController = controller {
@@ -417,7 +426,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                             actionSheet?.dismissAnimated()
 
                             let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.onlyWriteable, .excludeDisabled]))
-                            controller.peerSelected = { [weak controller] peer in
+                            controller.peerSelected = { [weak controller] peer, _ in
                                 let peerId = peer.id
 
                                 if let strongController = controller {
@@ -501,7 +510,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                             actionSheet?.dismissAnimated()
 
                             let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.onlyWriteable, .excludeDisabled]))
-                            controller.peerSelected = { [weak controller] peer in
+                            controller.peerSelected = { [weak controller] peer, _ in
                                 let peerId = peer.id
 
                                 if let strongController = controller {
@@ -586,7 +595,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                             actionSheet?.dismissAnimated()
 
                             let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.onlyWriteable, .excludeDisabled]))
-                            controller.peerSelected = { [weak controller] peer in
+                            controller.peerSelected = { [weak controller] peer, _ in
                                 let peerId = peer.id
 
                                 if let strongController = controller {
@@ -670,7 +679,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                                 actionSheet?.dismissAnimated()
                                 
                                 let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.onlyWriteable, .excludeDisabled]))
-                                controller.peerSelected = { [weak controller] peer in
+                                controller.peerSelected = { [weak controller] peer, _ in
                                     let peerId = peer.id
                                     
                                     if let strongController = controller {
@@ -743,7 +752,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                             actionSheet?.dismissAnimated()
 
                             let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.onlyWriteable, .excludeDisabled]))
-                            controller.peerSelected = { [weak controller] peer in
+                            controller.peerSelected = { [weak controller] peer, _ in
                                 let peerId = peer.id
 
                                 if let strongController = controller {
@@ -967,6 +976,54 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                     controller.dismiss()
                 })
             })
+        case .resetCacheIndex:
+            return ItemListActionItem(presentationData: presentationData, title: "Reset Cache Index [!]", kind: .destructive, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                guard let context = arguments.context else {
+                    return
+                }
+                
+                context.account.postbox.mediaBox.storageBox.reset()
+            })
+        case .reindexCache:
+            return ItemListActionItem(presentationData: presentationData, title: "Reindex Cache", kind: .destructive, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                guard let context = arguments.context else {
+                    return
+                }
+                
+                var signal = context.engine.resources.reindexCacheInBackground(lowImpact: false)
+                
+                var cancelImpl: (() -> Void)?
+                let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                let progressSignal = Signal<Never, NoError> { subscriber in
+                    let controller = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: {
+                        cancelImpl?()
+                    }))
+                    arguments.presentController(controller, nil)
+                    return ActionDisposable { [weak controller] in
+                        Queue.mainQueue().async() {
+                            controller?.dismiss()
+                        }
+                    }
+                }
+                |> runOn(Queue.mainQueue())
+                |> delay(0.15, queue: Queue.mainQueue())
+                let progressDisposable = progressSignal.start()
+                
+                let reindexDisposable = MetaDisposable()
+                
+                signal = signal
+                |> afterDisposed {
+                    Queue.mainQueue().async {
+                        progressDisposable.dispose()
+                    }
+                }
+                cancelImpl = {
+                    reindexDisposable.set(nil)
+                }
+                reindexDisposable.set((signal
+                |> deliverOnMainQueue).start(completed: {
+                }))
+            })
         case .resetBiometricsData:
             return ItemListActionItem(presentationData: presentationData, title: "Reset Biometrics Data", kind: .destructive, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 let _ = updatePresentationPasscodeSettingsInteractively(accountManager: arguments.sharedContext.accountManager, { settings in
@@ -1053,12 +1110,12 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                     })
                 }).start()
             })
-        case let .inlineStickers(value):
-            return ItemListSwitchItem(presentationData: presentationData, title: "Inline Stickers", value: value, sectionId: self.section, style: .blocks, updated: { value in
+        case let .inlineForums(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Inline Forums", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
                     transaction.updateSharedData(ApplicationSpecificSharedDataKeys.experimentalUISettings, { settings in
                         var settings = settings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
-                        settings.inlineStickers = value
+                        settings.inlineForums = value
                         return PreferencesEntry(settings)
                     })
                 }).start()
@@ -1103,6 +1160,16 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                     transaction.updateSharedData(ApplicationSpecificSharedDataKeys.experimentalUISettings, { settings in
                         var settings = settings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
                         settings.playlistPlayback = value
+                        return PreferencesEntry(settings)
+                    })
+                }).start()
+            })
+        case let .enableQuickReactionSwitch(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Enable Quick Reaction", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
+                    transaction.updateSharedData(ApplicationSpecificSharedDataKeys.experimentalUISettings, { settings in
+                        var settings = settings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
+                        settings.disableQuickReaction = !value
                         return PreferencesEntry(settings)
                     })
                 }).start()
@@ -1210,6 +1277,8 @@ private func debugControllerEntries(sharedContext: SharedAccountContext, present
     entries.append(.resetHoles(presentationData.theme))
     if isMainApp {
         entries.append(.reindexUnread(presentationData.theme))
+        entries.append(.resetCacheIndex)
+        entries.append(.reindexCache)
         entries.append(.resetWebViewCache(presentationData.theme))
     }
     entries.append(.optimizeDatabase(presentationData.theme))
@@ -1219,7 +1288,7 @@ private func debugControllerEntries(sharedContext: SharedAccountContext, present
         entries.append(.enableDebugDataDisplay(experimentalSettings.enableDebugDataDisplay))
         entries.append(.acceleratedStickers(experimentalSettings.acceleratedStickers))
         entries.append(.experimentalBackground(experimentalSettings.experimentalBackground))
-        entries.append(.inlineStickers(experimentalSettings.inlineStickers))
+        entries.append(.inlineForums(experimentalSettings.inlineForums))
         entries.append(.localTranscription(experimentalSettings.localTranscription))
         if case .internal = sharedContext.applicationBindings.appBuildType {
             entries.append(.enableReactionOverrides(experimentalSettings.enableReactionOverrides))
@@ -1227,6 +1296,7 @@ private func debugControllerEntries(sharedContext: SharedAccountContext, present
         entries.append(.restorePurchases(presentationData.theme))
         entries.append(.playerEmbedding(experimentalSettings.playerEmbedding))
         entries.append(.playlistPlayback(experimentalSettings.playlistPlayback))
+        entries.append(.enableQuickReactionSwitch(!experimentalSettings.disableQuickReaction))
     }
     
     let codecs: [(String, String?)] = [
@@ -1345,7 +1415,7 @@ public func triggerDebugSendLogsUI(context: AccountContext, additionalInfo: Stri
     let _ = (Logger.shared.collectLogs()
     |> deliverOnMainQueue).start(next: { logs in
         let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.onlyWriteable, .excludeDisabled]))
-        controller.peerSelected = { [weak controller] peer in
+        controller.peerSelected = { [weak controller] peer, _ in
             let peerId = peer.id
 
             if let strongController = controller {

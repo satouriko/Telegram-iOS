@@ -2,6 +2,7 @@ public extension Api.auth {
     enum CodeType: TypeConstructorDescription {
         case codeTypeCall
         case codeTypeFlashCall
+        case codeTypeFragmentSms
         case codeTypeMissedCall
         case codeTypeSms
     
@@ -16,6 +17,12 @@ public extension Api.auth {
                 case .codeTypeFlashCall:
                     if boxed {
                         buffer.appendInt32(577556219)
+                    }
+                    
+                    break
+                case .codeTypeFragmentSms:
+                    if boxed {
+                        buffer.appendInt32(116234636)
                     }
                     
                     break
@@ -40,6 +47,8 @@ public extension Api.auth {
                 return ("codeTypeCall", [])
                 case .codeTypeFlashCall:
                 return ("codeTypeFlashCall", [])
+                case .codeTypeFragmentSms:
+                return ("codeTypeFragmentSms", [])
                 case .codeTypeMissedCall:
                 return ("codeTypeMissedCall", [])
                 case .codeTypeSms:
@@ -52,6 +61,9 @@ public extension Api.auth {
         }
         public static func parse_codeTypeFlashCall(_ reader: BufferReader) -> CodeType? {
             return Api.auth.CodeType.codeTypeFlashCall
+        }
+        public static func parse_codeTypeFragmentSms(_ reader: BufferReader) -> CodeType? {
+            return Api.auth.CodeType.codeTypeFragmentSms
         }
         public static func parse_codeTypeMissedCall(_ reader: BufferReader) -> CodeType? {
             return Api.auth.CodeType.codeTypeMissedCall
@@ -81,7 +93,7 @@ public extension Api.auth {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .exportedAuthorization(let id, let bytes):
-                return ("exportedAuthorization", [("id", String(describing: id)), ("bytes", String(describing: bytes))])
+                return ("exportedAuthorization", [("id", id as Any), ("bytes", bytes as Any)])
     }
     }
     
@@ -121,7 +133,7 @@ public extension Api.auth {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .loggedOut(let flags, let futureAuthToken):
-                return ("loggedOut", [("flags", String(describing: flags)), ("futureAuthToken", String(describing: futureAuthToken))])
+                return ("loggedOut", [("flags", flags as Any), ("futureAuthToken", futureAuthToken as Any)])
     }
     }
     
@@ -176,11 +188,11 @@ public extension Api.auth {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .loginToken(let expires, let token):
-                return ("loginToken", [("expires", String(describing: expires)), ("token", String(describing: token))])
+                return ("loginToken", [("expires", expires as Any), ("token", token as Any)])
                 case .loginTokenMigrateTo(let dcId, let token):
-                return ("loginTokenMigrateTo", [("dcId", String(describing: dcId)), ("token", String(describing: token))])
+                return ("loginTokenMigrateTo", [("dcId", dcId as Any), ("token", token as Any)])
                 case .loginTokenSuccess(let authorization):
-                return ("loginTokenSuccess", [("authorization", String(describing: authorization))])
+                return ("loginTokenSuccess", [("authorization", authorization as Any)])
     }
     }
     
@@ -246,7 +258,7 @@ public extension Api.auth {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .passwordRecovery(let emailPattern):
-                return ("passwordRecovery", [("emailPattern", String(describing: emailPattern))])
+                return ("passwordRecovery", [("emailPattern", emailPattern as Any)])
     }
     }
     
@@ -286,7 +298,7 @@ public extension Api.auth {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .sentCode(let flags, let type, let phoneCodeHash, let nextType, let timeout):
-                return ("sentCode", [("flags", String(describing: flags)), ("type", String(describing: type)), ("phoneCodeHash", String(describing: phoneCodeHash)), ("nextType", String(describing: nextType)), ("timeout", String(describing: timeout))])
+                return ("sentCode", [("flags", flags as Any), ("type", type as Any), ("phoneCodeHash", phoneCodeHash as Any), ("nextType", nextType as Any), ("timeout", timeout as Any)])
     }
     }
     
@@ -326,6 +338,7 @@ public extension Api.auth {
         case sentCodeTypeCall(length: Int32)
         case sentCodeTypeEmailCode(flags: Int32, emailPattern: String, length: Int32, nextPhoneLoginDate: Int32?)
         case sentCodeTypeFlashCall(pattern: String)
+        case sentCodeTypeFragmentSms(url: String, length: Int32)
         case sentCodeTypeMissedCall(prefix: String, length: Int32)
         case sentCodeTypeSetUpEmailRequired(flags: Int32)
         case sentCodeTypeSms(length: Int32)
@@ -359,6 +372,13 @@ public extension Api.auth {
                     }
                     serializeString(pattern, buffer: buffer, boxed: false)
                     break
+                case .sentCodeTypeFragmentSms(let url, let length):
+                    if boxed {
+                        buffer.appendInt32(-648651719)
+                    }
+                    serializeString(url, buffer: buffer, boxed: false)
+                    serializeInt32(length, buffer: buffer, boxed: false)
+                    break
                 case .sentCodeTypeMissedCall(let prefix, let length):
                     if boxed {
                         buffer.appendInt32(-2113903484)
@@ -384,19 +404,21 @@ public extension Api.auth {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .sentCodeTypeApp(let length):
-                return ("sentCodeTypeApp", [("length", String(describing: length))])
+                return ("sentCodeTypeApp", [("length", length as Any)])
                 case .sentCodeTypeCall(let length):
-                return ("sentCodeTypeCall", [("length", String(describing: length))])
+                return ("sentCodeTypeCall", [("length", length as Any)])
                 case .sentCodeTypeEmailCode(let flags, let emailPattern, let length, let nextPhoneLoginDate):
-                return ("sentCodeTypeEmailCode", [("flags", String(describing: flags)), ("emailPattern", String(describing: emailPattern)), ("length", String(describing: length)), ("nextPhoneLoginDate", String(describing: nextPhoneLoginDate))])
+                return ("sentCodeTypeEmailCode", [("flags", flags as Any), ("emailPattern", emailPattern as Any), ("length", length as Any), ("nextPhoneLoginDate", nextPhoneLoginDate as Any)])
                 case .sentCodeTypeFlashCall(let pattern):
-                return ("sentCodeTypeFlashCall", [("pattern", String(describing: pattern))])
+                return ("sentCodeTypeFlashCall", [("pattern", pattern as Any)])
+                case .sentCodeTypeFragmentSms(let url, let length):
+                return ("sentCodeTypeFragmentSms", [("url", url as Any), ("length", length as Any)])
                 case .sentCodeTypeMissedCall(let prefix, let length):
-                return ("sentCodeTypeMissedCall", [("prefix", String(describing: prefix)), ("length", String(describing: length))])
+                return ("sentCodeTypeMissedCall", [("prefix", prefix as Any), ("length", length as Any)])
                 case .sentCodeTypeSetUpEmailRequired(let flags):
-                return ("sentCodeTypeSetUpEmailRequired", [("flags", String(describing: flags))])
+                return ("sentCodeTypeSetUpEmailRequired", [("flags", flags as Any)])
                 case .sentCodeTypeSms(let length):
-                return ("sentCodeTypeSms", [("length", String(describing: length))])
+                return ("sentCodeTypeSms", [("length", length as Any)])
     }
     }
     
@@ -448,6 +470,20 @@ public extension Api.auth {
             let _c1 = _1 != nil
             if _c1 {
                 return Api.auth.SentCodeType.sentCodeTypeFlashCall(pattern: _1!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_sentCodeTypeFragmentSms(_ reader: BufferReader) -> SentCodeType? {
+            var _1: String?
+            _1 = parseString(reader)
+            var _2: Int32?
+            _2 = reader.readInt32()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.auth.SentCodeType.sentCodeTypeFragmentSms(url: _1!, length: _2!)
             }
             else {
                 return nil
@@ -524,7 +560,7 @@ public extension Api.channels {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .adminLogResults(let events, let chats, let users):
-                return ("adminLogResults", [("events", String(describing: events)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("adminLogResults", [("events", events as Any), ("chats", chats as Any), ("users", users as Any)])
     }
     }
     
@@ -582,7 +618,7 @@ public extension Api.channels {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .channelParticipant(let participant, let chats, let users):
-                return ("channelParticipant", [("participant", String(describing: participant)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("channelParticipant", [("participant", participant as Any), ("chats", chats as Any), ("users", users as Any)])
     }
     }
     
@@ -652,7 +688,7 @@ public extension Api.channels {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .channelParticipants(let count, let participants, let chats, let users):
-                return ("channelParticipants", [("count", String(describing: count)), ("participants", String(describing: participants)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("channelParticipants", [("count", count as Any), ("participants", participants as Any), ("chats", chats as Any), ("users", users as Any)])
                 case .channelParticipantsNotModified:
                 return ("channelParticipantsNotModified", [])
     }
@@ -722,7 +758,7 @@ public extension Api.channels {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .sendAsPeers(let peers, let chats, let users):
-                return ("sendAsPeers", [("peers", String(describing: peers)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("sendAsPeers", [("peers", peers as Any), ("chats", chats as Any), ("users", users as Any)])
     }
     }
     
@@ -806,9 +842,9 @@ public extension Api.contacts {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .blocked(let blocked, let chats, let users):
-                return ("blocked", [("blocked", String(describing: blocked)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("blocked", [("blocked", blocked as Any), ("chats", chats as Any), ("users", users as Any)])
                 case .blockedSlice(let count, let blocked, let chats, let users):
-                return ("blockedSlice", [("count", String(describing: count)), ("blocked", String(describing: blocked)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("blockedSlice", [("count", count as Any), ("blocked", blocked as Any), ("chats", chats as Any), ("users", users as Any)])
     }
     }
     
@@ -899,7 +935,7 @@ public extension Api.contacts {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .contacts(let contacts, let savedCount, let users):
-                return ("contacts", [("contacts", String(describing: contacts)), ("savedCount", String(describing: savedCount)), ("users", String(describing: users))])
+                return ("contacts", [("contacts", contacts as Any), ("savedCount", savedCount as Any), ("users", users as Any)])
                 case .contactsNotModified:
                 return ("contactsNotModified", [])
     }
@@ -969,7 +1005,7 @@ public extension Api.contacts {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .found(let myResults, let results, let chats, let users):
-                return ("found", [("myResults", String(describing: myResults)), ("results", String(describing: results)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("found", [("myResults", myResults as Any), ("results", results as Any), ("chats", chats as Any), ("users", users as Any)])
     }
     }
     
@@ -1041,7 +1077,7 @@ public extension Api.contacts {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .importedContacts(let imported, let popularInvites, let retryContacts, let users):
-                return ("importedContacts", [("imported", String(describing: imported)), ("popularInvites", String(describing: popularInvites)), ("retryContacts", String(describing: retryContacts)), ("users", String(describing: users))])
+                return ("importedContacts", [("imported", imported as Any), ("popularInvites", popularInvites as Any), ("retryContacts", retryContacts as Any), ("users", users as Any)])
     }
     }
     
@@ -1104,7 +1140,7 @@ public extension Api.contacts {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .resolvedPeer(let peer, let chats, let users):
-                return ("resolvedPeer", [("peer", String(describing: peer)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("resolvedPeer", [("peer", peer as Any), ("chats", chats as Any), ("users", users as Any)])
     }
     }
     
@@ -1130,92 +1166,6 @@ public extension Api.contacts {
             else {
                 return nil
             }
-        }
-    
-    }
-}
-public extension Api.contacts {
-    enum TopPeers: TypeConstructorDescription {
-        case topPeers(categories: [Api.TopPeerCategoryPeers], chats: [Api.Chat], users: [Api.User])
-        case topPeersDisabled
-        case topPeersNotModified
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .topPeers(let categories, let chats, let users):
-                    if boxed {
-                        buffer.appendInt32(1891070632)
-                    }
-                    buffer.appendInt32(481674261)
-                    buffer.appendInt32(Int32(categories.count))
-                    for item in categories {
-                        item.serialize(buffer, true)
-                    }
-                    buffer.appendInt32(481674261)
-                    buffer.appendInt32(Int32(chats.count))
-                    for item in chats {
-                        item.serialize(buffer, true)
-                    }
-                    buffer.appendInt32(481674261)
-                    buffer.appendInt32(Int32(users.count))
-                    for item in users {
-                        item.serialize(buffer, true)
-                    }
-                    break
-                case .topPeersDisabled:
-                    if boxed {
-                        buffer.appendInt32(-1255369827)
-                    }
-                    
-                    break
-                case .topPeersNotModified:
-                    if boxed {
-                        buffer.appendInt32(-567906571)
-                    }
-                    
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .topPeers(let categories, let chats, let users):
-                return ("topPeers", [("categories", String(describing: categories)), ("chats", String(describing: chats)), ("users", String(describing: users))])
-                case .topPeersDisabled:
-                return ("topPeersDisabled", [])
-                case .topPeersNotModified:
-                return ("topPeersNotModified", [])
-    }
-    }
-    
-        public static func parse_topPeers(_ reader: BufferReader) -> TopPeers? {
-            var _1: [Api.TopPeerCategoryPeers]?
-            if let _ = reader.readInt32() {
-                _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.TopPeerCategoryPeers.self)
-            }
-            var _2: [Api.Chat]?
-            if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Chat.self)
-            }
-            var _3: [Api.User]?
-            if let _ = reader.readInt32() {
-                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.contacts.TopPeers.topPeers(categories: _1!, chats: _2!, users: _3!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_topPeersDisabled(_ reader: BufferReader) -> TopPeers? {
-            return Api.contacts.TopPeers.topPeersDisabled
-        }
-        public static func parse_topPeersNotModified(_ reader: BufferReader) -> TopPeers? {
-            return Api.contacts.TopPeers.topPeersNotModified
         }
     
     }

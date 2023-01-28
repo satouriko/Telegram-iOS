@@ -16,7 +16,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .channelAdminLogEventsFilter(let flags):
-                return ("channelAdminLogEventsFilter", [("flags", String(describing: flags))])
+                return ("channelAdminLogEventsFilter", [("flags", flags as Any)])
     }
     }
     
@@ -60,7 +60,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .channelLocation(let geoPoint, let address):
-                return ("channelLocation", [("geoPoint", String(describing: geoPoint)), ("address", String(describing: address))])
+                return ("channelLocation", [("geoPoint", geoPoint as Any), ("address", address as Any)])
                 case .channelLocationEmpty:
                 return ("channelLocationEmpty", [])
     }
@@ -118,7 +118,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .channelMessagesFilter(let flags, let ranges):
-                return ("channelMessagesFilter", [("flags", String(describing: flags)), ("ranges", String(describing: ranges))])
+                return ("channelMessagesFilter", [("flags", flags as Any), ("ranges", ranges as Any)])
                 case .channelMessagesFilterEmpty:
                 return ("channelMessagesFilterEmpty", [])
     }
@@ -216,17 +216,17 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .channelParticipant(let userId, let date):
-                return ("channelParticipant", [("userId", String(describing: userId)), ("date", String(describing: date))])
+                return ("channelParticipant", [("userId", userId as Any), ("date", date as Any)])
                 case .channelParticipantAdmin(let flags, let userId, let inviterId, let promotedBy, let date, let adminRights, let rank):
-                return ("channelParticipantAdmin", [("flags", String(describing: flags)), ("userId", String(describing: userId)), ("inviterId", String(describing: inviterId)), ("promotedBy", String(describing: promotedBy)), ("date", String(describing: date)), ("adminRights", String(describing: adminRights)), ("rank", String(describing: rank))])
+                return ("channelParticipantAdmin", [("flags", flags as Any), ("userId", userId as Any), ("inviterId", inviterId as Any), ("promotedBy", promotedBy as Any), ("date", date as Any), ("adminRights", adminRights as Any), ("rank", rank as Any)])
                 case .channelParticipantBanned(let flags, let peer, let kickedBy, let date, let bannedRights):
-                return ("channelParticipantBanned", [("flags", String(describing: flags)), ("peer", String(describing: peer)), ("kickedBy", String(describing: kickedBy)), ("date", String(describing: date)), ("bannedRights", String(describing: bannedRights))])
+                return ("channelParticipantBanned", [("flags", flags as Any), ("peer", peer as Any), ("kickedBy", kickedBy as Any), ("date", date as Any), ("bannedRights", bannedRights as Any)])
                 case .channelParticipantCreator(let flags, let userId, let adminRights, let rank):
-                return ("channelParticipantCreator", [("flags", String(describing: flags)), ("userId", String(describing: userId)), ("adminRights", String(describing: adminRights)), ("rank", String(describing: rank))])
+                return ("channelParticipantCreator", [("flags", flags as Any), ("userId", userId as Any), ("adminRights", adminRights as Any), ("rank", rank as Any)])
                 case .channelParticipantLeft(let peer):
-                return ("channelParticipantLeft", [("peer", String(describing: peer))])
+                return ("channelParticipantLeft", [("peer", peer as Any)])
                 case .channelParticipantSelf(let flags, let userId, let inviterId, let date):
-                return ("channelParticipantSelf", [("flags", String(describing: flags)), ("userId", String(describing: userId)), ("inviterId", String(describing: inviterId)), ("date", String(describing: date))])
+                return ("channelParticipantSelf", [("flags", flags as Any), ("userId", userId as Any), ("inviterId", inviterId as Any), ("date", date as Any)])
     }
     }
     
@@ -431,19 +431,19 @@ public extension Api {
                 case .channelParticipantsAdmins:
                 return ("channelParticipantsAdmins", [])
                 case .channelParticipantsBanned(let q):
-                return ("channelParticipantsBanned", [("q", String(describing: q))])
+                return ("channelParticipantsBanned", [("q", q as Any)])
                 case .channelParticipantsBots:
                 return ("channelParticipantsBots", [])
                 case .channelParticipantsContacts(let q):
-                return ("channelParticipantsContacts", [("q", String(describing: q))])
+                return ("channelParticipantsContacts", [("q", q as Any)])
                 case .channelParticipantsKicked(let q):
-                return ("channelParticipantsKicked", [("q", String(describing: q))])
+                return ("channelParticipantsKicked", [("q", q as Any)])
                 case .channelParticipantsMentions(let flags, let q, let topMsgId):
-                return ("channelParticipantsMentions", [("flags", String(describing: flags)), ("q", String(describing: q)), ("topMsgId", String(describing: topMsgId))])
+                return ("channelParticipantsMentions", [("flags", flags as Any), ("q", q as Any), ("topMsgId", topMsgId as Any)])
                 case .channelParticipantsRecent:
                 return ("channelParticipantsRecent", [])
                 case .channelParticipantsSearch(let q):
-                return ("channelParticipantsSearch", [("q", String(describing: q))])
+                return ("channelParticipantsSearch", [("q", q as Any)])
     }
     }
     
@@ -522,7 +522,7 @@ public extension Api {
 }
 public extension Api {
     indirect enum Chat: TypeConstructorDescription {
-        case channel(flags: Int32, id: Int64, accessHash: Int64?, title: String, username: String?, photo: Api.ChatPhoto, date: Int32, restrictionReason: [Api.RestrictionReason]?, adminRights: Api.ChatAdminRights?, bannedRights: Api.ChatBannedRights?, defaultBannedRights: Api.ChatBannedRights?, participantsCount: Int32?)
+        case channel(flags: Int32, flags2: Int32, id: Int64, accessHash: Int64?, title: String, username: String?, photo: Api.ChatPhoto, date: Int32, restrictionReason: [Api.RestrictionReason]?, adminRights: Api.ChatAdminRights?, bannedRights: Api.ChatBannedRights?, defaultBannedRights: Api.ChatBannedRights?, participantsCount: Int32?, usernames: [Api.Username]?)
         case channelForbidden(flags: Int32, id: Int64, accessHash: Int64, title: String, untilDate: Int32?)
         case chat(flags: Int32, id: Int64, title: String, photo: Api.ChatPhoto, participantsCount: Int32, date: Int32, version: Int32, migratedTo: Api.InputChannel?, adminRights: Api.ChatAdminRights?, defaultBannedRights: Api.ChatBannedRights?)
         case chatEmpty(id: Int64)
@@ -530,11 +530,12 @@ public extension Api {
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .channel(let flags, let id, let accessHash, let title, let username, let photo, let date, let restrictionReason, let adminRights, let bannedRights, let defaultBannedRights, let participantsCount):
+                case .channel(let flags, let flags2, let id, let accessHash, let title, let username, let photo, let date, let restrictionReason, let adminRights, let bannedRights, let defaultBannedRights, let participantsCount, let usernames):
                     if boxed {
-                        buffer.appendInt32(-2107528095)
+                        buffer.appendInt32(-2094689180)
                     }
                     serializeInt32(flags, buffer: buffer, boxed: false)
+                    serializeInt32(flags2, buffer: buffer, boxed: false)
                     serializeInt64(id, buffer: buffer, boxed: false)
                     if Int(flags) & Int(1 << 13) != 0 {serializeInt64(accessHash!, buffer: buffer, boxed: false)}
                     serializeString(title, buffer: buffer, boxed: false)
@@ -550,6 +551,11 @@ public extension Api {
                     if Int(flags) & Int(1 << 15) != 0 {bannedRights!.serialize(buffer, true)}
                     if Int(flags) & Int(1 << 18) != 0 {defaultBannedRights!.serialize(buffer, true)}
                     if Int(flags) & Int(1 << 17) != 0 {serializeInt32(participantsCount!, buffer: buffer, boxed: false)}
+                    if Int(flags2) & Int(1 << 0) != 0 {buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(usernames!.count))
+                    for item in usernames! {
+                        item.serialize(buffer, true)
+                    }}
                     break
                 case .channelForbidden(let flags, let id, let accessHash, let title, let untilDate):
                     if boxed {
@@ -594,68 +600,76 @@ public extension Api {
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .channel(let flags, let id, let accessHash, let title, let username, let photo, let date, let restrictionReason, let adminRights, let bannedRights, let defaultBannedRights, let participantsCount):
-                return ("channel", [("flags", String(describing: flags)), ("id", String(describing: id)), ("accessHash", String(describing: accessHash)), ("title", String(describing: title)), ("username", String(describing: username)), ("photo", String(describing: photo)), ("date", String(describing: date)), ("restrictionReason", String(describing: restrictionReason)), ("adminRights", String(describing: adminRights)), ("bannedRights", String(describing: bannedRights)), ("defaultBannedRights", String(describing: defaultBannedRights)), ("participantsCount", String(describing: participantsCount))])
+                case .channel(let flags, let flags2, let id, let accessHash, let title, let username, let photo, let date, let restrictionReason, let adminRights, let bannedRights, let defaultBannedRights, let participantsCount, let usernames):
+                return ("channel", [("flags", flags as Any), ("flags2", flags2 as Any), ("id", id as Any), ("accessHash", accessHash as Any), ("title", title as Any), ("username", username as Any), ("photo", photo as Any), ("date", date as Any), ("restrictionReason", restrictionReason as Any), ("adminRights", adminRights as Any), ("bannedRights", bannedRights as Any), ("defaultBannedRights", defaultBannedRights as Any), ("participantsCount", participantsCount as Any), ("usernames", usernames as Any)])
                 case .channelForbidden(let flags, let id, let accessHash, let title, let untilDate):
-                return ("channelForbidden", [("flags", String(describing: flags)), ("id", String(describing: id)), ("accessHash", String(describing: accessHash)), ("title", String(describing: title)), ("untilDate", String(describing: untilDate))])
+                return ("channelForbidden", [("flags", flags as Any), ("id", id as Any), ("accessHash", accessHash as Any), ("title", title as Any), ("untilDate", untilDate as Any)])
                 case .chat(let flags, let id, let title, let photo, let participantsCount, let date, let version, let migratedTo, let adminRights, let defaultBannedRights):
-                return ("chat", [("flags", String(describing: flags)), ("id", String(describing: id)), ("title", String(describing: title)), ("photo", String(describing: photo)), ("participantsCount", String(describing: participantsCount)), ("date", String(describing: date)), ("version", String(describing: version)), ("migratedTo", String(describing: migratedTo)), ("adminRights", String(describing: adminRights)), ("defaultBannedRights", String(describing: defaultBannedRights))])
+                return ("chat", [("flags", flags as Any), ("id", id as Any), ("title", title as Any), ("photo", photo as Any), ("participantsCount", participantsCount as Any), ("date", date as Any), ("version", version as Any), ("migratedTo", migratedTo as Any), ("adminRights", adminRights as Any), ("defaultBannedRights", defaultBannedRights as Any)])
                 case .chatEmpty(let id):
-                return ("chatEmpty", [("id", String(describing: id))])
+                return ("chatEmpty", [("id", id as Any)])
                 case .chatForbidden(let id, let title):
-                return ("chatForbidden", [("id", String(describing: id)), ("title", String(describing: title))])
+                return ("chatForbidden", [("id", id as Any), ("title", title as Any)])
     }
     }
     
         public static func parse_channel(_ reader: BufferReader) -> Chat? {
             var _1: Int32?
             _1 = reader.readInt32()
-            var _2: Int64?
-            _2 = reader.readInt64()
+            var _2: Int32?
+            _2 = reader.readInt32()
             var _3: Int64?
-            if Int(_1!) & Int(1 << 13) != 0 {_3 = reader.readInt64() }
-            var _4: String?
-            _4 = parseString(reader)
+            _3 = reader.readInt64()
+            var _4: Int64?
+            if Int(_1!) & Int(1 << 13) != 0 {_4 = reader.readInt64() }
             var _5: String?
-            if Int(_1!) & Int(1 << 6) != 0 {_5 = parseString(reader) }
-            var _6: Api.ChatPhoto?
+            _5 = parseString(reader)
+            var _6: String?
+            if Int(_1!) & Int(1 << 6) != 0 {_6 = parseString(reader) }
+            var _7: Api.ChatPhoto?
             if let signature = reader.readInt32() {
-                _6 = Api.parse(reader, signature: signature) as? Api.ChatPhoto
+                _7 = Api.parse(reader, signature: signature) as? Api.ChatPhoto
             }
-            var _7: Int32?
-            _7 = reader.readInt32()
-            var _8: [Api.RestrictionReason]?
+            var _8: Int32?
+            _8 = reader.readInt32()
+            var _9: [Api.RestrictionReason]?
             if Int(_1!) & Int(1 << 9) != 0 {if let _ = reader.readInt32() {
-                _8 = Api.parseVector(reader, elementSignature: 0, elementType: Api.RestrictionReason.self)
+                _9 = Api.parseVector(reader, elementSignature: 0, elementType: Api.RestrictionReason.self)
             } }
-            var _9: Api.ChatAdminRights?
+            var _10: Api.ChatAdminRights?
             if Int(_1!) & Int(1 << 14) != 0 {if let signature = reader.readInt32() {
-                _9 = Api.parse(reader, signature: signature) as? Api.ChatAdminRights
-            } }
-            var _10: Api.ChatBannedRights?
-            if Int(_1!) & Int(1 << 15) != 0 {if let signature = reader.readInt32() {
-                _10 = Api.parse(reader, signature: signature) as? Api.ChatBannedRights
+                _10 = Api.parse(reader, signature: signature) as? Api.ChatAdminRights
             } }
             var _11: Api.ChatBannedRights?
-            if Int(_1!) & Int(1 << 18) != 0 {if let signature = reader.readInt32() {
+            if Int(_1!) & Int(1 << 15) != 0 {if let signature = reader.readInt32() {
                 _11 = Api.parse(reader, signature: signature) as? Api.ChatBannedRights
             } }
-            var _12: Int32?
-            if Int(_1!) & Int(1 << 17) != 0 {_12 = reader.readInt32() }
+            var _12: Api.ChatBannedRights?
+            if Int(_1!) & Int(1 << 18) != 0 {if let signature = reader.readInt32() {
+                _12 = Api.parse(reader, signature: signature) as? Api.ChatBannedRights
+            } }
+            var _13: Int32?
+            if Int(_1!) & Int(1 << 17) != 0 {_13 = reader.readInt32() }
+            var _14: [Api.Username]?
+            if Int(_2!) & Int(1 << 0) != 0 {if let _ = reader.readInt32() {
+                _14 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Username.self)
+            } }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 13) == 0) || _3 != nil
-            let _c4 = _4 != nil
-            let _c5 = (Int(_1!) & Int(1 << 6) == 0) || _5 != nil
-            let _c6 = _6 != nil
+            let _c3 = _3 != nil
+            let _c4 = (Int(_1!) & Int(1 << 13) == 0) || _4 != nil
+            let _c5 = _5 != nil
+            let _c6 = (Int(_1!) & Int(1 << 6) == 0) || _6 != nil
             let _c7 = _7 != nil
-            let _c8 = (Int(_1!) & Int(1 << 9) == 0) || _8 != nil
-            let _c9 = (Int(_1!) & Int(1 << 14) == 0) || _9 != nil
-            let _c10 = (Int(_1!) & Int(1 << 15) == 0) || _10 != nil
-            let _c11 = (Int(_1!) & Int(1 << 18) == 0) || _11 != nil
-            let _c12 = (Int(_1!) & Int(1 << 17) == 0) || _12 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 {
-                return Api.Chat.channel(flags: _1!, id: _2!, accessHash: _3, title: _4!, username: _5, photo: _6!, date: _7!, restrictionReason: _8, adminRights: _9, bannedRights: _10, defaultBannedRights: _11, participantsCount: _12)
+            let _c8 = _8 != nil
+            let _c9 = (Int(_1!) & Int(1 << 9) == 0) || _9 != nil
+            let _c10 = (Int(_1!) & Int(1 << 14) == 0) || _10 != nil
+            let _c11 = (Int(_1!) & Int(1 << 15) == 0) || _11 != nil
+            let _c12 = (Int(_1!) & Int(1 << 18) == 0) || _12 != nil
+            let _c13 = (Int(_1!) & Int(1 << 17) == 0) || _13 != nil
+            let _c14 = (Int(_2!) & Int(1 << 0) == 0) || _14 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 {
+                return Api.Chat.channel(flags: _1!, flags2: _2!, id: _3!, accessHash: _4, title: _5!, username: _6, photo: _7!, date: _8!, restrictionReason: _9, adminRights: _10, bannedRights: _11, defaultBannedRights: _12, participantsCount: _13, usernames: _14)
             }
             else {
                 return nil
@@ -776,7 +790,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .chatAdminRights(let flags):
-                return ("chatAdminRights", [("flags", String(describing: flags))])
+                return ("chatAdminRights", [("flags", flags as Any)])
     }
     }
     
@@ -814,7 +828,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .chatAdminWithInvites(let adminId, let invitesCount, let revokedInvitesCount):
-                return ("chatAdminWithInvites", [("adminId", String(describing: adminId)), ("invitesCount", String(describing: invitesCount)), ("revokedInvitesCount", String(describing: revokedInvitesCount))])
+                return ("chatAdminWithInvites", [("adminId", adminId as Any), ("invitesCount", invitesCount as Any), ("revokedInvitesCount", revokedInvitesCount as Any)])
     }
     }
     
@@ -857,7 +871,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .chatBannedRights(let flags, let untilDate):
-                return ("chatBannedRights", [("flags", String(describing: flags)), ("untilDate", String(describing: untilDate))])
+                return ("chatBannedRights", [("flags", flags as Any), ("untilDate", untilDate as Any)])
     }
     }
     
@@ -975,9 +989,9 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .channelFull(let flags, let flags2, let id, let about, let participantsCount, let adminsCount, let kickedCount, let bannedCount, let onlineCount, let readInboxMaxId, let readOutboxMaxId, let unreadCount, let chatPhoto, let notifySettings, let exportedInvite, let botInfo, let migratedFromChatId, let migratedFromMaxId, let pinnedMsgId, let stickerset, let availableMinId, let folderId, let linkedChatId, let location, let slowmodeSeconds, let slowmodeNextSendDate, let statsDc, let pts, let call, let ttlPeriod, let pendingSuggestions, let groupcallDefaultJoinAs, let themeEmoticon, let requestsPending, let recentRequesters, let defaultSendAs, let availableReactions):
-                return ("channelFull", [("flags", String(describing: flags)), ("flags2", String(describing: flags2)), ("id", String(describing: id)), ("about", String(describing: about)), ("participantsCount", String(describing: participantsCount)), ("adminsCount", String(describing: adminsCount)), ("kickedCount", String(describing: kickedCount)), ("bannedCount", String(describing: bannedCount)), ("onlineCount", String(describing: onlineCount)), ("readInboxMaxId", String(describing: readInboxMaxId)), ("readOutboxMaxId", String(describing: readOutboxMaxId)), ("unreadCount", String(describing: unreadCount)), ("chatPhoto", String(describing: chatPhoto)), ("notifySettings", String(describing: notifySettings)), ("exportedInvite", String(describing: exportedInvite)), ("botInfo", String(describing: botInfo)), ("migratedFromChatId", String(describing: migratedFromChatId)), ("migratedFromMaxId", String(describing: migratedFromMaxId)), ("pinnedMsgId", String(describing: pinnedMsgId)), ("stickerset", String(describing: stickerset)), ("availableMinId", String(describing: availableMinId)), ("folderId", String(describing: folderId)), ("linkedChatId", String(describing: linkedChatId)), ("location", String(describing: location)), ("slowmodeSeconds", String(describing: slowmodeSeconds)), ("slowmodeNextSendDate", String(describing: slowmodeNextSendDate)), ("statsDc", String(describing: statsDc)), ("pts", String(describing: pts)), ("call", String(describing: call)), ("ttlPeriod", String(describing: ttlPeriod)), ("pendingSuggestions", String(describing: pendingSuggestions)), ("groupcallDefaultJoinAs", String(describing: groupcallDefaultJoinAs)), ("themeEmoticon", String(describing: themeEmoticon)), ("requestsPending", String(describing: requestsPending)), ("recentRequesters", String(describing: recentRequesters)), ("defaultSendAs", String(describing: defaultSendAs)), ("availableReactions", String(describing: availableReactions))])
+                return ("channelFull", [("flags", flags as Any), ("flags2", flags2 as Any), ("id", id as Any), ("about", about as Any), ("participantsCount", participantsCount as Any), ("adminsCount", adminsCount as Any), ("kickedCount", kickedCount as Any), ("bannedCount", bannedCount as Any), ("onlineCount", onlineCount as Any), ("readInboxMaxId", readInboxMaxId as Any), ("readOutboxMaxId", readOutboxMaxId as Any), ("unreadCount", unreadCount as Any), ("chatPhoto", chatPhoto as Any), ("notifySettings", notifySettings as Any), ("exportedInvite", exportedInvite as Any), ("botInfo", botInfo as Any), ("migratedFromChatId", migratedFromChatId as Any), ("migratedFromMaxId", migratedFromMaxId as Any), ("pinnedMsgId", pinnedMsgId as Any), ("stickerset", stickerset as Any), ("availableMinId", availableMinId as Any), ("folderId", folderId as Any), ("linkedChatId", linkedChatId as Any), ("location", location as Any), ("slowmodeSeconds", slowmodeSeconds as Any), ("slowmodeNextSendDate", slowmodeNextSendDate as Any), ("statsDc", statsDc as Any), ("pts", pts as Any), ("call", call as Any), ("ttlPeriod", ttlPeriod as Any), ("pendingSuggestions", pendingSuggestions as Any), ("groupcallDefaultJoinAs", groupcallDefaultJoinAs as Any), ("themeEmoticon", themeEmoticon as Any), ("requestsPending", requestsPending as Any), ("recentRequesters", recentRequesters as Any), ("defaultSendAs", defaultSendAs as Any), ("availableReactions", availableReactions as Any)])
                 case .chatFull(let flags, let id, let about, let participants, let chatPhoto, let notifySettings, let exportedInvite, let botInfo, let pinnedMsgId, let folderId, let call, let ttlPeriod, let groupcallDefaultJoinAs, let themeEmoticon, let requestsPending, let recentRequesters, let availableReactions):
-                return ("chatFull", [("flags", String(describing: flags)), ("id", String(describing: id)), ("about", String(describing: about)), ("participants", String(describing: participants)), ("chatPhoto", String(describing: chatPhoto)), ("notifySettings", String(describing: notifySettings)), ("exportedInvite", String(describing: exportedInvite)), ("botInfo", String(describing: botInfo)), ("pinnedMsgId", String(describing: pinnedMsgId)), ("folderId", String(describing: folderId)), ("call", String(describing: call)), ("ttlPeriod", String(describing: ttlPeriod)), ("groupcallDefaultJoinAs", String(describing: groupcallDefaultJoinAs)), ("themeEmoticon", String(describing: themeEmoticon)), ("requestsPending", String(describing: requestsPending)), ("recentRequesters", String(describing: recentRequesters)), ("availableReactions", String(describing: availableReactions))])
+                return ("chatFull", [("flags", flags as Any), ("id", id as Any), ("about", about as Any), ("participants", participants as Any), ("chatPhoto", chatPhoto as Any), ("notifySettings", notifySettings as Any), ("exportedInvite", exportedInvite as Any), ("botInfo", botInfo as Any), ("pinnedMsgId", pinnedMsgId as Any), ("folderId", folderId as Any), ("call", call as Any), ("ttlPeriod", ttlPeriod as Any), ("groupcallDefaultJoinAs", groupcallDefaultJoinAs as Any), ("themeEmoticon", themeEmoticon as Any), ("requestsPending", requestsPending as Any), ("recentRequesters", recentRequesters as Any), ("availableReactions", availableReactions as Any)])
     }
     }
     
@@ -1246,11 +1260,11 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .chatInvite(let flags, let title, let about, let photo, let participantsCount, let participants):
-                return ("chatInvite", [("flags", String(describing: flags)), ("title", String(describing: title)), ("about", String(describing: about)), ("photo", String(describing: photo)), ("participantsCount", String(describing: participantsCount)), ("participants", String(describing: participants))])
+                return ("chatInvite", [("flags", flags as Any), ("title", title as Any), ("about", about as Any), ("photo", photo as Any), ("participantsCount", participantsCount as Any), ("participants", participants as Any)])
                 case .chatInviteAlready(let chat):
-                return ("chatInviteAlready", [("chat", String(describing: chat))])
+                return ("chatInviteAlready", [("chat", chat as Any)])
                 case .chatInvitePeek(let chat, let expires):
-                return ("chatInvitePeek", [("chat", String(describing: chat)), ("expires", String(describing: expires))])
+                return ("chatInvitePeek", [("chat", chat as Any), ("expires", expires as Any)])
     }
     }
     

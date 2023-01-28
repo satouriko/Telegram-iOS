@@ -106,7 +106,7 @@ private final class PremiumGiftScreenContentComponent: CombinedComponent {
 //                    }
                     
                     for (_, video) in promoConfiguration.videos {
-                        strongSelf.preloadDisposableSet.add(preloadVideoResource(postbox: context.account.postbox, resourceReference: .standalone(resource: video.resource), duration: 3.0).start())
+                        strongSelf.preloadDisposableSet.add(preloadVideoResource(postbox: context.account.postbox, userLocation: .other, userContentType: .video, resourceReference: .standalone(resource: video.resource), duration: 3.0).start())
                     }
                 }
             })
@@ -123,9 +123,9 @@ private final class PremiumGiftScreenContentComponent: CombinedComponent {
                     for item in view.items {
                         if let mediaItem = item.contents.get(RecentMediaItem.self) {
                             let file = mediaItem.media
-                            strongSelf.preloadDisposableSet.add(freeMediaFileResourceInteractiveFetched(account: context.account, fileReference: .standalone(media: file), resource: file.resource).start())
+                            strongSelf.preloadDisposableSet.add(freeMediaFileResourceInteractiveFetched(account: context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
                             if let effect = file.videoThumbnails.first {
-                                strongSelf.preloadDisposableSet.add(freeMediaFileResourceInteractiveFetched(account: context.account, fileReference: .standalone(media: file), resource: effect.resource).start())
+                                strongSelf.preloadDisposableSet.add(freeMediaFileResourceInteractiveFetched(account: context.account, userLocation: .other, fileReference: .standalone(media: file), resource: effect.resource).start())
                             }
                         }
                     }
@@ -361,21 +361,7 @@ private final class PremiumGiftScreenContentComponent: CombinedComponent {
                         var demoSubject: PremiumDemoScreen.Subject
                         switch perk {
                         case .doubleLimits:
-                            var dismissImpl: (() -> Void)?
-                            let controller = PremimLimitsListScreen(context: accountContext, buttonText: strings.Premium_Gift_GiftSubscription(state?.price ?? "–").string, isPremium: false)
-                            controller.action = {
-                                dismissImpl?()
-                                buy()
-                            }
-                            controller.disposed = {
-//                                updateIsFocused(false)
-                            }
-                            present(controller)
-                            dismissImpl = { [weak controller] in
-                                controller?.dismiss(animated: true, completion: nil)
-                            }
-//                            updateIsFocused(true)
-                            return
+                            demoSubject = .doubleLimits
                         case .moreUpload:
                             demoSubject = .moreUpload
                         case .fasterDownload:
@@ -402,20 +388,34 @@ private final class PremiumGiftScreenContentComponent: CombinedComponent {
                             demoSubject = .emojiStatus
                         }
                         
-                        let controller = PremiumDemoScreen(
-                            context: accountContext,
-                            subject: demoSubject,
-                            source: .gift(state?.price),
-                            order: state?.configuration.perks,
-                            action: {
-                                buy()
-                            }
-                        )
+                        var dismissImpl: (() -> Void)?
+                        let controller = PremiumLimitsListScreen(context: accountContext, subject: demoSubject, source: .gift(state?.price), order: state?.configuration.perks, buttonText: strings.Premium_Gift_GiftSubscription(state?.price ?? "–").string, isPremium: false)
+                        controller.action = {
+                            dismissImpl?()
+                            buy()
+                        }
                         controller.disposed = {
-//                            updateIsFocused(false)
+//                                updateIsFocused(false)
                         }
                         present(controller)
-//                        updateIsFocused(true)
+                        dismissImpl = { [weak controller] in
+                            controller?.dismiss(animated: true, completion: nil)
+                        }
+                        
+//                        let controller = PremiumDemoScreen(
+//                            context: accountContext,
+//                            subject: demoSubject,
+//                            source: .gift(state?.price),
+//                            order: state?.configuration.perks,
+//                            action: {
+//                                buy()
+//                            }
+//                        )
+//                        controller.disposed = {
+////                            updateIsFocused(false)
+//                        }
+//                        present(controller)
+////                        updateIsFocused(true)
                         
                         addAppLogEvent(postbox: accountContext.account.postbox, type: "premium.promo_screen_tap", data: ["item": perk.identifier])
                     }

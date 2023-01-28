@@ -36,7 +36,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .peerDialogs(let dialogs, let messages, let chats, let users, let state):
-                return ("peerDialogs", [("dialogs", String(describing: dialogs)), ("messages", String(describing: messages)), ("chats", String(describing: chats)), ("users", String(describing: users)), ("state", String(describing: state))])
+                return ("peerDialogs", [("dialogs", dialogs as Any), ("messages", messages as Any), ("chats", chats as Any), ("users", users as Any), ("state", state as Any)])
     }
     }
     
@@ -104,7 +104,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .peerSettings(let settings, let chats, let users):
-                return ("peerSettings", [("settings", String(describing: settings)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("peerSettings", [("settings", settings as Any), ("chats", chats as Any), ("users", users as Any)])
     }
     }
     
@@ -164,7 +164,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .reactions(let hash, let reactions):
-                return ("reactions", [("hash", String(describing: hash)), ("reactions", String(describing: reactions))])
+                return ("reactions", [("hash", hash as Any), ("reactions", reactions as Any)])
                 case .reactionsNotModified:
                 return ("reactionsNotModified", [])
     }
@@ -232,7 +232,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .recentStickers(let hash, let packs, let stickers, let dates):
-                return ("recentStickers", [("hash", String(describing: hash)), ("packs", String(describing: packs)), ("stickers", String(describing: stickers)), ("dates", String(describing: dates))])
+                return ("recentStickers", [("hash", hash as Any), ("packs", packs as Any), ("stickers", stickers as Any), ("dates", dates as Any)])
                 case .recentStickersNotModified:
                 return ("recentStickersNotModified", [])
     }
@@ -300,7 +300,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .savedGifs(let hash, let gifs):
-                return ("savedGifs", [("hash", String(describing: hash)), ("gifs", String(describing: gifs))])
+                return ("savedGifs", [("hash", hash as Any), ("gifs", gifs as Any)])
                 case .savedGifsNotModified:
                 return ("savedGifsNotModified", [])
     }
@@ -348,7 +348,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .searchCounter(let flags, let filter, let count):
-                return ("searchCounter", [("flags", String(describing: flags)), ("filter", String(describing: filter)), ("count", String(describing: count))])
+                return ("searchCounter", [("flags", flags as Any), ("filter", filter as Any), ("count", count as Any)])
     }
     }
     
@@ -416,7 +416,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .searchResultsCalendar(let flags, let count, let minDate, let minMsgId, let offsetIdOffset, let periods, let messages, let chats, let users):
-                return ("searchResultsCalendar", [("flags", String(describing: flags)), ("count", String(describing: count)), ("minDate", String(describing: minDate)), ("minMsgId", String(describing: minMsgId)), ("offsetIdOffset", String(describing: offsetIdOffset)), ("periods", String(describing: periods)), ("messages", String(describing: messages)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                return ("searchResultsCalendar", [("flags", flags as Any), ("count", count as Any), ("minDate", minDate as Any), ("minMsgId", minMsgId as Any), ("offsetIdOffset", offsetIdOffset as Any), ("periods", periods as Any), ("messages", messages as Any), ("chats", chats as Any), ("users", users as Any)])
     }
     }
     
@@ -489,7 +489,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .searchResultsPositions(let count, let positions):
-                return ("searchResultsPositions", [("count", String(describing: count)), ("positions", String(describing: positions))])
+                return ("searchResultsPositions", [("count", count as Any), ("positions", positions as Any)])
     }
     }
     
@@ -538,9 +538,9 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .sentEncryptedFile(let date, let file):
-                return ("sentEncryptedFile", [("date", String(describing: date)), ("file", String(describing: file))])
+                return ("sentEncryptedFile", [("date", date as Any), ("file", file as Any)])
                 case .sentEncryptedMessage(let date):
-                return ("sentEncryptedMessage", [("date", String(describing: date))])
+                return ("sentEncryptedMessage", [("date", date as Any)])
     }
     }
     
@@ -576,14 +576,17 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum SponsoredMessages: TypeConstructorDescription {
-        case sponsoredMessages(messages: [Api.SponsoredMessage], chats: [Api.Chat], users: [Api.User])
+        case sponsoredMessages(flags: Int32, postsBetween: Int32?, messages: [Api.SponsoredMessage], chats: [Api.Chat], users: [Api.User])
+        case sponsoredMessagesEmpty
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .sponsoredMessages(let messages, let chats, let users):
+                case .sponsoredMessages(let flags, let postsBetween, let messages, let chats, let users):
                     if boxed {
-                        buffer.appendInt32(1705297877)
+                        buffer.appendInt32(-907141753)
                     }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeInt32(postsBetween!, buffer: buffer, boxed: false)}
                     buffer.appendInt32(481674261)
                     buffer.appendInt32(Int32(messages.count))
                     for item in messages {
@@ -600,38 +603,55 @@ public extension Api.messages {
                         item.serialize(buffer, true)
                     }
                     break
+                case .sponsoredMessagesEmpty:
+                    if boxed {
+                        buffer.appendInt32(406407439)
+                    }
+                    
+                    break
     }
     }
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .sponsoredMessages(let messages, let chats, let users):
-                return ("sponsoredMessages", [("messages", String(describing: messages)), ("chats", String(describing: chats)), ("users", String(describing: users))])
+                case .sponsoredMessages(let flags, let postsBetween, let messages, let chats, let users):
+                return ("sponsoredMessages", [("flags", flags as Any), ("postsBetween", postsBetween as Any), ("messages", messages as Any), ("chats", chats as Any), ("users", users as Any)])
+                case .sponsoredMessagesEmpty:
+                return ("sponsoredMessagesEmpty", [])
     }
     }
     
         public static func parse_sponsoredMessages(_ reader: BufferReader) -> SponsoredMessages? {
-            var _1: [Api.SponsoredMessage]?
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int32?
+            if Int(_1!) & Int(1 << 0) != 0 {_2 = reader.readInt32() }
+            var _3: [Api.SponsoredMessage]?
             if let _ = reader.readInt32() {
-                _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.SponsoredMessage.self)
+                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.SponsoredMessage.self)
             }
-            var _2: [Api.Chat]?
+            var _4: [Api.Chat]?
             if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Chat.self)
+                _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Chat.self)
             }
-            var _3: [Api.User]?
+            var _5: [Api.User]?
             if let _ = reader.readInt32() {
-                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
+                _5 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
             }
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
+            let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
             let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.messages.SponsoredMessages.sponsoredMessages(messages: _1!, chats: _2!, users: _3!)
+            let _c4 = _4 != nil
+            let _c5 = _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.messages.SponsoredMessages.sponsoredMessages(flags: _1!, postsBetween: _2, messages: _3!, chats: _4!, users: _5!)
             }
             else {
                 return nil
             }
+        }
+        public static func parse_sponsoredMessagesEmpty(_ reader: BufferReader) -> SponsoredMessages? {
+            return Api.messages.SponsoredMessages.sponsoredMessagesEmpty
         }
     
     }
@@ -676,7 +696,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .stickerSet(let set, let packs, let keywords, let documents):
-                return ("stickerSet", [("set", String(describing: set)), ("packs", String(describing: packs)), ("keywords", String(describing: keywords)), ("documents", String(describing: documents))])
+                return ("stickerSet", [("set", set as Any), ("packs", packs as Any), ("keywords", keywords as Any), ("documents", documents as Any)])
                 case .stickerSetNotModified:
                 return ("stickerSetNotModified", [])
     }
@@ -745,7 +765,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .stickerSetInstallResultArchive(let sets):
-                return ("stickerSetInstallResultArchive", [("sets", String(describing: sets))])
+                return ("stickerSetInstallResultArchive", [("sets", sets as Any)])
                 case .stickerSetInstallResultSuccess:
                 return ("stickerSetInstallResultSuccess", [])
     }
@@ -800,7 +820,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .stickers(let hash, let stickers):
-                return ("stickers", [("hash", String(describing: hash)), ("stickers", String(describing: stickers))])
+                return ("stickers", [("hash", hash as Any), ("stickers", stickers as Any)])
                 case .stickersNotModified:
                 return ("stickersNotModified", [])
     }
@@ -848,7 +868,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .transcribedAudio(let flags, let transcriptionId, let text):
-                return ("transcribedAudio", [("flags", String(describing: flags)), ("transcriptionId", String(describing: transcriptionId)), ("text", String(describing: text))])
+                return ("transcribedAudio", [("flags", flags as Any), ("transcriptionId", transcriptionId as Any), ("text", text as Any)])
     }
     }
     
@@ -899,7 +919,7 @@ public extension Api.messages {
                 case .translateNoResult:
                 return ("translateNoResult", [])
                 case .translateResultText(let text):
-                return ("translateResultText", [("text", String(describing: text))])
+                return ("translateResultText", [("text", text as Any)])
     }
     }
     
@@ -950,7 +970,7 @@ public extension Api.messages {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .votesList(let flags, let count, let votes, let users, let nextOffset):
-                return ("votesList", [("flags", String(describing: flags)), ("count", String(describing: count)), ("votes", String(describing: votes)), ("users", String(describing: users)), ("nextOffset", String(describing: nextOffset))])
+                return ("votesList", [("flags", flags as Any), ("count", count as Any), ("votes", votes as Any), ("users", users as Any), ("nextOffset", nextOffset as Any)])
     }
     }
     
@@ -1007,7 +1027,7 @@ public extension Api.payments {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .bankCardData(let title, let openUrls):
-                return ("bankCardData", [("title", String(describing: title)), ("openUrls", String(describing: openUrls))])
+                return ("bankCardData", [("title", title as Any), ("openUrls", openUrls as Any)])
     }
     }
     
@@ -1048,7 +1068,7 @@ public extension Api.payments {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .exportedInvoice(let url):
-                return ("exportedInvoice", [("url", String(describing: url))])
+                return ("exportedInvoice", [("url", url as Any)])
     }
     }
     
@@ -1110,7 +1130,7 @@ public extension Api.payments {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .paymentForm(let flags, let formId, let botId, let title, let description, let photo, let invoice, let providerId, let url, let nativeProvider, let nativeParams, let additionalMethods, let savedInfo, let savedCredentials, let users):
-                return ("paymentForm", [("flags", String(describing: flags)), ("formId", String(describing: formId)), ("botId", String(describing: botId)), ("title", String(describing: title)), ("description", String(describing: description)), ("photo", String(describing: photo)), ("invoice", String(describing: invoice)), ("providerId", String(describing: providerId)), ("url", String(describing: url)), ("nativeProvider", String(describing: nativeProvider)), ("nativeParams", String(describing: nativeParams)), ("additionalMethods", String(describing: additionalMethods)), ("savedInfo", String(describing: savedInfo)), ("savedCredentials", String(describing: savedCredentials)), ("users", String(describing: users))])
+                return ("paymentForm", [("flags", flags as Any), ("formId", formId as Any), ("botId", botId as Any), ("title", title as Any), ("description", description as Any), ("photo", photo as Any), ("invoice", invoice as Any), ("providerId", providerId as Any), ("url", url as Any), ("nativeProvider", nativeProvider as Any), ("nativeParams", nativeParams as Any), ("additionalMethods", additionalMethods as Any), ("savedInfo", savedInfo as Any), ("savedCredentials", savedCredentials as Any), ("users", users as Any)])
     }
     }
     
@@ -1220,7 +1240,7 @@ public extension Api.payments {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .paymentReceipt(let flags, let date, let botId, let providerId, let title, let description, let photo, let invoice, let info, let shipping, let tipAmount, let currency, let totalAmount, let credentialsTitle, let users):
-                return ("paymentReceipt", [("flags", String(describing: flags)), ("date", String(describing: date)), ("botId", String(describing: botId)), ("providerId", String(describing: providerId)), ("title", String(describing: title)), ("description", String(describing: description)), ("photo", String(describing: photo)), ("invoice", String(describing: invoice)), ("info", String(describing: info)), ("shipping", String(describing: shipping)), ("tipAmount", String(describing: tipAmount)), ("currency", String(describing: currency)), ("totalAmount", String(describing: totalAmount)), ("credentialsTitle", String(describing: credentialsTitle)), ("users", String(describing: users))])
+                return ("paymentReceipt", [("flags", flags as Any), ("date", date as Any), ("botId", botId as Any), ("providerId", providerId as Any), ("title", title as Any), ("description", description as Any), ("photo", photo as Any), ("invoice", invoice as Any), ("info", info as Any), ("shipping", shipping as Any), ("tipAmount", tipAmount as Any), ("currency", currency as Any), ("totalAmount", totalAmount as Any), ("credentialsTitle", credentialsTitle as Any), ("users", users as Any)])
     }
     }
     
@@ -1315,9 +1335,9 @@ public extension Api.payments {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .paymentResult(let updates):
-                return ("paymentResult", [("updates", String(describing: updates))])
+                return ("paymentResult", [("updates", updates as Any)])
                 case .paymentVerificationNeeded(let url):
-                return ("paymentVerificationNeeded", [("url", String(describing: url))])
+                return ("paymentVerificationNeeded", [("url", url as Any)])
     }
     }
     
@@ -1367,7 +1387,7 @@ public extension Api.payments {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .savedInfo(let flags, let savedInfo):
-                return ("savedInfo", [("flags", String(describing: flags)), ("savedInfo", String(describing: savedInfo))])
+                return ("savedInfo", [("flags", flags as Any), ("savedInfo", savedInfo as Any)])
     }
     }
     
@@ -1382,56 +1402,6 @@ public extension Api.payments {
             let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
             if _c1 && _c2 {
                 return Api.payments.SavedInfo.savedInfo(flags: _1!, savedInfo: _2)
-            }
-            else {
-                return nil
-            }
-        }
-    
-    }
-}
-public extension Api.payments {
-    enum ValidatedRequestedInfo: TypeConstructorDescription {
-        case validatedRequestedInfo(flags: Int32, id: String?, shippingOptions: [Api.ShippingOption]?)
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .validatedRequestedInfo(let flags, let id, let shippingOptions):
-                    if boxed {
-                        buffer.appendInt32(-784000893)
-                    }
-                    serializeInt32(flags, buffer: buffer, boxed: false)
-                    if Int(flags) & Int(1 << 0) != 0 {serializeString(id!, buffer: buffer, boxed: false)}
-                    if Int(flags) & Int(1 << 1) != 0 {buffer.appendInt32(481674261)
-                    buffer.appendInt32(Int32(shippingOptions!.count))
-                    for item in shippingOptions! {
-                        item.serialize(buffer, true)
-                    }}
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .validatedRequestedInfo(let flags, let id, let shippingOptions):
-                return ("validatedRequestedInfo", [("flags", String(describing: flags)), ("id", String(describing: id)), ("shippingOptions", String(describing: shippingOptions))])
-    }
-    }
-    
-        public static func parse_validatedRequestedInfo(_ reader: BufferReader) -> ValidatedRequestedInfo? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: String?
-            if Int(_1!) & Int(1 << 0) != 0 {_2 = parseString(reader) }
-            var _3: [Api.ShippingOption]?
-            if Int(_1!) & Int(1 << 1) != 0 {if let _ = reader.readInt32() {
-                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.ShippingOption.self)
-            } }
-            let _c1 = _1 != nil
-            let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.payments.ValidatedRequestedInfo.validatedRequestedInfo(flags: _1!, id: _2, shippingOptions: _3)
             }
             else {
                 return nil

@@ -3,6 +3,7 @@ import UIKit
 import TelegramCore
 import AccountContext
 import ChatPresentationInterfaceState
+import ChatControllerInteraction
 
 func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, currentPanel: ChatTitleAccessoryPanelNode?, controllerInteraction: ChatControllerInteraction?, interfaceInteraction: ChatPanelInterfaceInteraction?) -> ChatTitleAccessoryPanelNode? {
     if case .overlay = chatPresentationInterfaceState.mode {
@@ -54,6 +55,31 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
             break
         default:
             selectedContext = nil
+        }
+    }
+    
+    if let channel = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.flags.contains(.isForum) {
+        if let threadData = chatPresentationInterfaceState.threadData {
+            if threadData.isClosed {
+                var canManage = false
+                if channel.flags.contains(.isCreator) {
+                    canManage = true
+                } else if channel.hasPermission(.manageTopics) {
+                    canManage = true
+                } else if threadData.isOwnedByMe {
+                    canManage = true
+                }
+                
+                if canManage {
+                    if let currentPanel = currentPanel as? ChatReportPeerTitlePanelNode {
+                        return currentPanel
+                    } else if let controllerInteraction = controllerInteraction {
+                        let panel = ChatReportPeerTitlePanelNode(context: context, animationCache: controllerInteraction.presentationContext.animationCache, animationRenderer: controllerInteraction.presentationContext.animationRenderer)
+                        panel.interfaceInteraction = interfaceInteraction
+                        return panel
+                    }
+                }
+            }
         }
     }
     

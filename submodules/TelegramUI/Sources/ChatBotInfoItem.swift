@@ -13,6 +13,7 @@ import AccountContext
 import UniversalMediaPlayer
 import TelegramUniversalVideoContent
 import WallpaperBackgroundNode
+import ChatControllerInteraction
 
 private let messageFont = Font.regular(17.0)
 private let messageBoldFont = Font.semibold(17.0)
@@ -139,6 +140,7 @@ final class ChatBotInfoItemNode: ListViewItemNode {
         
         let videoContent = NativeVideoContent(
             id: .message(0, MediaId(namespace: 0, id: Int64.random(in: 0..<Int64.max))),
+            userLocation: .other,
             fileReference: .standalone(media: file),
             streamVideo: .none,
             loopVideo: true,
@@ -171,7 +173,7 @@ final class ChatBotInfoItemNode: ListViewItemNode {
                         break
                     case .ignore:
                         return .fail
-                    case .url, .peerMention, .textMention, .botCommand, .hashtag, .instantPage, .wallpaper, .theme, .call, .openMessage, .timecode, .bankCard, .tooltip, .openPollResults, .copy, .largeEmoji:
+                    case .url, .peerMention, .textMention, .botCommand, .hashtag, .instantPage, .wallpaper, .theme, .call, .openMessage, .timecode, .bankCard, .tooltip, .openPollResults, .copy, .largeEmoji, .customEmoji:
                         return .waitForSingleTap
                 }
             }
@@ -264,7 +266,7 @@ final class ChatBotInfoItemNode: ListViewItemNode {
                 imageApply = makeImageLayout(arguments)
                 
                 if mediaUpdated {
-                    updatedImageSignal = chatMessagePhoto(postbox: item.context.account.postbox, photoReference: .standalone(media: image), synchronousLoad: true, highQuality: false)
+                    updatedImageSignal = chatMessagePhoto(postbox: item.context.account.postbox, userLocation: .other, photoReference: .standalone(media: image), synchronousLoad: true, highQuality: false)
                 }
             }
             if let video = item.video, let dimensions = video.dimensions {
@@ -295,7 +297,7 @@ final class ChatBotInfoItemNode: ListViewItemNode {
                         if let updatedImageSignal = updatedImageSignal {
                             strongSelf.imageNode.setSignal(updatedImageSignal)
                             if let image = item.photo {
-                                strongSelf.fetchDisposable.set(chatMessagePhotoInteractiveFetched(context: item.context, photoReference: .standalone(media: image), displayAtSize: nil, storeToDownloadsPeerType: nil).start())
+                                strongSelf.fetchDisposable.set(chatMessagePhotoInteractiveFetched(context: item.context, userLocation: .other, photoReference: .standalone(media: image), displayAtSize: nil, storeToDownloadsPeerType: nil).start())
                             }
                         }
                         strongSelf.imageNode.isHidden = false
@@ -453,7 +455,14 @@ final class ChatBotInfoItemNode: ListViewItemNode {
                                 case let .url(url, concealed):
                                     self.item?.controllerInteraction.openUrl(url, concealed, nil, nil)
                                 case let .peerMention(peerId, _):
-                                    self.item?.controllerInteraction.openPeer(peerId, .chat(textInputState: nil, subject: nil, peekData: nil), nil, false, nil)
+                                    if let item = self.item {
+                                        let _ = (item.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+                                        |> deliverOnMainQueue).start(next: { [weak self] peer in
+                                            if let peer = peer {
+                                                self?.item?.controllerInteraction.openPeer(peer, .chat(textInputState: nil, subject: nil, peekData: nil), nil, .default)
+                                            }
+                                        })
+                                    }
                                 case let .textMention(name):
                                     self.item?.controllerInteraction.openPeerMention(name)
                                 case let .botCommand(command):
@@ -537,7 +546,9 @@ private final class VideoDecoration: UniversalVideoDecoration {
             let boundingSize: CGSize = CGSize(width: max(corners.topLeft.radius, corners.bottomLeft.radius) + max(corners.topRight.radius, corners.bottomRight.radius), height: max(corners.topLeft.radius, corners.topRight.radius) + max(corners.bottomLeft.radius, corners.bottomRight.radius))
             let size: CGSize = CGSize(width: boundingSize.width + corners.extendedEdges.left + corners.extendedEdges.right, height: boundingSize.height + corners.extendedEdges.top + corners.extendedEdges.bottom)
             let arguments = TransformImageArguments(corners: corners, imageSize: size, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets())
-            let context = DrawingContext(size: size, clear: true)
+            guard let context = DrawingContext(size: size, clear: true) else {
+                return
+            }
             context.withContext { ctx in
                 ctx.setFillColor(UIColor.black.cgColor)
                 ctx.fill(arguments.drawingRect)

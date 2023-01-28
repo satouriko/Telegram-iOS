@@ -91,7 +91,7 @@ final class WatchChatMessagesHandler: WatchRequestHandler {
                 |> take(1)
                 |> mapToSignal({ context -> Signal<(MessageHistoryView, Bool, PresentationData), NoError> in
                     if let context = context {
-                        return context.account.viewTracker.aroundMessageHistoryViewForLocation(.peer(peerId: peerId), index: .upperBound, anchorIndex: .upperBound, count: limit, fixedCombinedReadStates: nil)
+                        return context.account.viewTracker.aroundMessageHistoryViewForLocation(.peer(peerId: peerId, threadId: nil), index: .upperBound, anchorIndex: .upperBound, count: limit, fixedCombinedReadStates: nil)
                         |> map { messageHistoryView, _, _ -> (MessageHistoryView, Bool, PresentationData) in
                             return (messageHistoryView, peerId == context.account.peerId, context.sharedContext.currentPresentationData.with { $0 })
                         }
@@ -217,7 +217,7 @@ final class WatchSendMessageHandler: WatchRequestHandler {
                     } else if let args = subscription as? TGBridgeSendForwardedMessageSubscription {
                         let peerId = makePeerIdFromBridgeIdentifier(args.targetPeerId)
                         if let forwardPeerId = makePeerIdFromBridgeIdentifier(args.peerId) {
-                            messageSignal = .single((.forward(source: MessageId(peerId: forwardPeerId, namespace: Namespaces.Message.Cloud, id: args.messageId), grouping: .none, attributes: [], correlationId: nil), peerId))
+                            messageSignal = .single((.forward(source: MessageId(peerId: forwardPeerId, namespace: Namespaces.Message.Cloud, id: args.messageId), threadId: nil, grouping: .none, attributes: [], correlationId: nil), peerId))
                         }
                     }
                     
@@ -476,8 +476,8 @@ final class WatchMediaHandler: WatchRequestHandler {
                                     if let dimensions = media.dimensions {
                                         size = dimensions.cgSize
                                     }
-                                    self.disposable.add(freeMediaFileInteractiveFetched(account: context.account, fileReference: fileReference).start())
-                                    return chatMessageSticker(account: context.account, file: media, small: false, fetched: true, onlyFullSize: true)
+                                    self.disposable.add(freeMediaFileInteractiveFetched(account: context.account, userLocation: .other, fileReference: fileReference).start())
+                                    return chatMessageSticker(account: context.account, userLocation: .other, file: media, small: false, fetched: true, onlyFullSize: true)
                                 }
                                 return .complete()
                             }
@@ -545,13 +545,13 @@ final class WatchMediaHandler: WatchRequestHandler {
                                 }
                                 if let updatedMediaReference = updatedMediaReference, imageDimensions != nil {
                                     if let imageReference = updatedMediaReference.concrete(TelegramMediaImage.self) {
-                                        imageSignal = chatMessagePhotoThumbnail(account: context.account, photoReference: imageReference, onlyFullSize: true)
+                                        imageSignal = chatMessagePhotoThumbnail(account: context.account, userLocation: .other, photoReference: imageReference, onlyFullSize: true)
                                     } else if let fileReference = updatedMediaReference.concrete(TelegramMediaFile.self) {
                                         if fileReference.media.isVideo {
-                                            imageSignal = chatMessageVideoThumbnail(account: context.account, fileReference: fileReference)
+                                            imageSignal = chatMessageVideoThumbnail(account: context.account, userLocation: .other, fileReference: fileReference)
                                             roundVideo = fileReference.media.isInstantVideo
                                         } else if let iconImageRepresentation = smallestImageRepresentation(fileReference.media.previewRepresentations) {
-                                            imageSignal = chatWebpageSnippetFile(account: context.account, mediaReference: fileReference.abstract, representation: iconImageRepresentation)
+                                            imageSignal = chatWebpageSnippetFile(account: context.account, userLocation: .other, mediaReference: fileReference.abstract, representation: iconImageRepresentation)
                                         }
                                     }
                                 }
@@ -833,7 +833,7 @@ final class WatchPeerSettingsHandler: WatchRequestHandler {
                         var signal: Signal<Void, NoError>?
                         
                         if let args = subscription as? TGBridgePeerUpdateNotificationSettingsSubscription, let peerId = makePeerIdFromBridgeIdentifier(args.peerId) {
-                            signal = context.engine.peers.togglePeerMuted(peerId: peerId)
+                            signal = context.engine.peers.togglePeerMuted(peerId: peerId, threadId: nil)
                         } else if let args = subscription as? TGBridgePeerUpdateBlockStatusSubscription, let peerId = makePeerIdFromBridgeIdentifier(args.peerId) {
                             signal = context.engine.privacy.requestUpdatePeerIsBlocked(peerId: peerId, isBlocked: args.blocked)
                         }

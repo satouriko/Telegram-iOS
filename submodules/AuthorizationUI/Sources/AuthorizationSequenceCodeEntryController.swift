@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import Display
 import AsyncDisplayKit
+import SwiftSignalKit
 import TelegramCore
 import TelegramPresentationData
 import ProgressNavigationButtonNode
@@ -15,10 +16,10 @@ public final class AuthorizationSequenceCodeEntryController: ViewController {
     
     private let strings: PresentationStrings
     private let theme: PresentationTheme
-    private let openUrl: (String) -> Void
     
     public var loginWithCode: ((String) -> Void)?
     public var signInWithApple: (() -> Void)?
+    public var openFragment: ((String) -> Void)?
     
     var reset: (() -> Void)?
     var requestNextOption: (() -> Void)?
@@ -37,10 +38,9 @@ public final class AuthorizationSequenceCodeEntryController: ViewController {
         }
     }
     
-    public init(presentationData: PresentationData, openUrl: @escaping (String) -> Void, back: @escaping () -> Void) {
+    public init(presentationData: PresentationData, back: @escaping () -> Void) {
         self.strings = presentationData.strings
         self.theme = presentationData.theme
-        self.openUrl = openUrl
         
         super.init(navigationBarPresentationData: NavigationBarPresentationData(theme: AuthorizationSequenceController.navigationBarTheme(theme), strings: NavigationBarStrings(presentationStrings: strings)))
         
@@ -93,6 +93,10 @@ public final class AuthorizationSequenceCodeEntryController: ViewController {
             self?.signInWithApple?()
         }
         
+        self.controllerNode.openFragment = { [weak self] url in
+            self?.openFragment?(url)
+        }
+        
         self.controllerNode.requestNextOption = { [weak self] in
             self?.requestNextOption?()
         }
@@ -103,6 +107,10 @@ public final class AuthorizationSequenceCodeEntryController: ViewController {
         
         self.controllerNode.updateNextEnabled = { [weak self] value in
             self?.navigationItem.rightBarButtonItem?.isEnabled = value
+        }
+        
+        self.controllerNode.present = { [weak self] c, a in
+            self?.present(c, in: .window(.root), with: a)
         }
         
         if let (number, email, codeType, nextType, timeout) = self.data {
@@ -116,6 +124,10 @@ public final class AuthorizationSequenceCodeEntryController: ViewController {
     
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        
+        if let navigationController = self.navigationController as? NavigationController, let layout = self.validLayout {
+            addTemporaryKeyboardSnapshotView(navigationController: navigationController, parentView: self.view, layout: layout)
+        }
         
         self.controllerNode.activateInput()
     }
@@ -194,6 +206,8 @@ public final class AuthorizationSequenceCodeEntryController: ViewController {
                 minimalCodeLength = Int(length)
             case let .email(_, length, _, _, _):
                 minimalCodeLength = Int(length)
+            case let .fragment(_, length):
+                minimalCodeLength = Int(length)
             case .flashCall, .emailSetupRequired:
                 break
         }
@@ -210,7 +224,29 @@ public final class AuthorizationSequenceCodeEntryController: ViewController {
         self.loginWithCode?(code)
     }
     
-    func applyConfirmationCode(_ code: Int) {
+    public func applyConfirmationCode(_ code: Int) {
         self.controllerNode.updateCode("\(code)")
+    }
+}
+
+func addTemporaryKeyboardSnapshotView(navigationController: NavigationController, parentView: UIView, layout: ContainerViewLayout) {
+    if case .compact = layout.metrics.widthClass, let statusBarHost = navigationController.statusBarHost {
+        if let keyboardView = statusBarHost.keyboardView {
+            if let snapshotView = keyboardView.snapshotView(afterScreenUpdates: false) {
+                keyboardView.layer.removeAllAnimations()
+                UIView.performWithoutAnimation {
+                    snapshotView.frame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - snapshotView.frame.size.height), size: snapshotView.frame.size)
+                    if let keyboardWindow = statusBarHost.keyboardWindow {
+                        keyboardWindow.addSubview(snapshotView)
+                    }
+                    
+                    Queue.mainQueue().after(0.5, {
+                        snapshotView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak snapshotView] _ in
+                            snapshotView?.removeFromSuperview()
+                        })
+                    })
+                }
+            }
+        }
     }
 }

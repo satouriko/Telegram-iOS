@@ -1,4 +1,86 @@
 public extension Api {
+    indirect enum InputChannel: TypeConstructorDescription {
+        case inputChannel(channelId: Int64, accessHash: Int64)
+        case inputChannelEmpty
+        case inputChannelFromMessage(peer: Api.InputPeer, msgId: Int32, channelId: Int64)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .inputChannel(let channelId, let accessHash):
+                    if boxed {
+                        buffer.appendInt32(-212145112)
+                    }
+                    serializeInt64(channelId, buffer: buffer, boxed: false)
+                    serializeInt64(accessHash, buffer: buffer, boxed: false)
+                    break
+                case .inputChannelEmpty:
+                    if boxed {
+                        buffer.appendInt32(-292807034)
+                    }
+                    
+                    break
+                case .inputChannelFromMessage(let peer, let msgId, let channelId):
+                    if boxed {
+                        buffer.appendInt32(1536380829)
+                    }
+                    peer.serialize(buffer, true)
+                    serializeInt32(msgId, buffer: buffer, boxed: false)
+                    serializeInt64(channelId, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .inputChannel(let channelId, let accessHash):
+                return ("inputChannel", [("channelId", channelId as Any), ("accessHash", accessHash as Any)])
+                case .inputChannelEmpty:
+                return ("inputChannelEmpty", [])
+                case .inputChannelFromMessage(let peer, let msgId, let channelId):
+                return ("inputChannelFromMessage", [("peer", peer as Any), ("msgId", msgId as Any), ("channelId", channelId as Any)])
+    }
+    }
+    
+        public static func parse_inputChannel(_ reader: BufferReader) -> InputChannel? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.InputChannel.inputChannel(channelId: _1!, accessHash: _2!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_inputChannelEmpty(_ reader: BufferReader) -> InputChannel? {
+            return Api.InputChannel.inputChannelEmpty
+        }
+        public static func parse_inputChannelFromMessage(_ reader: BufferReader) -> InputChannel? {
+            var _1: Api.InputPeer?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.InputPeer
+            }
+            var _2: Int32?
+            _2 = reader.readInt32()
+            var _3: Int64?
+            _3 = reader.readInt64()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.InputChannel.inputChannelFromMessage(peer: _1!, msgId: _2!, channelId: _3!)
+            }
+            else {
+                return nil
+            }
+        }
+    
+    }
+}
+public extension Api {
     enum InputChatPhoto: TypeConstructorDescription {
         case inputChatPhoto(id: Api.InputPhoto)
         case inputChatPhotoEmpty
@@ -33,11 +115,11 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inputChatPhoto(let id):
-                return ("inputChatPhoto", [("id", String(describing: id))])
+                return ("inputChatPhoto", [("id", id as Any)])
                 case .inputChatPhotoEmpty:
                 return ("inputChatPhotoEmpty", [])
                 case .inputChatUploadedPhoto(let flags, let file, let video, let videoStartTs):
-                return ("inputChatUploadedPhoto", [("flags", String(describing: flags)), ("file", String(describing: file)), ("video", String(describing: video)), ("videoStartTs", String(describing: videoStartTs))])
+                return ("inputChatUploadedPhoto", [("flags", flags as Any), ("file", file as Any), ("video", video as Any), ("videoStartTs", videoStartTs as Any)])
     }
     }
     
@@ -113,7 +195,7 @@ public extension Api {
                 case .inputCheckPasswordEmpty:
                 return ("inputCheckPasswordEmpty", [])
                 case .inputCheckPasswordSRP(let srpId, let A, let M1):
-                return ("inputCheckPasswordSRP", [("srpId", String(describing: srpId)), ("A", String(describing: A)), ("M1", String(describing: M1))])
+                return ("inputCheckPasswordSRP", [("srpId", srpId as Any), ("A", A as Any), ("M1", M1 as Any)])
     }
     }
     
@@ -159,7 +241,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inputClientProxy(let address, let port):
-                return ("inputClientProxy", [("address", String(describing: address)), ("port", String(describing: port))])
+                return ("inputClientProxy", [("address", address as Any), ("port", port as Any)])
     }
     }
     
@@ -201,7 +283,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inputPhoneContact(let clientId, let phone, let firstName, let lastName):
-                return ("inputPhoneContact", [("clientId", String(describing: clientId)), ("phone", String(describing: phone)), ("firstName", String(describing: firstName)), ("lastName", String(describing: lastName))])
+                return ("inputPhoneContact", [("clientId", clientId as Any), ("phone", phone as Any), ("firstName", firstName as Any), ("lastName", lastName as Any)])
     }
     }
     
@@ -253,9 +335,9 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inputDialogPeer(let peer):
-                return ("inputDialogPeer", [("peer", String(describing: peer))])
+                return ("inputDialogPeer", [("peer", peer as Any)])
                 case .inputDialogPeerFolder(let folderId):
-                return ("inputDialogPeerFolder", [("folderId", String(describing: folderId))])
+                return ("inputDialogPeerFolder", [("folderId", folderId as Any)])
     }
     }
     
@@ -313,7 +395,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inputDocument(let id, let accessHash, let fileReference):
-                return ("inputDocument", [("id", String(describing: id)), ("accessHash", String(describing: accessHash)), ("fileReference", String(describing: fileReference))])
+                return ("inputDocument", [("id", id as Any), ("accessHash", accessHash as Any), ("fileReference", fileReference as Any)])
                 case .inputDocumentEmpty:
                 return ("inputDocumentEmpty", [])
     }
@@ -361,7 +443,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inputEncryptedChat(let chatId, let accessHash):
-                return ("inputEncryptedChat", [("chatId", String(describing: chatId)), ("accessHash", String(describing: accessHash))])
+                return ("inputEncryptedChat", [("chatId", chatId as Any), ("accessHash", accessHash as Any)])
     }
     }
     
@@ -427,13 +509,13 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inputEncryptedFile(let id, let accessHash):
-                return ("inputEncryptedFile", [("id", String(describing: id)), ("accessHash", String(describing: accessHash))])
+                return ("inputEncryptedFile", [("id", id as Any), ("accessHash", accessHash as Any)])
                 case .inputEncryptedFileBigUploaded(let id, let parts, let keyFingerprint):
-                return ("inputEncryptedFileBigUploaded", [("id", String(describing: id)), ("parts", String(describing: parts)), ("keyFingerprint", String(describing: keyFingerprint))])
+                return ("inputEncryptedFileBigUploaded", [("id", id as Any), ("parts", parts as Any), ("keyFingerprint", keyFingerprint as Any)])
                 case .inputEncryptedFileEmpty:
                 return ("inputEncryptedFileEmpty", [])
                 case .inputEncryptedFileUploaded(let id, let parts, let md5Checksum, let keyFingerprint):
-                return ("inputEncryptedFileUploaded", [("id", String(describing: id)), ("parts", String(describing: parts)), ("md5Checksum", String(describing: md5Checksum)), ("keyFingerprint", String(describing: keyFingerprint))])
+                return ("inputEncryptedFileUploaded", [("id", id as Any), ("parts", parts as Any), ("md5Checksum", md5Checksum as Any), ("keyFingerprint", keyFingerprint as Any)])
     }
     }
     
@@ -524,9 +606,9 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inputFile(let id, let parts, let name, let md5Checksum):
-                return ("inputFile", [("id", String(describing: id)), ("parts", String(describing: parts)), ("name", String(describing: name)), ("md5Checksum", String(describing: md5Checksum))])
+                return ("inputFile", [("id", id as Any), ("parts", parts as Any), ("name", name as Any), ("md5Checksum", md5Checksum as Any)])
                 case .inputFileBig(let id, let parts, let name):
-                return ("inputFileBig", [("id", String(describing: id)), ("parts", String(describing: parts)), ("name", String(describing: name))])
+                return ("inputFileBig", [("id", id as Any), ("parts", parts as Any), ("name", name as Any)])
     }
     }
     
@@ -675,23 +757,23 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inputDocumentFileLocation(let id, let accessHash, let fileReference, let thumbSize):
-                return ("inputDocumentFileLocation", [("id", String(describing: id)), ("accessHash", String(describing: accessHash)), ("fileReference", String(describing: fileReference)), ("thumbSize", String(describing: thumbSize))])
+                return ("inputDocumentFileLocation", [("id", id as Any), ("accessHash", accessHash as Any), ("fileReference", fileReference as Any), ("thumbSize", thumbSize as Any)])
                 case .inputEncryptedFileLocation(let id, let accessHash):
-                return ("inputEncryptedFileLocation", [("id", String(describing: id)), ("accessHash", String(describing: accessHash))])
+                return ("inputEncryptedFileLocation", [("id", id as Any), ("accessHash", accessHash as Any)])
                 case .inputFileLocation(let volumeId, let localId, let secret, let fileReference):
-                return ("inputFileLocation", [("volumeId", String(describing: volumeId)), ("localId", String(describing: localId)), ("secret", String(describing: secret)), ("fileReference", String(describing: fileReference))])
+                return ("inputFileLocation", [("volumeId", volumeId as Any), ("localId", localId as Any), ("secret", secret as Any), ("fileReference", fileReference as Any)])
                 case .inputGroupCallStream(let flags, let call, let timeMs, let scale, let videoChannel, let videoQuality):
-                return ("inputGroupCallStream", [("flags", String(describing: flags)), ("call", String(describing: call)), ("timeMs", String(describing: timeMs)), ("scale", String(describing: scale)), ("videoChannel", String(describing: videoChannel)), ("videoQuality", String(describing: videoQuality))])
+                return ("inputGroupCallStream", [("flags", flags as Any), ("call", call as Any), ("timeMs", timeMs as Any), ("scale", scale as Any), ("videoChannel", videoChannel as Any), ("videoQuality", videoQuality as Any)])
                 case .inputPeerPhotoFileLocation(let flags, let peer, let photoId):
-                return ("inputPeerPhotoFileLocation", [("flags", String(describing: flags)), ("peer", String(describing: peer)), ("photoId", String(describing: photoId))])
+                return ("inputPeerPhotoFileLocation", [("flags", flags as Any), ("peer", peer as Any), ("photoId", photoId as Any)])
                 case .inputPhotoFileLocation(let id, let accessHash, let fileReference, let thumbSize):
-                return ("inputPhotoFileLocation", [("id", String(describing: id)), ("accessHash", String(describing: accessHash)), ("fileReference", String(describing: fileReference)), ("thumbSize", String(describing: thumbSize))])
+                return ("inputPhotoFileLocation", [("id", id as Any), ("accessHash", accessHash as Any), ("fileReference", fileReference as Any), ("thumbSize", thumbSize as Any)])
                 case .inputPhotoLegacyFileLocation(let id, let accessHash, let fileReference, let volumeId, let localId, let secret):
-                return ("inputPhotoLegacyFileLocation", [("id", String(describing: id)), ("accessHash", String(describing: accessHash)), ("fileReference", String(describing: fileReference)), ("volumeId", String(describing: volumeId)), ("localId", String(describing: localId)), ("secret", String(describing: secret))])
+                return ("inputPhotoLegacyFileLocation", [("id", id as Any), ("accessHash", accessHash as Any), ("fileReference", fileReference as Any), ("volumeId", volumeId as Any), ("localId", localId as Any), ("secret", secret as Any)])
                 case .inputSecureFileLocation(let id, let accessHash):
-                return ("inputSecureFileLocation", [("id", String(describing: id)), ("accessHash", String(describing: accessHash))])
+                return ("inputSecureFileLocation", [("id", id as Any), ("accessHash", accessHash as Any)])
                 case .inputStickerSetThumb(let stickerset, let thumbVersion):
-                return ("inputStickerSetThumb", [("stickerset", String(describing: stickerset)), ("thumbVersion", String(describing: thumbVersion))])
+                return ("inputStickerSetThumb", [("stickerset", stickerset as Any), ("thumbVersion", thumbVersion as Any)])
                 case .inputTakeoutFileLocation:
                 return ("inputTakeoutFileLocation", [])
     }
@@ -899,7 +981,7 @@ public extension Api {
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
                 case .inputFolderPeer(let peer, let folderId):
-                return ("inputFolderPeer", [("peer", String(describing: peer)), ("folderId", String(describing: folderId))])
+                return ("inputFolderPeer", [("peer", peer as Any), ("folderId", folderId as Any)])
     }
     }
     
@@ -918,132 +1000,6 @@ public extension Api {
             else {
                 return nil
             }
-        }
-    
-    }
-}
-public extension Api {
-    indirect enum InputGame: TypeConstructorDescription {
-        case inputGameID(id: Int64, accessHash: Int64)
-        case inputGameShortName(botId: Api.InputUser, shortName: String)
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .inputGameID(let id, let accessHash):
-                    if boxed {
-                        buffer.appendInt32(53231223)
-                    }
-                    serializeInt64(id, buffer: buffer, boxed: false)
-                    serializeInt64(accessHash, buffer: buffer, boxed: false)
-                    break
-                case .inputGameShortName(let botId, let shortName):
-                    if boxed {
-                        buffer.appendInt32(-1020139510)
-                    }
-                    botId.serialize(buffer, true)
-                    serializeString(shortName, buffer: buffer, boxed: false)
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .inputGameID(let id, let accessHash):
-                return ("inputGameID", [("id", String(describing: id)), ("accessHash", String(describing: accessHash))])
-                case .inputGameShortName(let botId, let shortName):
-                return ("inputGameShortName", [("botId", String(describing: botId)), ("shortName", String(describing: shortName))])
-    }
-    }
-    
-        public static func parse_inputGameID(_ reader: BufferReader) -> InputGame? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: Int64?
-            _2 = reader.readInt64()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.InputGame.inputGameID(id: _1!, accessHash: _2!)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_inputGameShortName(_ reader: BufferReader) -> InputGame? {
-            var _1: Api.InputUser?
-            if let signature = reader.readInt32() {
-                _1 = Api.parse(reader, signature: signature) as? Api.InputUser
-            }
-            var _2: String?
-            _2 = parseString(reader)
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.InputGame.inputGameShortName(botId: _1!, shortName: _2!)
-            }
-            else {
-                return nil
-            }
-        }
-    
-    }
-}
-public extension Api {
-    enum InputGeoPoint: TypeConstructorDescription {
-        case inputGeoPoint(flags: Int32, lat: Double, long: Double, accuracyRadius: Int32?)
-        case inputGeoPointEmpty
-    
-    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-    switch self {
-                case .inputGeoPoint(let flags, let lat, let long, let accuracyRadius):
-                    if boxed {
-                        buffer.appendInt32(1210199983)
-                    }
-                    serializeInt32(flags, buffer: buffer, boxed: false)
-                    serializeDouble(lat, buffer: buffer, boxed: false)
-                    serializeDouble(long, buffer: buffer, boxed: false)
-                    if Int(flags) & Int(1 << 0) != 0 {serializeInt32(accuracyRadius!, buffer: buffer, boxed: false)}
-                    break
-                case .inputGeoPointEmpty:
-                    if boxed {
-                        buffer.appendInt32(-457104426)
-                    }
-                    
-                    break
-    }
-    }
-    
-    public func descriptionFields() -> (String, [(String, Any)]) {
-        switch self {
-                case .inputGeoPoint(let flags, let lat, let long, let accuracyRadius):
-                return ("inputGeoPoint", [("flags", String(describing: flags)), ("lat", String(describing: lat)), ("long", String(describing: long)), ("accuracyRadius", String(describing: accuracyRadius))])
-                case .inputGeoPointEmpty:
-                return ("inputGeoPointEmpty", [])
-    }
-    }
-    
-        public static func parse_inputGeoPoint(_ reader: BufferReader) -> InputGeoPoint? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Double?
-            _2 = reader.readDouble()
-            var _3: Double?
-            _3 = reader.readDouble()
-            var _4: Int32?
-            if Int(_1!) & Int(1 << 0) != 0 {_4 = reader.readInt32() }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.InputGeoPoint.inputGeoPoint(flags: _1!, lat: _2!, long: _3!, accuracyRadius: _4)
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_inputGeoPointEmpty(_ reader: BufferReader) -> InputGeoPoint? {
-            return Api.InputGeoPoint.inputGeoPointEmpty
         }
     
     }

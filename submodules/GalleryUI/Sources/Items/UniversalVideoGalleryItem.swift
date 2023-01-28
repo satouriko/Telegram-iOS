@@ -126,13 +126,13 @@ public class UniversalVideoGalleryItem: GalleryItem {
                     }
                 }
                 if let mediaReference = mediaReference {
-                    if let item = ChatMediaGalleryThumbnailItem(account: self.context.account, mediaReference: mediaReference) {
+                    if let item = ChatMediaGalleryThumbnailItem(account: self.context.account, userLocation: .peer(message.id.peerId), mediaReference: mediaReference) {
                         return (Int64(id), item)
                     }
                 }
             }
         } else if case let .webPage(webPage, media, _) = contentInfo, let file = media as? TelegramMediaFile  {
-            if let item = ChatMediaGalleryThumbnailItem(account: self.context.account, mediaReference: .webPage(webPage: WebpageReference(webPage), media: file)) {
+            if let item = ChatMediaGalleryThumbnailItem(account: self.context.account, userLocation: .other, mediaReference: .webPage(webPage: WebpageReference(webPage), media: file)) {
                 return (0, item)
             }
         }
@@ -290,7 +290,7 @@ func optionsBackgroundImage(dark: Bool) -> UIImage? {
     })?.stretchableImage(withLeftCapWidth: 14, topCapHeight: 14)
 }
 
-private func optionsCircleImage(dark: Bool) -> UIImage? {
+func optionsCircleImage(dark: Bool) -> UIImage? {
     return generateImage(CGSize(width: 22.0, height: 22.0), contextGenerator: { size, context in
         context.clear(CGRect(origin: CGPoint(), size: size))
 
@@ -339,7 +339,7 @@ private func optionsRateImage(rate: String, isLarge: Bool, color: UIColor = .whi
     })
 }
 
-private final class MoreHeaderButton: HighlightableButtonNode {
+final class MoreHeaderButton: HighlightableButtonNode {
     enum Content {
         case image(UIImage?)
         case more(UIImage?)
@@ -517,7 +517,7 @@ private final class PictureInPictureContentImpl: NSObject, PictureInPictureConte
             guard let status = self.status else {
                 return CMTimeRange(start: CMTime(seconds: 0.0, preferredTimescale: CMTimeScale(30.0)), duration: CMTime(seconds: 0.0, preferredTimescale: CMTimeScale(30.0)))
             }
-            return CMTimeRange(start: CMTime(seconds: 0.0, preferredTimescale: CMTimeScale(30.0)), duration: CMTime(seconds: status.duration, preferredTimescale: CMTimeScale(30.0)))
+            return CMTimeRange(start: CMTime(seconds: status.timestamp, preferredTimescale: CMTimeScale(30.0)), duration: CMTime(seconds: status.duration, preferredTimescale: CMTimeScale(30.0)))
         }
 
         public func pictureInPictureControllerIsPlaybackPaused(_ pictureInPictureController: AVPictureInPictureController) -> Bool {
@@ -1012,43 +1012,10 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     }
     
     func setupItem(_ item: UniversalVideoGalleryItem) {
-        if self.item?.content.id != item.content.id {
-            func parseChapters(_ string: NSAttributedString) -> [MediaPlayerScrubbingChapter] {
-                var existingTimecodes = Set<Double>()
-                var timecodeRanges: [(NSRange, TelegramTimecode)] = []
-                var lineRanges: [NSRange] = []
-                string.enumerateAttributes(in: NSMakeRange(0, string.length), options: [], using: { attributes, range, _ in
-                    if let timecode = attributes[NSAttributedString.Key(TelegramTextAttributes.Timecode)] as? TelegramTimecode {
-                        if !existingTimecodes.contains(timecode.time) {
-                            timecodeRanges.append((range, timecode))
-                            existingTimecodes.insert(timecode.time)
-                        }
-                    }
-                })
-                (string.string as NSString).enumerateSubstrings(in: NSMakeRange(0, string.length), options: .byLines, using: { _, range, _, _ in
-                    lineRanges.append(range)
-                })
-                
-                var chapters: [MediaPlayerScrubbingChapter] = []
-                for (timecodeRange, timecode) in timecodeRanges {
-                    inner: for lineRange in lineRanges {
-                        if lineRange.contains(timecodeRange.location) {
-                            if lineRange.length > timecodeRange.length && timecodeRange.location < lineRange.location + 4 {
-                                var title = ((string.string as NSString).substring(with: lineRange) as NSString).replacingCharacters(in: NSMakeRange(timecodeRange.location - lineRange.location, timecodeRange.length), with: "")
-                                title = title.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: .punctuationCharacters)
-                                chapters.append(MediaPlayerScrubbingChapter(title: title, start: timecode.time))
-                            }
-                            break inner
-                        }
-                    }
-                }
-                
-                return chapters
-            }
-            
-            var chapters = parseChapters(item.caption)
+        if self.item?.content.id != item.content.id {            
+            var chapters = parseMediaPlayerChapters(item.caption)
             if chapters.isEmpty, let description = item.description {
-                chapters = parseChapters(description)
+                chapters = parseMediaPlayerChapters(description)
             }
             let scrubberView = ChatVideoGalleryItemScrubberView(chapters: chapters)
             self.scrubberView = scrubberView
@@ -1102,7 +1069,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
             var isEnhancedWebPlayer = false
             if let content = item.content as? NativeVideoContent {
                 isAnimated = content.fileReference.media.isAnimated
-                self.videoFramePreview = MediaPlayerFramePreview(postbox: item.context.account.postbox, fileReference: content.fileReference)
+                self.videoFramePreview = MediaPlayerFramePreview(postbox: item.context.account.postbox, userLocation: content.userLocation, userContentType: .video, fileReference: content.fileReference)
             } else if let _ = item.content as? SystemVideoContent {
                 self._title.set(.single(item.presentationData.strings.Message_Video))
             } else if let content = item.content as? WebEmbedVideoContent {
@@ -2475,6 +2442,29 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
             }
 
             var items: [ContextMenuItem] = []
+            
+            if let (message, _, _) = strongSelf.contentInfo() {
+                let context = strongSelf.context
+                items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.SharedMedia_ViewInChat, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.contextMenu.primaryColor)}, action: { [weak self] _, f in
+                    
+                    let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: message.id.peerId))
+                    |> deliverOnMainQueue).start(next: { [weak self] peer in
+                        guard let strongSelf = self, let peer = peer else {
+                            return
+                        }
+                        if let navigationController = strongSelf.baseNavigationController() {
+                            strongSelf.beginCustomDismiss(true)
+                            
+                            context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), subject: .message(id: .id(message.id), highlight: true, timecode: nil)))
+                            
+                            Queue.mainQueue().after(0.3) {
+                                strongSelf.completeCustomDismiss()
+                            }
+                        }
+                        f(.default)
+                    })
+                })))
+            }
 
             var speedValue: String = strongSelf.presentationData.strings.PlaybackSpeed_Normal
             var speedIconText: String = "1x"
@@ -2542,7 +2532,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                     if let strongSelf = self {
                         switch strongSelf.fetchStatus {
                         case .Local:
-                            let _ = (SaveToCameraRoll.saveToCameraRoll(context: strongSelf.context, postbox: strongSelf.context.account.postbox, mediaReference: .message(message: MessageReference(message), media: file))
+                            let _ = (SaveToCameraRoll.saveToCameraRoll(context: strongSelf.context, postbox: strongSelf.context.account.postbox, userLocation: .peer(message.id.peerId), mediaReference: .message(message: MessageReference(message), media: file))
                             |> deliverOnMainQueue).start(completed: {
                                 guard let strongSelf = self else {
                                     return
@@ -2687,7 +2677,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
             }
             let baseNavigationController = strongSelf.baseNavigationController()
             baseNavigationController?.view.endEditing(true)
-            let controller = StickerPackScreen(context: strongSelf.context, mainStickerPack: packs[0], stickerPacks: Array(packs.prefix(1)), sendSticker: nil, actionPerformed: { actions in
+            let controller = StickerPackScreen(context: strongSelf.context, mainStickerPack: packs[0], stickerPacks: packs, sendSticker: nil, actionPerformed: { actions in
                 if let (info, items, action) = actions.first {
                     let animateInAsReplacement = false
                     switch action {
@@ -2804,7 +2794,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     }
 }
 
-private final class HeaderContextReferenceContentSource: ContextReferenceContentSource {
+final class HeaderContextReferenceContentSource: ContextReferenceContentSource {
     private let controller: ViewController
     private let sourceNode: ContextReferenceContentNode
 

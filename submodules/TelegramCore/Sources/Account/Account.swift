@@ -896,6 +896,7 @@ public class Account {
     private let managedOperationsDisposable = DisposableSet()
     private let managedTopReactionsDisposable = MetaDisposable()
     private var storageSettingsDisposable: Disposable?
+    private var automaticCacheEvictionContext: AutomaticCacheEvictionContext?
     
     public let importableContacts = Promise<[DeviceContactNormalizedPhoneNumber: ImportableDeviceContactData]>()
     
@@ -1185,11 +1186,13 @@ public class Account {
             self.managedOperationsDisposable.add(self.managedTopReactionsDisposable)
             
             self.managedOperationsDisposable.add(_internal_loadedStickerPack(postbox: self.postbox, network: self.network, reference: .iconStatusEmoji, forceActualized: true).start())
+            self.managedOperationsDisposable.add(_internal_loadedStickerPack(postbox: self.postbox, network: self.network, reference: .iconTopicEmoji, forceActualized: true).start())
         }
 
         if !supplementary {
             let mediaBox = postbox.mediaBox
-            self.storageSettingsDisposable = accountManager.sharedData(keys: [SharedDataKeys.cacheStorageSettings]).start(next: { [weak mediaBox] sharedData in
+            let _ = (accountManager.sharedData(keys: [SharedDataKeys.cacheStorageSettings])
+            |> take(1)).start(next: { [weak mediaBox] sharedData in
                 guard let mediaBox = mediaBox else {
                     return
                 }
@@ -1216,6 +1219,8 @@ public class Account {
             }
             strongSelf.managedTopReactionsDisposable.set(managedTopReactions(postbox: strongSelf.postbox, network: strongSelf.network).start())
         }
+        
+        self.automaticCacheEvictionContext = AutomaticCacheEvictionContext(postbox: postbox, accountManager: accountManager)
         
         /*#if DEBUG
         self.managedOperationsDisposable.add(debugFetchAllStickers(account: self).start(completed: {
@@ -1272,6 +1277,19 @@ public class Account {
     
     public func resetCachedData() {
         self.viewTracker.reset()
+    }
+    
+    public func cleanupTasks(lowImpact: Bool) -> Signal<Never, NoError> {
+        let postbox = self.postbox
+        
+        return _internal_reindexCacheInBackground(account: self, lowImpact: lowImpact)
+        |> then(
+            Signal { subscriber in
+                return postbox.mediaBox.updateResourceIndex(lowImpact: lowImpact, completion: {
+                    subscriber.putCompletion()
+                })
+            }
+        )
     }
     
     public func restartContactManagement() {
