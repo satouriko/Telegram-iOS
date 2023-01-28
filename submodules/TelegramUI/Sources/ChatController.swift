@@ -7653,7 +7653,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     strongSelf.sendMessages([.message(text: messageText, attributes: message.attributes, inlineStickers: [:], mediaReference: nil, replyToMessageId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])])
                 } else {
                     strongSelf.sendMessages([
-                        .forward(source: message.id, grouping: .auto, attributes: [], correlationId: nil)
+                        .forward(source: message.id, threadId: nil, grouping: .auto, attributes: [], correlationId: nil)
                     ])
                 }
             }
