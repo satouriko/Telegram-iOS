@@ -7184,10 +7184,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 strongSelf.commitPurposefulAction()
                 if let threadMessageId = threadMessageId {
                     let messageText = message.text
-                    strongSelf.sendMessages([.message(text: messageText, attributes: message.attributes, inlineStickers: [:], mediaReference: nil, replyToMessageId: threadMessageId, localGroupingKey: nil, correlationId: nil)])
+                    strongSelf.sendMessages([.message(text: messageText, attributes: message.attributes, inlineStickers: [:], mediaReference: nil, replyToMessageId: threadMessageId, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])])
                 } else if strongSelf.presentationInterfaceState.copyProtectionEnabled {
                     let messageText = message.text
-                    strongSelf.sendMessages([.message(text: messageText, attributes: message.attributes, inlineStickers: [:], mediaReference: nil, replyToMessageId: nil, localGroupingKey: nil, correlationId: nil)])
+                    strongSelf.sendMessages([.message(text: messageText, attributes: message.attributes, inlineStickers: [:], mediaReference: nil, replyToMessageId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])])
                 } else {
                     strongSelf.sendMessages([
                         .forward(source: message.id, grouping: .auto, attributes: [], correlationId: nil)
@@ -7207,7 +7207,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         messageText += String(char)
                     }
                 }
-                strongSelf.sendMessages([.message(text: messageText, attributes: message.attributes, inlineStickers: [:], mediaReference: nil, replyToMessageId: message.id, localGroupingKey: nil, correlationId: nil)])
+                strongSelf.sendMessages([.message(text: messageText, attributes: message.attributes, inlineStickers: [:], mediaReference: nil, replyToMessageId: message.id, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])])
             }
         }, updateForwardOptionsState: { [weak self] f in
             if let strongSelf = self {
