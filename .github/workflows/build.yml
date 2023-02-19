@@ -107,18 +107,18 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: release-ipa
-          path: /Users/telegram/telegram-ios/build/artifacts/Telegram.ipa
+          path: /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa
 
       - name: Upload DSYM
         uses: actions/upload-artifact@v2
         with:
           name: release-dsym
-          path: /Users/telegram/telegram-ios/build/artifacts/Telegram.DSYMs.zip
+          path: /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip
 
       - name: Deploy to App Store Connect
         run: |
           xcrun altool --upload-app --type ios \
-            --file /Users/telegram/telegram-ios/build/artifacts/Telegram.ipa \
+            --file /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa \
             --username "${{ secrets.APPSTORE_CONNECT_USERNAME }}" \
             --password "${{ secrets.APPSTORE_CONNECT_PASSWORD }}" --verbose
 
@@ -128,7 +128,7 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           BOT_API_SERVER: ${{ secrets.BOT_API_SERVER }}
         run: |
-          cd /Users/telegram/telegram-ios
-          mv /Users/telegram/telegram-ios/build/artifacts/Telegram.ipa "/Users/telegram/telegram-ios/build/artifacts/Nanogram-$APP_VERSION-$BUILD_NUMBER.ipa"
-          mv /Users/telegram/telegram-ios/build/artifacts/Telegram.DSYMs.zip "/Users/telegram/telegram-ios/build/artifacts/Nanogram-$APP_VERSION-$BUILD_NUMBER.DSYMs.zip"
+          cd /Users/Shared/telegram-ios
+          mv /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa "/Users/Shared/telegram-ios/build/artifacts/Nanogram-$APP_VERSION-$BUILD_NUMBER.ipa"
+          mv /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip "/Users/Shared/telegram-ios/build/artifacts/Nanogram-$APP_VERSION-$BUILD_NUMBER.DSYMs.zip"
           eval $(python3 buildbox/sendMediaGroup.py)
