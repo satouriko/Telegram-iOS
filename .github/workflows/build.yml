@@ -72,7 +72,7 @@ jobs:
 
           # install certificates
           mkdir -p $HOME/codesigning/certs
-          echo $APPLE_DISTRIBUTION_V2 | base64 -di - > "$HOME/codesigning/certs/dist.p12"
+          echo $APPLE_DISTRIBUTION_V2 | base64 -d -i - > "$HOME/codesigning/certs/dist.p12"
           python3 build-system/Make/ImportCertificates.py --path "$HOME/codesigning/certs"
 
           # build the app
