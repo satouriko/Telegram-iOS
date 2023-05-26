@@ -47,7 +47,7 @@ public enum ChatHistoryListDisplayHeaders {
 
 public enum ChatHistoryListMode: Equatable {
     case bubbles
-    case list(search: Bool, reversed: Bool, displayHeaders: ChatHistoryListDisplayHeaders, hintLinks: Bool, isGlobalSearch: Bool)
+    case list(search: Bool, reversed: Bool, reverseGroups: Bool, displayHeaders: ChatHistoryListDisplayHeaders, hintLinks: Bool, isGlobalSearch: Bool)
 }
 
 enum ChatHistoryViewScrollPosition {
@@ -224,7 +224,7 @@ private func mappedInsertEntries(context: AccountContext, chatLocation: ChatLoca
                 switch mode {
                     case .bubbles:
                         item = ChatMessageItem(presentationData: presentationData, context: context, chatLocation: chatLocation, associatedData: associatedData, controllerInteraction: controllerInteraction, content: .message(message: message, read: read, selection: selection, attributes: attributes, location: location))
-                    case let .list(_, _, displayHeaders, hintLinks, isGlobalSearch):
+                    case let .list(_, _, _, displayHeaders, hintLinks, isGlobalSearch):
                         let displayHeader: Bool
                         switch displayHeaders {
                         case .none:
@@ -269,7 +269,7 @@ private func mappedUpdateEntries(context: AccountContext, chatLocation: ChatLoca
                 switch mode {
                     case .bubbles:
                         item = ChatMessageItem(presentationData: presentationData, context: context, chatLocation: chatLocation, associatedData: associatedData, controllerInteraction: controllerInteraction, content: .message(message: message, read: read, selection: selection, attributes: attributes, location: location))
-                    case let .list(_, _, displayHeaders, hintLinks, isGlobalSearch):
+                    case let .list(_, _, _, displayHeaders, hintLinks, isGlobalSearch):
                         let displayHeader: Bool
                         switch displayHeaders {
                         case .none:
@@ -1216,10 +1216,12 @@ public final class ChatHistoryListNode: ListView, ChatHistoryNode {
                 var updatedScrollPosition = scrollPosition
                 
                 var reverse = false
+                var reverseGroups = false
                 var includeSearchEntry = false
-                if case let .list(search, reverseValue, _, _, _) = mode {
+                if case let .list(search, reverseValue, reverseGroupsValue, _, _, _) = mode {
                     includeSearchEntry = search
                     reverse = reverseValue
+                    reverseGroups = reverseGroupsValue
                 }
                 
                 var isCopyProtectionEnabled: Bool =  data.initialData?.peer?.isCopyProtectionEnabled ?? false
@@ -1241,12 +1243,17 @@ public final class ChatHistoryListNode: ListView, ChatHistoryNode {
                 
                 var translateToLanguage: String?
                 if let translationState, isPremium && translationState.isEnabled {
-                    translateToLanguage = translationState.toLang ?? presentationData.strings.baseLanguageCode
-                    if translateToLanguage == "nb" {
-                        translateToLanguage = "no"
-                    } else if translateToLanguage == "pt-br" {
-                        translateToLanguage = "pt"
+                    var languageCode = translationState.toLang ?? presentationData.strings.baseLanguageCode
+                    let rawSuffix = "-raw"
+                    if languageCode.hasSuffix(rawSuffix) {
+                        languageCode = String(languageCode.dropLast(rawSuffix.count))
                     }
+                    if languageCode == "nb" {
+                        languageCode = "no"
+                    } else if languageCode == "pt-br" {
+                        languageCode = "pt"
+                    }
+                    translateToLanguage = languageCode
                 }
                 
                 let associatedData = extractAssociatedData(chatLocation: chatLocation, view: view, automaticDownloadNetworkType: networkType, animatedEmojiStickers: animatedEmojiStickers, additionalAnimatedEmojiStickers: additionalAnimatedEmojiStickers, subject: subject, currentlyPlayingMessageId: currentlyPlayingMessageIdAndType?.0, isCopyProtectionEnabled: isCopyProtectionEnabled, availableReactions: availableReactions, defaultReaction: defaultReaction, isPremium: isPremium, alwaysDisplayTranscribeButton: alwaysDisplayTranscribeButton, accountPeer: accountPeer, topicAuthorId: topicAuthorId, hasBots: chatHasBots, translateToLanguage: translateToLanguage)
@@ -1260,6 +1267,7 @@ public final class ChatHistoryListNode: ListView, ChatHistoryNode {
                     includeSearchEntry: includeSearchEntry && tagMask != nil,
                     reverse: reverse,
                     groupMessages: mode == .bubbles,
+                    reverseGroupedMessages: reverseGroups,
                     selectedMessages: selectedMessages,
                     presentationData: chatPresentationData,
                     historyAppearsCleared: historyAppearsCleared,
@@ -1353,6 +1361,7 @@ public final class ChatHistoryListNode: ListView, ChatHistoryNode {
                                 
                                 if (isChat && (wasPlaying || currentlyPlayingVideo)) || (!isChat && !wasPlaying && currentlyPlayingVideo) {
                                     var currentIsVisible = true
+                                    var nextIsVisible = false
                                     if let appliedPlayingMessageId = strongSelf.appliedPlayingMessageId {
                                         currentIsVisible = false
                                         strongSelf.forEachVisibleMessageItemNode({ view in
@@ -1361,7 +1370,12 @@ public final class ChatHistoryListNode: ListView, ChatHistoryNode {
                                             }
                                         })
                                     }
-                                    if currentIsVisible && currentlyPlayingVideo {
+                                    strongSelf.forEachVisibleMessageItemNode({ view in
+                                        if view.item?.message.id == currentlyPlayingMessageId.id {
+                                            nextIsVisible = true
+                                        }
+                                    })
+                                    if currentIsVisible && nextIsVisible && currentlyPlayingVideo {
                                         updatedScrollPosition = .index(index: .message(currentlyPlayingMessageId), position: .center(.bottom), directionHint: .Up, animated: true, highlight: true, displayLink: true)
                                         scrollAnimationCurve = .Spring(duration: 0.4)
                                     }
@@ -2726,14 +2740,19 @@ public final class ChatHistoryListNode: ListView, ChatHistoryNode {
                     loadState = .empty(.generic)
                 }
             } else {
-                loadState = .messages
+                if transition.historyView.filteredEntries.count == 1, let entry = transition.historyView.filteredEntries.first, case .ChatInfoEntry = entry {
+                    loadState = .empty(.botInfo)
+                } else {
+                    loadState = .messages
+                }
             }
             if self.loadState != loadState {
                 self.loadState = loadState
                 self.loadStateUpdated?(loadState, transition.options.contains(.AnimateInsertion))
             }
             
-            let historyState: ChatHistoryNodeHistoryState = .loaded(isEmpty: transition.historyView.originalView.entries.isEmpty)
+            let isEmpty = transition.historyView.originalView.entries.isEmpty || loadState == .empty(.botInfo)
+            let historyState: ChatHistoryNodeHistoryState = .loaded(isEmpty: isEmpty)
             if self.currentHistoryState != historyState {
                 self.currentHistoryState = historyState
                 self.historyState.set(historyState)
@@ -2911,7 +2930,11 @@ public final class ChatHistoryListNode: ListView, ChatHistoryNode {
                         if historyView.originalView.isLoadingEarlier && strongSelf.chatLocation.peerId?.namespace != Namespaces.Peer.CloudUser {
                             loadState = .loading(true)
                         } else {
-                            loadState = .messages
+                            if historyView.filteredEntries.count == 1, let entry = historyView.filteredEntries.first, case .ChatInfoEntry = entry {
+                                loadState = .empty(.botInfo)
+                            } else {
+                                loadState = .messages
+                            }
                         }
                     }
                 } else {
@@ -2975,7 +2998,8 @@ public final class ChatHistoryListNode: ListView, ChatHistoryNode {
                     strongSelf._initialData.set(.single(ChatHistoryCombinedInitialData(initialData: transition.initialData, buttonKeyboardMessage: transition.keyboardButtonsMessage, cachedData: transition.cachedData, cachedDataMessages: transition.cachedDataMessages, readStateData: transition.readStateData)))
                 }
                 strongSelf._cachedPeerDataAndMessages.set(.single((transition.cachedData, transition.cachedDataMessages)))
-                let historyState: ChatHistoryNodeHistoryState = .loaded(isEmpty: transition.historyView.originalView.entries.isEmpty)
+                let isEmpty = transition.historyView.originalView.entries.isEmpty || loadState == .empty(.botInfo)
+                let historyState: ChatHistoryNodeHistoryState = .loaded(isEmpty: isEmpty)
                 if strongSelf.currentHistoryState != historyState {
                     strongSelf.currentHistoryState = historyState
                     strongSelf.historyState.set(historyState)
@@ -3460,7 +3484,7 @@ public final class ChatHistoryListNode: ListView, ChatHistoryNode {
                                 switch self.mode {
                                     case .bubbles:
                                         item = ChatMessageItem(presentationData: presentationData, context: self.context, chatLocation: self.chatLocation, associatedData: associatedData, controllerInteraction: self.controllerInteraction, content: .message(message: message, read: read, selection: selection, attributes: attributes, location: location))
-                                    case let .list(_, _, displayHeaders, hintLinks, isGlobalSearch):
+                                    case let .list(_, _, _, displayHeaders, hintLinks, isGlobalSearch):
                                         let displayHeader: Bool
                                         switch displayHeaders {
                                         case .none:
@@ -3516,7 +3540,7 @@ public final class ChatHistoryListNode: ListView, ChatHistoryNode {
                                 switch self.mode {
                                     case .bubbles:
                                         item = ChatMessageItem(presentationData: presentationData, context: self.context, chatLocation: self.chatLocation, associatedData: associatedData, controllerInteraction: self.controllerInteraction, content: .message(message: message, read: read, selection: selection, attributes: attributes, location: location))
-                                    case let .list(_, _, displayHeaders, hintLinks, isGlobalSearch):
+                                    case let .list(_, _, _, displayHeaders, hintLinks, isGlobalSearch):
                                         let displayHeader: Bool
                                         switch displayHeaders {
                                         case .none:
@@ -3765,15 +3789,16 @@ public final class ChatHistoryListNode: ListView, ChatHistoryNode {
             }
         }
 
-        let snapshotView = self.view.snapshotView(afterScreenUpdates: false)!
+        let snapshotView = self.view//.snapshotView(afterScreenUpdates: false)!
+        self.globalIgnoreScrollingEvents = true
 
-        snapshotView.frame = self.view.bounds
-        if let sublayers = self.layer.sublayers {
+        //snapshotView.frame = self.view.bounds
+        /*if let sublayers = self.layer.sublayers {
             for sublayer in sublayers {
                 sublayer.isHidden = true
             }
-        }
-        self.view.addSubview(snapshotView)
+        }*/
+        //self.view.addSubview(snapshotView)
 
         let overscrollView = self.overscrollView
         if let overscrollView = overscrollView {
@@ -3811,6 +3836,10 @@ public final class ChatHistoryListNode: ListView, ChatHistoryNode {
         snapshotParentView.frame = self.view.frame
 
         snapshotState.snapshotView.frame = snapshotParentView.bounds
+        
+        snapshotState.snapshotView.clipsToBounds = true
+        snapshotState.snapshotView.layer.sublayerTransform = CATransform3DMakeRotation(CGFloat.pi, 0.0, 0.0, 1.0)
+        
         self.view.superview?.insertSubview(snapshotParentView, belowSubview: self.view)
 
         snapshotParentView.layer.animatePosition(from: CGPoint(x: 0.0, y: 0.0), to: CGPoint(x: 0.0, y: -self.view.bounds.height - snapshotState.snapshotBottomInset - snapshotTopInset), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, additive: true, completion: { [weak snapshotParentView] _ in

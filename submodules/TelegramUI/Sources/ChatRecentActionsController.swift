@@ -122,6 +122,7 @@ final class ChatRecentActionsController: TelegramBaseController {
         }, beginCall: { _ in
         }, toggleMessageStickerStarred: { _ in
         }, presentController: { _, _ in
+        }, presentControllerInCurrent: { _, _ in
         }, getNavigationController: {
             return nil
         }, presentGlobalOverlayController: { _, _ in
@@ -162,6 +163,7 @@ final class ChatRecentActionsController: TelegramBaseController {
         }, changeTranslationLanguage: { _ in
         }, addDoNotTranslateLanguage: { _ in
         }, hideTranslationPanel: {
+        }, openPremiumGift: {
         }, requestLayout: { _ in
         }, chatController: {
             return nil

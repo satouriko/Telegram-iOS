@@ -7,12 +7,12 @@ import AccountContext
 import ComponentFlow
 
 public enum UndoOverlayContent {
-    case removedChat(text: String)
+    case removedChat(title: String, text: String?)
     case archivedChat(peerId: Int64, title: String, text: String, undo: Bool)
     case hidArchive(title: String, text: String, undo: Bool)
     case revealedArchive(title: String, text: String, undo: Bool)
     case succeed(text: String)
-    case info(title: String?, text: String)
+    case info(title: String?, text: String, timeout: Double?)
     case emoji(name: String, text: String)
     case swipeToReply(title: String, text: String)
     case actionSucceeded(title: String, text: String, cancel: String)
@@ -41,7 +41,7 @@ public enum UndoOverlayContent {
     case inviteRequestSent(title: String, text: String)
     case image(image: UIImage, title: String?, text: String, round: Bool, undoText: String?)
     case notificationSoundAdded(title: String, text: String, action: (() -> Void)?)
-    case universal(animation: String, scale: CGFloat, colors: [String: UIColor], title: String?, text: String, customUndoText: String?)
+    case universal(animation: String, scale: CGFloat, colors: [String: UIColor], title: String?, text: String, customUndoText: String?, timeout: Double?)
     case peers(context: AccountContext, peers: [EnginePeer], title: String?, text: String, customUndoText: String?)
 }
 

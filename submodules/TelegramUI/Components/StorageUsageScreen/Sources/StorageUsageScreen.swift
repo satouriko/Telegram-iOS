@@ -2214,7 +2214,7 @@ final class StorageUsageScreenComponent: Component {
                 
                 let clearingSize = CGSize(width: availableSize.width, height: availableSize.height)
                 clearingNode.frame = CGRect(origin: CGPoint(x: floor((availableSize.width - clearingSize.width) / 2.0), y: floor((availableSize.height - clearingSize.height) / 2.0)), size: clearingSize)
-                clearingNode.updateLayout(size: clearingSize, transition: .immediate)
+                clearingNode.updateLayout(size: clearingSize, bottomInset: environment.safeInsets.bottom, transition: .immediate)
                 
                 if animateIn {
                     clearingNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25, delay: 0.4)
@@ -2258,7 +2258,7 @@ final class StorageUsageScreenComponent: Component {
             }
             
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-            controller.present(UndoOverlayController(presentationData: presentationData, content: .succeed(text: presentationData.strings.ClearCache_Success("\(dataSizeString(size, formatting: DataSizeStringFormatting(presentationData: presentationData)))", stringForDeviceType()).string), elevatedLayout: false, action: { _ in return false }), in: .window(.root))
+            controller.present(UndoOverlayController(presentationData: presentationData, content: .succeed(text: presentationData.strings.ClearCache_Success("\(dataSizeString(size, formatting: DataSizeStringFormatting(presentationData: presentationData)))", stringForDeviceType()).string), elevatedLayout: false, action: { _ in return false }), in: .current)
         }
         
         private func reloadStats(firstTime: Bool, completion: @escaping () -> Void) {
@@ -2793,11 +2793,8 @@ final class StorageUsageScreenComponent: Component {
                         return
                     }
                     let _ = self
-                }, editMedia: { [weak self] messageId, snapshots, transitionCompletion in
-                    guard let self else {
-                        return
-                    }
-                    let _ = self
+                }, editMedia: { _, _, _ in
+                }, updateCanReadHistory: { _ in
                 }),
                 centralItemUpdated: { [weak self] messageId in
                     //let _ = self?.paneContainerNode.requestExpandTabs?()
@@ -2880,7 +2877,12 @@ final class StorageUsageScreenComponent: Component {
                 let totalSize = aggregatedData.selectedSize
                 
                 let _ = (component.context.engine.resources.clearStorage(peerId: component.peer?.id, categories: mappedCategories, includeMessages: aggregatedData.clearIncludeMessages, excludeMessages: aggregatedData.clearExcludeMessages)
-                |> deliverOnMainQueue).start(completed: { [weak self] in
+                |> deliverOnMainQueue).start(next: { [weak self] progress in
+                    guard let self else {
+                        return
+                    }
+                    self.updateClearProgress(progress: progress)
+                }, completed: { [weak self] in
                     guard let self, let _ = self.component else {
                         return
                     }
@@ -2921,39 +2923,45 @@ final class StorageUsageScreenComponent: Component {
                     self.isClearing = true
                     self.state?.updated(transition: .immediate)
                     
+                    var totalSize: Int64 = 0
+                    
+                    let contextStats = aggregatedData.contextStats
+                    
+                    for category in aggregatedData.selectedCategories {
+                        let mappedCategory: StorageUsageStats.CategoryKey
+                        switch category {
+                        case .photos:
+                            mappedCategory = .photos
+                        case .videos:
+                            mappedCategory = .videos
+                        case .files:
+                            mappedCategory = .files
+                        case .music:
+                            mappedCategory = .music
+                        case .other:
+                            continue
+                        case .stickers:
+                            mappedCategory = .stickers
+                        case .avatars:
+                            mappedCategory = .avatars
+                        case .misc:
+                            mappedCategory = .misc
+                        }
+                        
+                        if let value = contextStats.categories[mappedCategory] {
+                            totalSize += value.size
+                        }
+                    }
+                    
                     let _ = (component.context.engine.resources.clearStorage(peerId: component.peer?.id, categories: mappedCategories, includeMessages: [], excludeMessages: [])
-                    |> deliverOnMainQueue).start(completed: { [weak self] in
-                        guard let self, let _ = self.component, let aggregatedData = self.aggregatedData else {
+                    |> deliverOnMainQueue).start(next: { [weak self] progress in
+                        guard let self else {
                             return
                         }
-                        var totalSize: Int64 = 0
-                        
-                        let contextStats = aggregatedData.contextStats
-                        
-                        for category in aggregatedData.selectedCategories {
-                            let mappedCategory: StorageUsageStats.CategoryKey
-                            switch category {
-                            case .photos:
-                                mappedCategory = .photos
-                            case .videos:
-                                mappedCategory = .videos
-                            case .files:
-                                mappedCategory = .files
-                            case .music:
-                                mappedCategory = .music
-                            case .other:
-                                continue
-                            case .stickers:
-                                mappedCategory = .stickers
-                            case .avatars:
-                                mappedCategory = .avatars
-                            case .misc:
-                                mappedCategory = .misc
-                            }
-                            
-                            if let value = contextStats.categories[mappedCategory] {
-                                totalSize += value.size
-                            }
+                        self.updateClearProgress(progress: progress)
+                    }, completed: { [weak self] in
+                        guard let self else {
+                            return
                         }
                         
                         self.reloadStats(firstTime: false, completion: { [weak self] in
@@ -2994,7 +3002,12 @@ final class StorageUsageScreenComponent: Component {
                     }
                     
                     let _ = (component.context.engine.resources.clearStorage(peerIds: aggregatedData.selectionState.selectedPeers, includeMessages: includeMessages, excludeMessages: excludeMessages)
-                    |> deliverOnMainQueue).start(completed: { [weak self] in
+                    |> deliverOnMainQueue).start(next: { [weak self] progress in
+                        guard let self else {
+                            return
+                        }
+                        self.updateClearProgress(progress: progress)
+                    }, completed: { [weak self] in
                         guard let self else {
                             return
                         }
@@ -3009,6 +3022,12 @@ final class StorageUsageScreenComponent: Component {
                         })
                     })
                 }
+            }
+        }
+        
+        private func updateClearProgress(progress: Float) {
+            if let clearingNode = self.clearingNode {
+                clearingNode.setProgress(progress)
             }
         }
         
@@ -3475,7 +3494,7 @@ private class StorageUsageClearProgressOverlayNode: ASDisplayNode {
     
     private let progressDisposable = MetaDisposable()
     
-    private var validLayout: CGSize?
+    private var validLayout: (CGSize, CGFloat)?
     
     init(presentationData: PresentationData) {
         self.presentationData = presentationData
@@ -3507,8 +3526,8 @@ private class StorageUsageClearProgressOverlayNode: ASDisplayNode {
         self.addSubnode(self.animationNode)
         self.addSubnode(self.progressTextNode)
         self.addSubnode(self.descriptionTextNode)
-        //self.addSubnode(self.progressBackgroundNode)
-        //self.addSubnode(self.progressForegroundNode)
+        self.addSubnode(self.progressBackgroundNode)
+        self.addSubnode(self.progressForegroundNode)
     }
     
     deinit {
@@ -3525,16 +3544,16 @@ private class StorageUsageClearProgressOverlayNode: ASDisplayNode {
     }
     
     private var progress: Float = 0.0
-    private func setProgress(_ progress: Float) {
+    func setProgress(_ progress: Float) {
         self.progress = progress
         
-        if let size = self.validLayout {
-            self.updateLayout(size: size, transition: .animated(duration: 0.5, curve: .linear))
+        if let (size, bottomInset) = self.validLayout {
+            self.updateLayout(size: size, bottomInset: bottomInset, transition: .animated(duration: 0.5, curve: .linear))
         }
     }
     
-    func updateLayout(size: CGSize, transition: ContainedViewLayoutTransition) {
-        self.validLayout = size
+    func updateLayout(size: CGSize, bottomInset: CGFloat, transition: ContainedViewLayoutTransition) {
+        self.validLayout = (size, bottomInset)
         
         transition.updateFrame(view: self.blurredView, frame: CGRect(origin: CGPoint(), size: size))
         self.blurredView.update(size: size, transition: transition)
@@ -3550,9 +3569,14 @@ private class StorageUsageClearProgressOverlayNode: ASDisplayNode {
         self.animationNode.frame = animationFrame
         self.animationNode.updateLayout(size: imageSize)
         
-        let progressFrame = CGRect(x: inset, y: size.height - inset - progressHeight, width: size.width - inset * 2.0, height: progressHeight)
+        var bottomInset = bottomInset
+        if bottomInset.isZero {
+            bottomInset = inset
+        }
+        
+        let progressFrame = CGRect(x: inset, y: size.height - bottomInset - progressHeight, width: size.width - inset * 2.0, height: progressHeight)
         self.progressBackgroundNode.frame = progressFrame
-        let progressForegroundFrame = CGRect(x: inset, y: size.height - inset - progressHeight, width: floorToScreenPixels(progressFrame.width * CGFloat(self.progress)), height: progressHeight)
+        let progressForegroundFrame = CGRect(x: inset, y: size.height - bottomInset - progressHeight, width: floorToScreenPixels(progressFrame.width * CGFloat(self.progress)), height: progressHeight)
         if !self.progressForegroundNode.frame.origin.x.isZero {
             transition.updateFrame(node: self.progressForegroundNode, frame: progressForegroundFrame, beginWithCurrentState: true)
         } else {
@@ -3562,8 +3586,10 @@ private class StorageUsageClearProgressOverlayNode: ASDisplayNode {
         self.descriptionTextNode.attributedText = NSAttributedString(string: self.presentationData.strings.ClearCache_KeepOpenedDescription, font: Font.regular(15.0), textColor: self.presentationData.theme.actionSheet.secondaryTextColor)
         let descriptionTextSize = self.descriptionTextNode.updateLayout(CGSize(width: size.width - inset * 3.0, height: size.height))
         var descriptionTextFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - descriptionTextSize.width) / 2.0), y: animationFrame.maxY + 52.0), size: descriptionTextSize)
+        
+        let progressText: String = "\(Int(self.progress * 100.0))%"
        
-        self.progressTextNode.attributedText = NSAttributedString(string: self.presentationData.strings.ClearCache_NoProgress, font: Font.with(size: 17.0, design: .regular, weight: .semibold, traits: [.monospacedNumbers]), textColor: self.presentationData.theme.actionSheet.primaryTextColor)
+        self.progressTextNode.attributedText = NSAttributedString(string: progressText, font: Font.with(size: 17.0, design: .regular, weight: .semibold, traits: [.monospacedNumbers]), textColor: self.presentationData.theme.actionSheet.primaryTextColor)
         let progressTextSize = self.progressTextNode.updateLayout(size)
         var progressTextFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - progressTextSize.width) / 2.0), y: descriptionTextFrame.minY - spacing - progressTextSize.height), size: progressTextSize)
         

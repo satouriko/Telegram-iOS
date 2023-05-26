@@ -1926,6 +1926,20 @@ static const NSUInteger MTMaxUnacknowledgedMessageCount = 64;
     }];
 }
 
+- (void)transportActivityUpdated:(MTTransport * _Nonnull)transport {
+    [[MTProto managerQueue] dispatchOnQueue:^
+    {
+        if (transport != _transport)
+            return;
+        
+        for (id<MTMessageService> messageService in _messageServices)
+        {
+            if ([messageService respondsToSelector:@selector(mtProtoTransportActivityUpdated:)])
+                [messageService mtProtoTransportActivityUpdated:self];
+        }
+    }];
+}
+
 - (void)transportTransactionsSucceeded:(NSArray *)transactionIds
 {
     [[MTProto managerQueue] dispatchOnQueue:^
@@ -1952,7 +1966,7 @@ static NSString *dumpHexString(NSData *data, int maxLength) {
     return hexString;
 }
 
-- (void)transportHasIncomingData:(MTTransport *)transport scheme:(MTTransportScheme *)scheme data:(NSData *)data transactionId:(id)transactionId requestTransactionAfterProcessing:(bool)requestTransactionAfterProcessing decodeResult:(void (^)(id transactionId, bool success))decodeResult
+- (void)transportHasIncomingData:(MTTransport *)transport scheme:(MTTransportScheme *)scheme networkType:(int32_t)networkType data:(NSData *)data transactionId:(id)transactionId requestTransactionAfterProcessing:(bool)requestTransactionAfterProcessing decodeResult:(void (^)(id transactionId, bool success))decodeResult
 {
     /*__block bool simulateError = false;
     static dispatch_once_t onceToken;
@@ -2083,7 +2097,7 @@ static NSString *dumpHexString(NSData *data, int maxLength) {
                 
                 for (MTIncomingMessage *incomingMessage in parsedMessages)
                 {
-                    [self _processIncomingMessage:incomingMessage totalSize:(int)data.length withTransactionId:transactionId address:scheme.address authInfoSelector:authInfoSelector];
+                    [self _processIncomingMessage:incomingMessage totalSize:(int)data.length withTransactionId:transactionId address:scheme.address authInfoSelector:authInfoSelector networkType:networkType];
                 }
                 
                 if (requestTransactionAfterProcessing)
@@ -2408,7 +2422,7 @@ static bool isDataEqualToDataConstTime(NSData *data1, NSData *data2) {
     return messages;
 }
 
-- (void)_processIncomingMessage:(MTIncomingMessage *)incomingMessage totalSize:(int)totalSize withTransactionId:(id)transactionId address:(MTDatacenterAddress *)address authInfoSelector:(MTDatacenterAuthInfoSelector)authInfoSelector
+- (void)_processIncomingMessage:(MTIncomingMessage *)incomingMessage totalSize:(int)totalSize withTransactionId:(id)transactionId address:(MTDatacenterAddress *)address authInfoSelector:(MTDatacenterAuthInfoSelector)authInfoSelector networkType:(int32_t)networkType
 {
     if ([_sessionInfo messageProcessed:incomingMessage.messageId])
     {
@@ -2591,8 +2605,8 @@ static bool isDataEqualToDataConstTime(NSData *data1, NSData *data2) {
         {
             id<MTMessageService> messageService = _messageServices[(NSUInteger)i];
             
-            if ([messageService respondsToSelector:@selector(mtProto:receivedMessage:authInfoSelector:)])
-                [messageService mtProto:self receivedMessage:incomingMessage authInfoSelector:authInfoSelector];
+            if ([messageService respondsToSelector:@selector(mtProto:receivedMessage:authInfoSelector:networkType:)])
+                [messageService mtProto:self receivedMessage:incomingMessage authInfoSelector:authInfoSelector networkType:networkType];
         }
         
         if (_timeFixContext != nil && [incomingMessage.body isKindOfClass:[MTPongMessage class]] && ((MTPongMessage *)incomingMessage.body).messageId == _timeFixContext.messageId)

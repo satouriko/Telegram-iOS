@@ -30,6 +30,7 @@ import StickerPackPreviewUI
 import ChatControllerInteraction
 import ChatPresentationInterfaceState
 import StorageUsageScreen
+import DebugSettingsUI
 
 private final class AccountUserInterfaceInUseContext {
     let subscribers = Bag<(Bool) -> Void>()
@@ -146,11 +147,13 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     public let currentInAppNotificationSettings: Atomic<InAppNotificationSettings>
     private var inAppNotificationSettingsDisposable: Disposable?
     
-    public let currentAutomaticMediaDownloadSettings: Atomic<MediaAutoDownloadSettings>
+    public var currentAutomaticMediaDownloadSettings: MediaAutoDownloadSettings
     private let _automaticMediaDownloadSettings = Promise<MediaAutoDownloadSettings>()
     public var automaticMediaDownloadSettings: Signal<MediaAutoDownloadSettings, NoError> {
         return self._automaticMediaDownloadSettings.get()
     }
+    
+    public private(set) var energyUsageSettings: EnergyUsageSettings
     
     public let currentAutodownloadSettings: Atomic<AutodownloadSettings>
     private let _autodownloadSettings = Promise<AutodownloadSettings>()
@@ -158,6 +161,12 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     
     public let currentMediaInputSettings: Atomic<MediaInputSettings>
     private var mediaInputSettingsDisposable: Disposable?
+    
+    public let currentMediaDisplaySettings: Atomic<MediaDisplaySettings>
+    private var mediaDisplaySettingsDisposable: Disposable?
+    
+    public let currentStickerSettings: Atomic<StickerSettings>
+    private var stickerSettingsDisposable: Disposable?
     
     private let automaticMediaDownloadSettingsDisposable = MetaDisposable()
     
@@ -178,6 +187,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     private weak var appDelegate: AppDelegate?
     
     private var invalidatedApsToken: Data?
+    
+    private let energyUsageAutomaticDisposable = MetaDisposable()
     
     init(mainWindow: Window1?, sharedContainerPath: String, basePath: String, encryptionParameters: ValueBoxEncryptionParameters, accountManager: AccountManager<TelegramAccountManagerTypes>, appLockContext: AppLockContext, applicationBindings: TelegramApplicationBindings, initialPresentationDataAndSettings: InitialPresentationDataAndSettings, networkArguments: NetworkInitializationArguments, hasInAppPurchases: Bool, rootPath: String, legacyBasePath: String?, apsNotificationToken: Signal<Data?, NoError>, voipNotificationToken: Signal<Data?, NoError>, firebaseSecretStream: Signal<[String: String], NoError>, setNotificationCall: @escaping (PresentationCall?) -> Void, navigateToChat: @escaping (AccountRecordId, PeerId, MessageId?) -> Void, displayUpgradeProgress: @escaping (Float?) -> Void = { _ in }, appDelegate: AppDelegate?) {
         assert(Queue.mainQueue().isCurrent())
@@ -230,10 +241,18 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         }
         
         self._currentPresentationData = Atomic(value: initialPresentationDataAndSettings.presentationData)
-        self.currentAutomaticMediaDownloadSettings = Atomic(value: initialPresentationDataAndSettings.automaticMediaDownloadSettings)
+        self.currentAutomaticMediaDownloadSettings = initialPresentationDataAndSettings.automaticMediaDownloadSettings
         self.currentAutodownloadSettings = Atomic(value: initialPresentationDataAndSettings.autodownloadSettings)
         self.currentMediaInputSettings = Atomic(value: initialPresentationDataAndSettings.mediaInputSettings)
+        self.currentMediaDisplaySettings = Atomic(value: initialPresentationDataAndSettings.mediaDisplaySettings)
+        self.currentStickerSettings = Atomic(value: initialPresentationDataAndSettings.stickerSettings)
         self.currentInAppNotificationSettings = Atomic(value: initialPresentationDataAndSettings.inAppNotificationSettings)
+        
+        if automaticEnergyUsageShouldBeOnNow(settings: self.currentAutomaticMediaDownloadSettings) {
+            self.energyUsageSettings = EnergyUsageSettings.powerSavingDefault
+        } else {
+            self.energyUsageSettings = self.currentAutomaticMediaDownloadSettings.energyUsageSettings
+        }
         
         let presentationData: Signal<PresentationData, NoError> = .single(initialPresentationDataAndSettings.presentationData)
         |> then(
@@ -344,6 +363,24 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             }
         })
         
+        self.mediaDisplaySettingsDisposable = (self.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.mediaDisplaySettings])
+        |> deliverOnMainQueue).start(next: { [weak self] sharedData in
+            if let strongSelf = self {
+                if let settings = sharedData.entries[ApplicationSpecificSharedDataKeys.mediaDisplaySettings]?.get(MediaDisplaySettings.self) {
+                    let _ = strongSelf.currentMediaDisplaySettings.swap(settings)
+                }
+            }
+        })
+        
+        self.stickerSettingsDisposable = (self.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.stickerSettings])
+        |> deliverOnMainQueue).start(next: { [weak self] sharedData in
+            if let strongSelf = self {
+                if let settings = sharedData.entries[ApplicationSpecificSharedDataKeys.stickerSettings]?.get(StickerSettings.self) {
+                    let _ = strongSelf.currentStickerSettings.swap(settings)
+                }
+            }
+        })
+        
         let immediateExperimentalUISettingsValue = self.immediateExperimentalUISettingsValue
         let _ = immediateExperimentalUISettingsValue.swap(initialPresentationDataAndSettings.experimentalUISettings)
         self.experimentalUISettingsDisposable = (self.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.experimentalUISettings])
@@ -363,7 +400,23 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         
         self.automaticMediaDownloadSettingsDisposable.set(self._automaticMediaDownloadSettings.get().start(next: { [weak self] next in
             if let strongSelf = self {
-                let _ = strongSelf.currentAutomaticMediaDownloadSettings.swap(next)
+                strongSelf.currentAutomaticMediaDownloadSettings = next
+                
+                if automaticEnergyUsageShouldBeOnNow(settings: next) {
+                    strongSelf.energyUsageSettings = EnergyUsageSettings.powerSavingDefault
+                } else {
+                    strongSelf.energyUsageSettings = next.energyUsageSettings
+                }
+                strongSelf.energyUsageAutomaticDisposable.set((automaticEnergyUsageShouldBeOn(settings: next)
+                |> deliverOnMainQueue).start(next: { value in
+                    if let strongSelf = self {
+                        if value {
+                            strongSelf.energyUsageSettings = EnergyUsageSettings.powerSavingDefault
+                        } else {
+                            strongSelf.energyUsageSettings = next.energyUsageSettings
+                        }
+                    }
+                }))
             }
         }))
         
@@ -598,6 +651,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 if hadUpdates {
                     self.activeAccountsValue!.accounts.sort(by: { $0.2 < $1.2 })
                     self.activeAccountsPromise.set(.single(self.activeAccountsValue!))
+                    
+                    self.performAccountSettingsImportIfNecessary()
                 }
                 
                 if self.activeAccountsValue!.primary == nil && self.activeAccountsValue!.currentAuth == nil {
@@ -853,9 +908,41 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         self.currentAutodownloadSettingsDisposable.dispose()
         self.inAppNotificationSettingsDisposable?.dispose()
         self.mediaInputSettingsDisposable?.dispose()
+        self.mediaDisplaySettingsDisposable?.dispose()
         self.callDisposable?.dispose()
         self.groupCallDisposable?.dispose()
         self.callStateDisposable?.dispose()
+    }
+    
+    private var didPerformAccountSettingsImport = false
+    private func performAccountSettingsImportIfNecessary() {
+        if self.didPerformAccountSettingsImport {
+            return
+        }
+        if let _ = UserDefaults.standard.value(forKey: "didPerformAccountSettingsImport") {
+            self.didPerformAccountSettingsImport = true
+            return
+        }
+        UserDefaults.standard.set(true as NSNumber, forKey: "didPerformAccountSettingsImport")
+        UserDefaults.standard.synchronize()
+        
+        if let primary = self.activeAccountsValue?.primary {
+            let _ = (primary.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: primary.account.peerId))
+            |> deliverOnMainQueue).start(next: { [weak self] peer in
+                guard let self, case let .user(user) = peer else {
+                    return
+                }
+                if user.isPremium {
+                    let _ = updateMediaDownloadSettingsInteractively(accountManager: self.accountManager, { settings in
+                        var settings = settings
+                        settings.energyUsageSettings.loopEmoji = true
+                        return settings
+                    }).start()
+                }
+            })
+        }
+        
+        self.didPerformAccountSettingsImport = true
     }
     
     private func updateAccountBackupData(account: Account) -> Signal<Never, NoError> {
@@ -1203,6 +1290,11 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return controller
     }
     
+    public func makeDebugSettingsController(context: AccountContext?) -> ViewController? {
+        let controller = debugController(sharedContext: self, context: context)
+        return controller
+    }
+    
     public func openExternalUrl(context: AccountContext, urlContext: OpenURLContext, url: String, forceExternal: Bool, presentationData: PresentationData, navigationController: NavigationController?, dismissInput: @escaping () -> Void) {
         openExternalUrlImpl(context: context, urlContext: urlContext, url: url, forceExternal: forceExternal, presentationData: presentationData, navigationController: navigationController, dismissInput: dismissInput)
     }
@@ -1235,8 +1327,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         guard let navigationController = self.mainWindow?.viewController as? NavigationController else {
             return
         }
-        
-        let controller = storageUsageController(context: context, isModal: true)
+        let controller = StorageUsageScreen(context: context, makeStorageUsageExceptionsScreen: { category in
+            return storageUsageExceptionsScreen(context: context, category: category)
+        })
         navigationController.pushViewController(controller)
     }
     
@@ -1362,9 +1455,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 tapMessage?(message)
         }, clickThroughMessage: {
             clickThroughMessage?()
-        }, toggleMessagesSelection: { _, _ in }, sendCurrentMessage: { _ in }, sendMessage: { _ in }, sendSticker: { _, _, _, _, _, _, _, _, _ in return false }, sendEmoji: { _, _, _ in }, sendGif: { _, _, _, _, _ in return false }, sendBotContextResultAsGif: { _, _, _, _, _ in
+        }, toggleMessagesSelection: { _, _ in }, sendCurrentMessage: { _ in }, sendMessage: { _ in }, sendSticker: { _, _, _, _, _, _, _, _, _ in return false }, sendEmoji: { _, _, _ in }, sendGif: { _, _, _, _, _ in return false }, sendBotContextResultAsGif: { _, _, _, _, _, _ in
             return false
-        }, requestMessageActionCallback: { _, _, _, _ in }, requestMessageActionUrlAuth: { _, _ in }, activateSwitchInline: { _, _ in }, openUrl: { _, _, _, _ in }, shareCurrentLocation: {}, shareAccountContact: {}, sendBotCommand: { _, _ in }, openInstantPage: { _, _ in  }, openWallpaper: { _ in  }, openTheme: { _ in  }, openHashtag: { _, _ in }, updateInputState: { _ in }, updateInputMode: { _ in }, openMessageShareMenu: { _ in
+        }, requestMessageActionCallback: { _, _, _, _ in }, requestMessageActionUrlAuth: { _, _ in }, activateSwitchInline: { _, _, _ in }, openUrl: { _, _, _, _ in }, shareCurrentLocation: {}, shareAccountContact: {}, sendBotCommand: { _, _ in }, openInstantPage: { _, _ in  }, openWallpaper: { _ in  }, openTheme: { _ in  }, openHashtag: { _, _ in }, updateInputState: { _ in }, updateInputMode: { _ in }, openMessageShareMenu: { _ in
         }, presentController: { _, _ in
         }, presentControllerInCurrent: { _, _ in
         }, navigationController: {
@@ -1421,7 +1514,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         }, dismissTextInput: {
         }, scrollToMessageId: { _ in
         }, automaticMediaDownloadSettings: MediaAutoDownloadSettings.defaultSettings,
-        pollActionState: ChatInterfacePollActionState(), stickerSettings: ChatInterfaceStickerSettings(loopAnimatedStickers: false), presentationContext: ChatPresentationContext(context: context, backgroundNode: backgroundNode as? WallpaperBackgroundNode))
+        pollActionState: ChatInterfacePollActionState(), stickerSettings: ChatInterfaceStickerSettings(), presentationContext: ChatPresentationContext(context: context, backgroundNode: backgroundNode as? WallpaperBackgroundNode))
         
         var entryAttributes = ChatMessageEntryAttributes()
         entryAttributes.isCentered = isCentered
@@ -1582,6 +1675,29 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             mappedSubject = .translation
         }
         return PremiumDemoScreen(context: context, subject: mappedSubject, action: action)
+    }
+    
+    public func makePremiumLimitController(context: AccountContext, subject: PremiumLimitSubject, count: Int32, action: @escaping () -> Void) -> ViewController {
+        let mappedSubject: PremiumLimitScreen.Subject
+        switch subject {
+        case .folders:
+            mappedSubject = .folders
+        case .chatsPerFolder:
+            mappedSubject =  .chatsPerFolder
+        case .pins:
+            mappedSubject =  .pins
+        case .files:
+            mappedSubject =  .files
+        case .accounts:
+            mappedSubject =  .accounts
+        case .linksPerSharedFolder:
+            mappedSubject = .linksPerSharedFolder
+        case .membershipInSharedFolders:
+            mappedSubject = .membershipInSharedFolders
+        case .channels:
+            mappedSubject = .channels
+        }
+        return PremiumLimitScreen(context: context, subject: mappedSubject, count: count, action: action)
     }
     
     public func makeStickerPackScreen(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, mainStickerPack: StickerPackReference, stickerPacks: [StickerPackReference], loadedStickerPacks: [LoadedStickerPack], parentNavigationController: NavigationController?, sendSticker: ((FileMediaReference, UIView, CGRect) -> Bool)?) -> ViewController {

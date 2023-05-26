@@ -357,6 +357,9 @@ swift_library(
         "//submodules/MediaPasteboardUI:MediaPasteboardUI",
         "//submodules/DrawingUI:DrawingUI",
         "//submodules/FeaturedStickersScreen:FeaturedStickersScreen",
+        "//submodules/TelegramUI/Components/SendInviteLinkScreen",
+        "//submodules/TelegramUI/Components/ChatFolderLinkPreviewScreen",
+        "//submodules/TelegramUI/Components/SliderContextItem:SliderContextItem",
         "//Nanogram/NNStrings:NNStrings",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_armv7": [],

@@ -183,7 +183,7 @@ private final class AttachmentFileContext: AttachmentMediaPickerContext {
     func setCaption(_ caption: NSAttributedString) {
     }
     
-    func send(silently: Bool, mode: AttachmentMediaPickerSendMode) {
+    func send(mode: AttachmentMediaPickerSendMode, attachmentMode: AttachmentMediaPickerAttachmentMode) {
     }
     
     func schedule() {
@@ -273,10 +273,9 @@ func attachmentFileController(context: AccountContext, updatedPresentationData: 
     )
     |> map { presentationData, recentDocuments, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
         var presentationData = presentationData
-        if presentationData.theme.list.blocksBackgroundColor.rgb == presentationData.theme.list.plainBackgroundColor.rgb {
-            let updatedTheme = presentationData.theme.withModalBlocksBackground()
-            presentationData = presentationData.withUpdated(theme: updatedTheme)
-        }
+        
+        let updatedTheme = presentationData.theme.withModalBlocksBackground()
+        presentationData = presentationData.withUpdated(theme: updatedTheme)
         
         let previousRecentDocuments = previousRecentDocuments.swap(recentDocuments)
         let crossfade = previousRecentDocuments == nil && recentDocuments != nil

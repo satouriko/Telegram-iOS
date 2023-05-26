@@ -15,6 +15,7 @@ import PersistentStringHash
 import CallKit
 import AppLockState
 import NotificationsPresentationData
+import RangeSet
 
 private let queue = Queue()
 
@@ -680,7 +681,7 @@ private final class NotificationServiceHandler {
         Logger.shared.logToConsole = loggingSettings.logToConsole
         Logger.shared.redactSensitiveData = loggingSettings.redactSensitiveData
 
-        let networkArguments = NetworkInitializationArguments(apiId: apiId, apiHash: apiHash, languagesCategory: languagesCategory, appVersion: appVersion, voipMaxLayer: 0, voipVersions: [], appData: .single(buildConfig.bundleData(withAppToken: nil, signatureDict: nil)), autolockDeadine: .single(nil), encryptionProvider: OpenSSLEncryptionProvider(), resolvedDeviceName: nil)
+        let networkArguments = NetworkInitializationArguments(apiId: apiId, apiHash: apiHash, languagesCategory: languagesCategory, appVersion: appVersion, voipMaxLayer: 0, voipVersions: [], appData: .single(buildConfig.bundleData(withAppToken: nil, signatureDict: nil)), autolockDeadine: .single(nil), encryptionProvider: OpenSSLEncryptionProvider(), deviceModelName: nil, useBetaFeatures: !buildConfig.isAppStoreBuild, isICloudEnabled: false)
         
         let isLockedMessage: String?
         if let data = try? Data(contentsOf: URL(fileURLWithPath: appLockStatePath(rootPath: rootPath))), let state = try? JSONDecoder().decode(LockState.self, from: data), isAppLocked(state: state) {
@@ -718,7 +719,12 @@ private final class NotificationServiceHandler {
 
         let _ = (combineLatest(queue: self.queue,
             self.accountManager.accountRecords(),
-            self.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.inAppNotificationSettings, ApplicationSpecificSharedDataKeys.voiceCallSettings, SharedDataKeys.loggingSettings])
+            self.accountManager.sharedData(keys: [
+                ApplicationSpecificSharedDataKeys.inAppNotificationSettings,
+                ApplicationSpecificSharedDataKeys.voiceCallSettings,
+                ApplicationSpecificSharedDataKeys.automaticMediaDownloadSettings,
+                SharedDataKeys.loggingSettings
+            ])
         )
         |> take(1)
         |> deliverOn(self.queue)).start(next: { [weak self] records, sharedData in
@@ -728,6 +734,14 @@ private final class NotificationServiceHandler {
             let loggingSettings = sharedData.entries[SharedDataKeys.loggingSettings]?.get(LoggingSettings.self) ?? LoggingSettings.defaultSettings
             Logger.shared.logToFile = loggingSettings.logToFile
             Logger.shared.logToConsole = loggingSettings.logToConsole
+            
+            var automaticMediaDownloadSettings: MediaAutoDownloadSettings
+            if let value = sharedData.entries[ApplicationSpecificSharedDataKeys.automaticMediaDownloadSettings]?.get(MediaAutoDownloadSettings.self) {
+                automaticMediaDownloadSettings = value
+            } else {
+                automaticMediaDownloadSettings = MediaAutoDownloadSettings.defaultSettings
+            }
+            let shouldSynchronizeState = true//automaticMediaDownloadSettings.energyUsageSettings.synchronizeInBackground
 
             if let keyId = notificationPayloadKeyId(data: payloadData) {
                 outer: for listRecord in records.records {
@@ -1041,7 +1055,12 @@ private final class NotificationServiceHandler {
                             }
 
                             if let category = aps["category"] as? String {
-                                content.category = category
+                                if peerId.isGroupOrChannel && ["r", "m"].contains(category) {
+                                    content.category = "g\(category)"
+                                } else {
+                                    content.category = category
+                                }
+
 
                                 let _ = messageId
 
@@ -1169,7 +1188,7 @@ private final class NotificationServiceHandler {
                                                     fetchMediaSignal = Signal { subscriber in
                                                         final class DataValue {
                                                             var data = Data()
-                                                            var totalSize: Int64?
+                                                            var missingRanges = RangeSet<Int64>(0 ..< Int64.max)
                                                         }
                                                         
                                                         let collectedData = Atomic<DataValue>(value: DataValue())
@@ -1199,12 +1218,22 @@ private final class NotificationServiceHandler {
                                                             useMainConnection: true
                                                         ).start(next: { result in
                                                             switch result {
-                                                            case let .dataPart(_, data, _, _):
+                                                            case let .dataPart(offset, data, dataRange, _):
                                                                 var isCompleted = false
                                                                 let _ = collectedData.modify { current in
                                                                     let current = current
-                                                                    current.data.append(data)
-                                                                    if let totalSize = current.totalSize, Int64(current.data.count) >= totalSize {
+                                                                    
+                                                                    let fillRange = Int(offset) ..< (Int(offset) + data.count)
+                                                                    if current.data.count < fillRange.upperBound {
+                                                                        current.data.count = fillRange.upperBound
+                                                                    }
+                                                                    current.data.withUnsafeMutableBytes { buffer -> Void in
+                                                                        let bytes = buffer.baseAddress!.assumingMemoryBound(to: UInt8.self)
+                                                                        data.copyBytes(to: bytes.advanced(by: Int(offset)), from: Int(dataRange.lowerBound) ..< Int(dataRange.upperBound))
+                                                                    }
+                                                                    current.missingRanges.remove(contentsOf: Int64(fillRange.lowerBound) ..< Int64(fillRange.upperBound))
+                                                                    
+                                                                    if current.missingRanges.isEmpty {
                                                                         isCompleted = true
                                                                     }
                                                                     return current
@@ -1217,8 +1246,8 @@ private final class NotificationServiceHandler {
                                                                 var isCompleted = false
                                                                 let _ = collectedData.modify { current in
                                                                     let current = current
-                                                                    current.totalSize = size
-                                                                    if Int64(current.data.count) >= size {
+                                                                    current.missingRanges.remove(contentsOf: size ..< Int64.max)
+                                                                    if current.missingRanges.isEmpty {
                                                                         isCompleted = true
                                                                     }
                                                                     return current
@@ -1406,34 +1435,38 @@ private final class NotificationServiceHandler {
 
                                 let pollSignal: Signal<Never, NoError>
 
-                                stateManager.network.shouldKeepConnection.set(.single(true))
-                                if peerId.namespace == Namespaces.Peer.CloudChannel {
-                                    Logger.shared.log("NotificationService \(episode)", "Will poll channel \(peerId)")
-
-                                    pollSignal = standalonePollChannelOnce(
-                                        accountPeerId: stateManager.accountPeerId,
-                                        postbox: stateManager.postbox,
-                                        network: stateManager.network,
-                                        peerId: peerId,
-                                        stateManager: stateManager
-                                    )
+                                if !shouldSynchronizeState {
+                                    pollSignal = .complete()
                                 } else {
-                                    Logger.shared.log("NotificationService \(episode)", "Will perform non-specific getDifference")
-                                    enum ControlError {
-                                        case restart
-                                    }
-                                    let signal = stateManager.standalonePollDifference()
-                                    |> castError(ControlError.self)
-                                    |> mapToSignal { result -> Signal<Never, ControlError> in
-                                        if result {
-                                            return .complete()
-                                        } else {
-                                            return .fail(.restart)
+                                    stateManager.network.shouldKeepConnection.set(.single(true))
+                                    if peerId.namespace == Namespaces.Peer.CloudChannel {
+                                        Logger.shared.log("NotificationService \(episode)", "Will poll channel \(peerId)")
+                                        
+                                        pollSignal = standalonePollChannelOnce(
+                                            accountPeerId: stateManager.accountPeerId,
+                                            postbox: stateManager.postbox,
+                                            network: stateManager.network,
+                                            peerId: peerId,
+                                            stateManager: stateManager
+                                        )
+                                    } else {
+                                        Logger.shared.log("NotificationService \(episode)", "Will perform non-specific getDifference")
+                                        enum ControlError {
+                                            case restart
                                         }
+                                        let signal = stateManager.standalonePollDifference()
+                                        |> castError(ControlError.self)
+                                        |> mapToSignal { result -> Signal<Never, ControlError> in
+                                            if result {
+                                                return .complete()
+                                            } else {
+                                                return .fail(.restart)
+                                            }
+                                        }
+                                        |> restartIfError
+                                        
+                                        pollSignal = signal
                                     }
-                                    |> restartIfError
-
-                                    pollSignal = signal
                                 }
 
                                 let pollWithUpdatedContent: Signal<NotificationContent, NoError>

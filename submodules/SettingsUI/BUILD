@@ -109,6 +109,10 @@ swift_library(
         "//submodules/TelegramUI/Components/ChatTimerScreen",
         "//submodules/AnimatedAvatarSetNode",
         "//submodules/TelegramUI/Components/StorageUsageScreen",
+        "//submodules/FeaturedStickersScreen:FeaturedStickersScreen",
+        "//submodules/MediaPickerUI:MediaPickerUI",
+        "//submodules/ImageBlur:ImageBlur",
+        "//submodules/AttachmentUI:AttachmentUI",
     ],
     visibility = [
         "//visibility:public",
