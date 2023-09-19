@@ -31,6 +31,15 @@ import ChatControllerInteraction
 import ChatPresentationInterfaceState
 import StorageUsageScreen
 import DebugSettingsUI
+import MediaPickerUI
+import Photos
+import TextFormat
+import ChatTextLinkEditUI
+import AttachmentTextInputPanelNode
+import ChatEntityKeyboardInputNode
+import HashtagSearchUI
+import PeerInfoStoryGridScreen
+import LegacyMessageInputPanel
 
 private final class AccountUserInterfaceInUseContext {
     let subscribers = Bag<(Bool) -> Void>()
@@ -129,6 +138,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return self.immediateHasOngoingCallValue.with { $0 }
     }
     private var hasOngoingCallDisposable: Disposable?
+    
+    public let enablePreloads = Promise<Bool>()
+    public let hasPreloadBlockingContent = Promise<Bool>(false)
     
     private var accountUserInterfaceInUseContexts: [AccountRecordId: AccountUserInterfaceInUseContext] = [:]
     
@@ -869,6 +881,20 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             let _ = immediateHasOngoingCallValue.swap(value)
         })
         
+        self.enablePreloads.set(combineLatest(
+            self.hasOngoingCall.get(),
+            self.hasPreloadBlockingContent.get()
+        )
+        |> map { hasOngoingCall, hasPreloadBlockingContent -> Bool in
+            if hasOngoingCall {
+                return false
+            }
+            if hasPreloadBlockingContent {
+                return false
+            }
+            return true
+        })
+        
         let _ = managedCleanupAccounts(networkArguments: networkArguments, accountManager: self.accountManager, rootPath: rootPath, auxiliaryMethods: makeTelegramAccountAuxiliaryMethods(appDelegate: appDelegate), encryptionParameters: encryptionParameters).start()
         
         self.updateNotificationTokensRegistration()
@@ -1345,7 +1371,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         
         if !found {
             let controllerParams = LocationViewParams(sendLiveLocation: { location in
-                //let outMessage: EnqueueMessage = .message(text: "", attributes: [], mediaReference: .standalone(media: location), replyToMessageId: nil, localGroupingKey: nil, correlationId: nil)
+                //let outMessage: EnqueueMessage = .message(text: "", attributes: [], mediaReference: .standalone(media: location), replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil)
 //                params.enqueueMessage(outMessage)
             }, stopLiveLocation: { messageId in
                 if let messageId = messageId {
@@ -1360,7 +1386,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 guard let message = message else {
                     return
                 }
-                let controller = LocationViewController(context: context, subject: message._asMessage(), params: controllerParams)
+                let controller = LocationViewController(context: context, subject: message, params: controllerParams)
                 controller.navigationPresentation = .modal
                 navigationController.pushViewController(controller)
             })
@@ -1513,6 +1539,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         }, cancelInteractiveKeyboardGestures: {
         }, dismissTextInput: {
         }, scrollToMessageId: { _ in
+        }, navigateToStory: { _, _ in
         }, automaticMediaDownloadSettings: MediaAutoDownloadSettings.defaultSettings,
         pollActionState: ChatInterfacePollActionState(), stickerSettings: ChatInterfaceStickerSettings(), presentationContext: ChatPresentationContext(context: context, backgroundNode: backgroundNode as? WallpaperBackgroundNode))
         
@@ -1593,7 +1620,37 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         })
     }
     
-    public func makePremiumIntroController(context: AccountContext, source: PremiumIntroSource) -> ViewController {
+    public func makeAttachmentFileController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, bannedSendMedia: (Int32, Bool)?, presentGallery: @escaping () -> Void, presentFiles: @escaping () -> Void, send: @escaping (AnyMediaReference) -> Void) -> AttachmentFileController {
+        return makeAttachmentFileControllerImpl(context: context, updatedPresentationData: updatedPresentationData, bannedSendMedia: bannedSendMedia, presentGallery: presentGallery, presentFiles: presentFiles, send: send)
+    }
+    
+    public func makeGalleryCaptionPanelView(context: AccountContext, chatLocation: ChatLocation, isScheduledMessages: Bool, customEmojiAvailable: Bool, present: @escaping (ViewController) -> Void, presentInGlobalOverlay: @escaping (ViewController) -> Void) -> NSObject? {
+        let inputPanelNode = LegacyMessageInputPanelNode(
+            context: context,
+            chatLocation: chatLocation,
+            isScheduledMessages: isScheduledMessages,
+            present: present,
+            presentInGlobalOverlay: presentInGlobalOverlay,
+            makeEntityInputView: {
+                return EntityInputView(context: context, isDark: true, areCustomEmojiEnabled: customEmojiAvailable)
+            }
+        )
+        return inputPanelNode
+    }
+    
+    public func makeHashtagSearchController(context: AccountContext, peer: EnginePeer?, query: String, all: Bool) -> ViewController {
+        return HashtagSearchController(context: context, peer: peer, query: query, all: all)
+    }
+    
+    public func makeMyStoriesController(context: AccountContext, isArchive: Bool) -> ViewController {
+        return PeerInfoStoryGridScreen(context: context, peerId: context.account.peerId, scope: isArchive ? .archive : .saved)
+    }
+    
+    public func makeArchiveSettingsController(context: AccountContext) -> ViewController {
+        return archiveSettingsController(context: context)
+    }
+    
+    public func makePremiumIntroController(context: AccountContext, source: PremiumIntroSource, forceDark: Bool, dismissed: (() -> Void)?) -> ViewController {
         let mappedSource: PremiumSource
         switch source {
         case .settings:
@@ -1638,8 +1695,22 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             mappedSource = .fasterDownload
         case .translation:
             mappedSource = .translation
+        case .stories:
+            mappedSource = .stories
+        case .storiesDownload:
+            mappedSource = .storiesDownload
+        case .storiesStealthMode:
+            mappedSource = .storiesStealthMode
+        case .storiesPermanentViews:
+            mappedSource = .storiesPermanentViews
+        case .storiesFormatting:
+            mappedSource = .storiesFormatting
+        case .storiesExpirationDurations:
+            mappedSource = .storiesExpirationDurations
         }
-        return PremiumIntroScreen(context: context, source: mappedSource)
+        let controller = PremiumIntroScreen(context: context, source: mappedSource, forceDark: forceDark)
+        controller.wasDismissed = dismissed
+        return controller
     }
     
     public func makePremiumDemoController(context: AccountContext, subject: PremiumDemoSubject, action: @escaping () -> Void) -> ViewController {
@@ -1673,43 +1744,59 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             mappedSubject = .emojiStatus
         case .translation:
             mappedSubject = .translation
+        case .stories:
+            mappedSubject = .stories
         }
         return PremiumDemoScreen(context: context, subject: mappedSubject, action: action)
     }
     
-    public func makePremiumLimitController(context: AccountContext, subject: PremiumLimitSubject, count: Int32, action: @escaping () -> Void) -> ViewController {
+    public func makePremiumLimitController(context: AccountContext, subject: PremiumLimitSubject, count: Int32, forceDark: Bool, cancel: @escaping () -> Void, action: @escaping () -> Void) -> ViewController {
         let mappedSubject: PremiumLimitScreen.Subject
         switch subject {
         case .folders:
             mappedSubject = .folders
         case .chatsPerFolder:
-            mappedSubject =  .chatsPerFolder
+            mappedSubject = .chatsPerFolder
         case .pins:
-            mappedSubject =  .pins
+            mappedSubject = .pins
         case .files:
-            mappedSubject =  .files
+            mappedSubject = .files
         case .accounts:
-            mappedSubject =  .accounts
+            mappedSubject = .accounts
         case .linksPerSharedFolder:
             mappedSubject = .linksPerSharedFolder
         case .membershipInSharedFolders:
             mappedSubject = .membershipInSharedFolders
         case .channels:
             mappedSubject = .channels
+        case .expiringStories:
+            mappedSubject = .expiringStories
+        case .storiesWeekly:
+            mappedSubject = .storiesWeekly
+        case .storiesMonthly:
+            mappedSubject = .storiesMonthly
         }
-        return PremiumLimitScreen(context: context, subject: mappedSubject, count: count, action: action)
+        return PremiumLimitScreen(context: context, subject: mappedSubject, count: count, forceDark: forceDark, cancel: cancel, action: action)
     }
     
     public func makeStickerPackScreen(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, mainStickerPack: StickerPackReference, stickerPacks: [StickerPackReference], loadedStickerPacks: [LoadedStickerPack], parentNavigationController: NavigationController?, sendSticker: ((FileMediaReference, UIView, CGRect) -> Bool)?) -> ViewController {
         return StickerPackScreen(context: context, updatedPresentationData: updatedPresentationData, mainStickerPack: mainStickerPack, stickerPacks: stickerPacks, loadedStickerPacks: loadedStickerPacks, parentNavigationController: parentNavigationController, sendSticker: sendSticker)
+    }
+    
+    public func makeMediaPickerScreen(context: AccountContext, hasSearch: Bool, completion: @escaping (Any) -> Void) -> ViewController {
+        return mediaPickerController(context: context, hasSearch: hasSearch, completion: completion)
+    }
+    
+    public func makeStoryMediaPickerScreen(context: AccountContext, getSourceRect: @escaping () -> CGRect, completion: @escaping (Any, UIView, CGRect, UIImage?, @escaping (Bool?) -> (UIView, CGRect)?, @escaping () -> Void) -> Void, dismissed: @escaping () -> Void, groupsPresented: @escaping () -> Void) -> ViewController {
+        return storyMediaPickerController(context: context, getSourceRect: getSourceRect, completion: completion, dismissed: dismissed, groupsPresented: groupsPresented)
     }
         
     public func makeProxySettingsController(sharedContext: SharedAccountContext, account: UnauthorizedAccount) -> ViewController {
         return proxySettingsController(accountManager: sharedContext.accountManager, postbox: account.postbox, network: account.network, mode: .modal, presentationData: sharedContext.currentPresentationData.with { $0 }, updatedPresentationData: sharedContext.presentationData)
     }
     
-    public func makeInstalledStickerPacksController(context: AccountContext, mode: InstalledStickerPacksControllerMode) -> ViewController {
-        return installedStickerPacksController(context: context, mode: mode)
+    public func makeInstalledStickerPacksController(context: AccountContext, mode: InstalledStickerPacksControllerMode, forceTheme: PresentationTheme?) -> ViewController {
+        return installedStickerPacksController(context: context, mode: mode, forceTheme: forceTheme)
     }
 }
 

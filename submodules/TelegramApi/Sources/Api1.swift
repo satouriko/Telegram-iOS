@@ -72,22 +72,22 @@ public extension Api {
 }
 public extension Api {
     enum AttachMenuBot: TypeConstructorDescription {
-        case attachMenuBot(flags: Int32, botId: Int64, shortName: String, peerTypes: [Api.AttachMenuPeerType], icons: [Api.AttachMenuBotIcon])
+        case attachMenuBot(flags: Int32, botId: Int64, shortName: String, peerTypes: [Api.AttachMenuPeerType]?, icons: [Api.AttachMenuBotIcon])
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
                 case .attachMenuBot(let flags, let botId, let shortName, let peerTypes, let icons):
                     if boxed {
-                        buffer.appendInt32(-928371502)
+                        buffer.appendInt32(-653423106)
                     }
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     serializeInt64(botId, buffer: buffer, boxed: false)
                     serializeString(shortName, buffer: buffer, boxed: false)
-                    buffer.appendInt32(481674261)
-                    buffer.appendInt32(Int32(peerTypes.count))
-                    for item in peerTypes {
+                    if Int(flags) & Int(1 << 3) != 0 {buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(peerTypes!.count))
+                    for item in peerTypes! {
                         item.serialize(buffer, true)
-                    }
+                    }}
                     buffer.appendInt32(481674261)
                     buffer.appendInt32(Int32(icons.count))
                     for item in icons {
@@ -112,9 +112,9 @@ public extension Api {
             var _3: String?
             _3 = parseString(reader)
             var _4: [Api.AttachMenuPeerType]?
-            if let _ = reader.readInt32() {
+            if Int(_1!) & Int(1 << 3) != 0 {if let _ = reader.readInt32() {
                 _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.AttachMenuPeerType.self)
-            }
+            } }
             var _5: [Api.AttachMenuBotIcon]?
             if let _ = reader.readInt32() {
                 _5 = Api.parseVector(reader, elementSignature: 0, elementType: Api.AttachMenuBotIcon.self)
@@ -122,10 +122,10 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = _4 != nil
+            let _c4 = (Int(_1!) & Int(1 << 3) == 0) || _4 != nil
             let _c5 = _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.AttachMenuBot.attachMenuBot(flags: _1!, botId: _2!, shortName: _3!, peerTypes: _4!, icons: _5!)
+                return Api.AttachMenuBot.attachMenuBot(flags: _1!, botId: _2!, shortName: _3!, peerTypes: _4, icons: _5!)
             }
             else {
                 return nil
@@ -508,27 +508,29 @@ public extension Api {
 }
 public extension Api {
     enum AutoDownloadSettings: TypeConstructorDescription {
-        case autoDownloadSettings(flags: Int32, photoSizeMax: Int32, videoSizeMax: Int64, fileSizeMax: Int64, videoUploadMaxbitrate: Int32)
+        case autoDownloadSettings(flags: Int32, photoSizeMax: Int32, videoSizeMax: Int64, fileSizeMax: Int64, videoUploadMaxbitrate: Int32, smallQueueActiveOperationsMax: Int32, largeQueueActiveOperationsMax: Int32)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .autoDownloadSettings(let flags, let photoSizeMax, let videoSizeMax, let fileSizeMax, let videoUploadMaxbitrate):
+                case .autoDownloadSettings(let flags, let photoSizeMax, let videoSizeMax, let fileSizeMax, let videoUploadMaxbitrate, let smallQueueActiveOperationsMax, let largeQueueActiveOperationsMax):
                     if boxed {
-                        buffer.appendInt32(-1896171181)
+                        buffer.appendInt32(-1163561432)
                     }
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     serializeInt32(photoSizeMax, buffer: buffer, boxed: false)
                     serializeInt64(videoSizeMax, buffer: buffer, boxed: false)
                     serializeInt64(fileSizeMax, buffer: buffer, boxed: false)
                     serializeInt32(videoUploadMaxbitrate, buffer: buffer, boxed: false)
+                    serializeInt32(smallQueueActiveOperationsMax, buffer: buffer, boxed: false)
+                    serializeInt32(largeQueueActiveOperationsMax, buffer: buffer, boxed: false)
                     break
     }
     }
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .autoDownloadSettings(let flags, let photoSizeMax, let videoSizeMax, let fileSizeMax, let videoUploadMaxbitrate):
-                return ("autoDownloadSettings", [("flags", flags as Any), ("photoSizeMax", photoSizeMax as Any), ("videoSizeMax", videoSizeMax as Any), ("fileSizeMax", fileSizeMax as Any), ("videoUploadMaxbitrate", videoUploadMaxbitrate as Any)])
+                case .autoDownloadSettings(let flags, let photoSizeMax, let videoSizeMax, let fileSizeMax, let videoUploadMaxbitrate, let smallQueueActiveOperationsMax, let largeQueueActiveOperationsMax):
+                return ("autoDownloadSettings", [("flags", flags as Any), ("photoSizeMax", photoSizeMax as Any), ("videoSizeMax", videoSizeMax as Any), ("fileSizeMax", fileSizeMax as Any), ("videoUploadMaxbitrate", videoUploadMaxbitrate as Any), ("smallQueueActiveOperationsMax", smallQueueActiveOperationsMax as Any), ("largeQueueActiveOperationsMax", largeQueueActiveOperationsMax as Any)])
     }
     }
     
@@ -543,13 +545,19 @@ public extension Api {
             _4 = reader.readInt64()
             var _5: Int32?
             _5 = reader.readInt32()
+            var _6: Int32?
+            _6 = reader.readInt32()
+            var _7: Int32?
+            _7 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.AutoDownloadSettings.autoDownloadSettings(flags: _1!, photoSizeMax: _2!, videoSizeMax: _3!, fileSizeMax: _4!, videoUploadMaxbitrate: _5!)
+            let _c6 = _6 != nil
+            let _c7 = _7 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
+                return Api.AutoDownloadSettings.autoDownloadSettings(flags: _1!, photoSizeMax: _2!, videoSizeMax: _3!, fileSizeMax: _4!, videoUploadMaxbitrate: _5!, smallQueueActiveOperationsMax: _6!, largeQueueActiveOperationsMax: _7!)
             }
             else {
                 return nil

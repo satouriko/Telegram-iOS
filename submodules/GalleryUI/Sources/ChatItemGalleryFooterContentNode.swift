@@ -631,7 +631,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, UIScroll
     func setMessage(_ message: Message, displayInfo: Bool = true, translateToLanguage: String? = nil, peerIsCopyProtected: Bool = false) {
         self.currentMessage = message
         
-        let canDelete: Bool
+        var canDelete: Bool
         var canShare = !message.containsSecretMedia
 
         var canFullscreen = false
@@ -646,7 +646,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, UIScroll
             } else if let media = media as? TelegramMediaFile, !media.isAnimated {
                 for attribute in media.attributes {
                     switch attribute {
-                    case let .Video(_, dimensions, _):
+                    case let .Video(_, dimensions, _, _):
                         isVideo = true
                         if dimensions.height > 0 {
                             if CGFloat(dimensions.width) / CGFloat(dimensions.height) > 1.33 {
@@ -713,6 +713,10 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, UIScroll
         if message.isCopyProtected() || peerIsCopyProtected {
             canShare = false
             canEdit = false
+        }
+        
+        if message.containsSecretMedia {
+            canDelete = false
         }
         
         var authorNameText: String?
@@ -878,6 +882,10 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, UIScroll
             displayCaption = !self.textNode.isHidden && !isLandscape
         } else {
             displayCaption = !self.textNode.isHidden
+        }
+        
+        if metrics.isTablet {
+            self.fullscreenButton.isHidden = true
         }
         
         var textFrame = CGRect()
@@ -1353,7 +1361,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, UIScroll
                                                         }
                                                         controllerInteraction?.presentController(UndoOverlayController(presentationData: presentationData, content: .universal(animation: "anim_gif", scale: 0.075, colors: [:], title: presentationData.strings.Premium_MaxSavedGifsTitle("\(limit)").string, text: text, customUndoText: nil, timeout: nil), elevatedLayout: true, animateInAsReplacement: false, action: { action in
                                                             if case .info = action {
-                                                                let controller = context.sharedContext.makePremiumIntroController(context: context, source: .savedGifs)
+                                                                let controller = context.sharedContext.makePremiumIntroController(context: context, source: .savedGifs, forceDark: false, dismissed: nil)
                                                                 controllerInteraction?.pushController(controller)
                                                                 return true
                                                             }
@@ -1566,7 +1574,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, UIScroll
                                         }
                                         controllerInteraction?.presentController(UndoOverlayController(presentationData: presentationData, content: .universal(animation: "anim_gif", scale: 0.075, colors: [:], title: presentationData.strings.Premium_MaxSavedGifsTitle("\(limit)").string, text: text, customUndoText: nil, timeout: nil), elevatedLayout: true, animateInAsReplacement: false, action: { action in
                                             if case .info = action {
-                                                let controller = context.sharedContext.makePremiumIntroController(context: context, source: .savedGifs)
+                                                let controller = context.sharedContext.makePremiumIntroController(context: context, source: .savedGifs, forceDark: false, dismissed: nil)
                                                 controllerInteraction?.pushController(controller)
                                                 return true
                                             }

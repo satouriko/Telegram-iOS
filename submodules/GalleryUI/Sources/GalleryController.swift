@@ -183,6 +183,7 @@ public func galleryItemForEntry(
                 location: location,
                 translateToLanguage: translateToLanguage,
                 peerIsCopyProtected: peerIsCopyProtected,
+                isSecret: isSecret,
                 displayInfoOnTop: displayInfoOnTop,
                 performAction: performAction,
                 openActionOptions: openActionOptions,
@@ -264,6 +265,7 @@ public func galleryItemForEntry(
                             location: location,
                             translateToLanguage: translateToLanguage,
                             peerIsCopyProtected: peerIsCopyProtected,
+                            isSecret: isSecret,
                             displayInfoOnTop: displayInfoOnTop,
                             performAction: performAction,
                             openActionOptions: openActionOptions,
@@ -303,7 +305,7 @@ public func galleryItemForEntry(
                         if let file = webpageContent.file, file.isVideo {
                             content = NativeVideoContent(id: .message(message.stableId, file.fileId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: file), imageReference: mediaImage.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), streamVideo: .conservative, loopVideo: loopVideos, tempFilePath: tempFilePath, captureProtected: message.isCopyProtected(), storeAfterDownload: generateStoreAfterDownload?(message, file))
                         } else if URL(string: embedUrl)?.pathExtension == "mp4" {
-                            content = SystemVideoContent(userLocation: .peer(message.id.peerId), url: embedUrl, imageReference: .webPage(webPage: WebpageReference(webpage), media: image), dimensions: webpageContent.embedSize?.cgSize ?? CGSize(width: 640.0, height: 640.0), duration: Int32(webpageContent.duration ?? 0))
+                            content = SystemVideoContent(userLocation: .peer(message.id.peerId), url: embedUrl, imageReference: .webPage(webPage: WebpageReference(webpage), media: image), dimensions: webpageContent.embedSize?.cgSize ?? CGSize(width: 640.0, height: 640.0), duration: webpageContent.duration.flatMap(Double.init) ?? 0.0)
                         }
                     }
                     if content == nil, let webEmbedContent = WebEmbedVideoContent(userLocation: .peer(message.id.peerId), webPage: webpage, webpageContent: webpageContent, forcedTimestamp: timecode.flatMap(Int.init), openUrl: { url in

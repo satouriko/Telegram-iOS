@@ -15,6 +15,7 @@ import ListMessageItem
 import ChatMessageInteractiveMediaBadge
 import SoftwareVideo
 import ChatControllerInteraction
+import PeerInfoVisualMediaPaneNode
 
 private final class FrameSequenceThumbnailNode: ASDisplayNode {
     private let context: AccountContext
@@ -64,9 +65,11 @@ private final class FrameSequenceThumbnailNode: ASDisplayNode {
             
             let source = UniversalSoftwareVideoSource(
                 mediaBox: self.context.account.postbox.mediaBox,
-                userLocation: userLocation,
-                userContentType: .other,
-                fileReference: self.file,
+                source: .file(
+                    userLocation: userLocation,
+                    userContentType: .other,
+                    fileReference: self.file
+                ),
                 automaticallyFetchHeader: true
             )
             self.sources.append(source)
@@ -373,7 +376,7 @@ private final class VisualMediaItemNode: ASDisplayNode {
                         })
                         
                         if let duration = file.duration {
-                            let durationString = stringForDuration(duration)
+                            let durationString = stringForDuration(Int32(duration))
                             
                             var badgeContent: ChatMessageInteractiveMediaBadgeContent?
                             var mediaDownloadState: ChatMessageInteractiveMediaDownloadState?
@@ -382,16 +385,16 @@ private final class VisualMediaItemNode: ASDisplayNode {
                                 switch status {
                                     case let .Fetching(_, progress):
                                         let progressString = String(format: "%d%%", Int(progress * 100.0))
-                                        badgeContent = .text(inset: 12.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: progressString))
+                                        badgeContent = .text(inset: 12.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: progressString), iconName: nil)
                                         mediaDownloadState = .compactFetching(progress: 0.0)
                                     case .Local:
-                                        badgeContent = .text(inset: 0.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: durationString))
+                                        badgeContent = .text(inset: 0.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: durationString), iconName: nil)
                                     case .Remote, .Paused:
-                                        badgeContent = .text(inset: 12.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: durationString))
+                                        badgeContent = .text(inset: 12.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: durationString), iconName: nil)
                                         mediaDownloadState = .compactRemote
                                 }
                             } else {
-                                badgeContent = .text(inset: 0.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: durationString))
+                                badgeContent = .text(inset: 0.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: durationString), iconName: nil)
                             }
                             
                             strongSelf.mediaBadgeNode.update(theme: nil, content: badgeContent, mediaDownloadState: mediaDownloadState, alignment: .right, animated: false, badgeAnimated: false)

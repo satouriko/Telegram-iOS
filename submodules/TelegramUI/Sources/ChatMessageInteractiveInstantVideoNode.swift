@@ -19,6 +19,7 @@ import UndoUI
 import TelegramNotices
 import Markdown
 import TextFormat
+import ChatMessageForwardInfoNode
 
 struct ChatMessageInstantVideoItemLayoutResult {
     let contentSize: CGSize
@@ -79,9 +80,7 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
     private var automaticDownload: Bool?
     var media: TelegramMediaFile?
     var appliedForwardInfo: (Peer?, String?)?
-    
-    private var secretProgressIcon: UIImage?
-    
+        
     private let fetchDisposable = MetaDisposable()
 
     private var durationBackgroundNode: NavigationBackgroundNode?
@@ -258,9 +257,7 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
             
             let theme = item.presentationData.theme
             let isSecretMedia = item.message.containsSecretMedia
-            var secretProgressIcon: UIImage?
             if isSecretMedia {
-                secretProgressIcon = PresentationResourcesChat.chatBubbleSecretMediaIcon(theme.theme)
                 secretVideoPlaceholderBackgroundImage = PresentationResourcesChat.chatInstantVideoBackgroundImage(theme.theme, wallpaper: !theme.wallpaper.isEmpty)
             }
             
@@ -315,6 +312,9 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
             let availableContentWidth = width - bubbleEdgeInset * 2.0 - bubbleContentInsetsLeft - 20.0
             
             if !ignoreHeaders {
+                var replyMessage: Message?
+                var replyStory: StoryId?
+                
                 for attribute in item.message.attributes {
                     if let attribute = attribute as? InlineBotMessageAttribute {
                         var inlineBotNameString: String?
@@ -337,22 +337,32 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                         }
                     }
                     
-                    if let replyAttribute = attribute as? ReplyMessageAttribute, let replyMessage = item.message.associatedMessages[replyAttribute.messageId] {
+                    if let replyAttribute = attribute as? ReplyMessageAttribute {
                         if case let .replyThread(replyThreadMessage) = item.chatLocation, replyThreadMessage.messageId == replyAttribute.messageId {
                         } else {
-                            replyInfoApply = makeReplyInfoLayout(ChatMessageReplyInfoNode.Arguments(
-                                presentationData: item.presentationData,
-                                strings: item.presentationData.strings,
-                                context: item.context,
-                                type: .standalone,
-                                message: replyMessage,
-                                parentMessage: item.message,
-                                constrainedSize: CGSize(width: availableWidth, height: CGFloat.greatestFiniteMagnitude),
-                                animationCache: item.controllerInteraction.presentationContext.animationCache,
-                                animationRenderer: item.controllerInteraction.presentationContext.animationRenderer,
-                                associatedData: item.associatedData
-                            ))
+                            replyMessage = item.message.associatedMessages[replyAttribute.messageId]
                         }
+                    } else if let attribute = attribute as? ReplyStoryAttribute {
+                        replyStory = attribute.storyId
+                    }
+                }
+                
+                if replyMessage != nil || replyStory != nil {
+                    if case let .replyThread(replyThreadMessage) = item.chatLocation, replyThreadMessage.messageId == replyMessage?.id {
+                    } else {
+                        replyInfoApply = makeReplyInfoLayout(ChatMessageReplyInfoNode.Arguments(
+                            presentationData: item.presentationData,
+                            strings: item.presentationData.strings,
+                            context: item.context,
+                            type: .standalone,
+                            message: replyMessage,
+                            story: replyStory,
+                            parentMessage: item.message,
+                            constrainedSize: CGSize(width: availableWidth, height: CGFloat.greatestFiniteMagnitude),
+                            animationCache: item.controllerInteraction.presentationContext.animationCache,
+                            animationRenderer: item.controllerInteraction.presentationContext.animationRenderer,
+                            associatedData: item.associatedData
+                        ))
                     }
                 }
             }
@@ -398,7 +408,7 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                     }
                 }
                 let availableWidth = max(60.0, availableContentWidth - 210.0 + 6.0)
-                forwardInfoSizeApply = makeForwardInfoLayout(item.presentationData, item.presentationData.strings, .standalone, forwardSource, forwardAuthorSignature, forwardPsaType, CGSize(width: availableWidth, height: CGFloat.greatestFiniteMagnitude))
+                forwardInfoSizeApply = makeForwardInfoLayout(item.presentationData, item.presentationData.strings, .standalone, forwardSource, forwardAuthorSignature, forwardPsaType, nil, CGSize(width: availableWidth, height: CGFloat.greatestFiniteMagnitude))
             }
             
             var notConsumed = false
@@ -416,7 +426,7 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
             
             var updatedPlaybackStatus: Signal<FileMediaResourceStatus, NoError>?
             if let updatedFile = updatedFile, updatedMedia || updatedMessageId {
-                updatedPlaybackStatus = combineLatest(messageFileMediaResourceStatus(context: item.context, file: updatedFile, message: item.message, isRecentActions: item.associatedData.isRecentActions), item.context.account.pendingMessageManager.pendingMessageStatus(item.message.id) |> map { $0.0 })
+                updatedPlaybackStatus = combineLatest(messageFileMediaResourceStatus(context: item.context, file: updatedFile, message: EngineMessage(item.message), isRecentActions: item.associatedData.isRecentActions), item.context.account.pendingMessageManager.pendingMessageStatus(item.message.id) |> map { $0.0 })
                 |> map { resourceStatus, pendingStatus -> FileMediaResourceStatus in
                     if let pendingStatus = pendingStatus {
                         var progress = pendingStatus.progress
@@ -561,7 +571,6 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                     strongSelf.item = item
                     strongSelf.videoFrame = displayVideoFrame
                     strongSelf.appliedForwardInfo = (forwardSource, forwardAuthorSignature)
-                    strongSelf.secretProgressIcon = secretProgressIcon
                     
                     strongSelf.automaticDownload = automaticDownload
                     
@@ -1141,11 +1150,11 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                             state = .progress(color: messageTheme.mediaOverlayControlColors.foregroundColor, lineWidth: nil, value: CGFloat(adjustedProgress), cancelEnabled: true, animateRotation: true)
                         }
                     case .Local:
-                        if isSecretMedia && self.secretProgressIcon != nil {
+                        if isSecretMedia {
                             if let (beginTime, timeout) = secretBeginTimeAndTimeout {
-                                state = .secretTimeout(color: messageTheme.mediaOverlayControlColors.foregroundColor, icon: secretProgressIcon, beginTime: beginTime, timeout: timeout, sparks: true)
+                                state = .secretTimeout(color: messageTheme.mediaOverlayControlColors.foregroundColor, icon: .flame, beginTime: beginTime, timeout: timeout, sparks: true)
                             } else {
-                                state = .customIcon(secretProgressIcon!)
+                                state = .staticTimeout
                             }
                         } else {
                             state = .none
@@ -1200,7 +1209,7 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
             }
             playbackStatusNode.frame = videoFrame.insetBy(dx: 1.5, dy: 1.5)
             
-            let status = messageFileMediaPlaybackStatus(context: item.context, file: file, message: item.message, isRecentActions: item.associatedData.isRecentActions, isGlobalSearch: false, isDownloadList: false)
+            let status = messageFileMediaPlaybackStatus(context: item.context, file: file, message: EngineMessage(item.message), isRecentActions: item.associatedData.isRecentActions, isGlobalSearch: false, isDownloadList: false)
             playbackStatusNode.status = status
             self.durationNode?.status = status
             |> map(Optional.init)
@@ -1256,6 +1265,9 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                                     for attribute in item.message.attributes {
                                         if let attribute = attribute as? ReplyMessageAttribute {
                                             item.controllerInteraction.navigateToMessage(item.message.id, attribute.messageId)
+                                            return
+                                        } else if let attribute = attribute as? ReplyStoryAttribute {
+                                            item.controllerInteraction.navigateToStory(item.message, attribute.storyId)
                                             return
                                         }
                                     }
@@ -1531,7 +1543,7 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                     let context = item.context
                     var replaceImpl: ((ViewController) -> Void)?
                     let controller = context.sharedContext.makePremiumDemoController(context: context, subject: .voiceToText, action: {
-                        let controller = context.sharedContext.makePremiumIntroController(context: context, source: .settings)
+                        let controller = context.sharedContext.makePremiumIntroController(context: context, source: .settings, forceDark: false, dismissed: nil)
                         replaceImpl?(controller)
                     })
                     replaceImpl = { [weak controller] c in
@@ -1812,5 +1824,21 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
         }
         
         self.canAttachContent = false
+    }
+    
+    func targetForStoryTransition(id: StoryId) -> UIView? {
+        guard let item = self.item else {
+            return nil
+        }
+        for attribute in item.message.attributes {
+            if let attribute = attribute as? ReplyStoryAttribute {
+                if attribute.storyId == id {
+                    if let replyInfoNode = self.replyInfoNode {
+                        return replyInfoNode.mediaTransitionView()
+                    }
+                }
+            }
+        }
+        return nil
     }
 }

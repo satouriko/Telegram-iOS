@@ -272,7 +272,7 @@ final class GridMessageItemNode: GridItemNode {
                         })
                         
                         if let duration = file.duration {
-                            let durationString = stringForDuration(duration)
+                            let durationString = stringForDuration(Int32(duration))
                             
                             var badgeContent: ChatMessageInteractiveMediaBadgeContent?
                             var mediaDownloadState: ChatMessageInteractiveMediaDownloadState?
@@ -281,16 +281,16 @@ final class GridMessageItemNode: GridItemNode {
                                 switch status {
                                     case let .Fetching(_, progress):
                                         let progressString = String(format: "%d%%", Int(progress * 100.0))
-                                        badgeContent = .text(inset: 12.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: progressString))
+                                        badgeContent = .text(inset: 12.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: progressString), iconName: nil)
                                         mediaDownloadState = .compactFetching(progress: 0.0)
                                     case .Local:
-                                        badgeContent = .text(inset: 0.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: durationString))
+                                        badgeContent = .text(inset: 0.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: durationString), iconName: nil)
                                     case .Remote, .Paused:
-                                        badgeContent = .text(inset: 12.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: durationString))
+                                        badgeContent = .text(inset: 12.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: durationString), iconName: nil)
                                         mediaDownloadState = .compactRemote
                                 }
                             } else {
-                                badgeContent = .text(inset: 0.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: durationString))
+                                badgeContent = .text(inset: 0.0, backgroundColor: mediaBadgeBackgroundColor, foregroundColor: mediaBadgeTextColor, text: NSAttributedString(string: durationString), iconName: nil)
                             }
                             
                             strongSelf.mediaBadgeNode.update(theme: item.theme, content: badgeContent, mediaDownloadState: mediaDownloadState, alignment: .right, animated: false, badgeAnimated: false)
@@ -380,7 +380,7 @@ final class GridMessageItemNode: GridItemNode {
         }
     }
     
-    func transitionNode(id: MessageId, media: Media) -> (ASDisplayNode, CGRect, () -> (UIView?, UIView?))? {
+    func transitionNode(id: MessageId, media: Media, adjustRect: Bool) -> (ASDisplayNode, CGRect, () -> (UIView?, UIView?))? {
         if self.messageId == id {
             let imageNode = self.imageNode
             return (self.imageNode, self.imageNode.bounds, { [weak self, weak imageNode] in

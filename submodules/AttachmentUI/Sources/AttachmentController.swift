@@ -19,7 +19,7 @@ public enum AttachmentButtonType: Equatable {
     case location
     case contact
     case poll
-    case app(Peer, String, [AttachMenuBots.Bot.IconName: TelegramMediaFile])
+    case app(AttachMenuBot)
     case gift
     case standalone
     
@@ -55,8 +55,8 @@ public enum AttachmentButtonType: Equatable {
                 } else {
                     return false
                 }
-            case let .app(lhsPeer, lhsTitle, lhsIcons):
-                if case let .app(rhsPeer, rhsTitle, rhsIcons) = rhs, arePeersEqual(lhsPeer, rhsPeer), lhsTitle == rhsTitle, lhsIcons == rhsIcons {
+            case let .app(lhsBot):
+                if case let .app(rhsBot) = rhs, lhsBot.peer.id == rhsBot.peer.id {
                     return true
                 } else {
                     return false
@@ -84,6 +84,7 @@ public protocol AttachmentContainable: ViewController {
     var cancelPanGesture: () -> Void { get set }
     var isContainerPanning: () -> Bool { get set }
     var isContainerExpanded: () -> Bool { get set }
+    var mediaPickerContext: AttachmentMediaPickerContext? { get }
     
     func isContainerPanningUpdated(_ panning: Bool)
     
@@ -178,6 +179,7 @@ public class AttachmentController: ViewController {
     private let context: AccountContext
     private let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
     private let chatLocation: ChatLocation?
+    private let isScheduledMessages: Bool
     private let buttons: [AttachmentButtonType]
     private let initialButton: AttachmentButtonType
     private let fromMenu: Bool
@@ -206,7 +208,7 @@ public class AttachmentController: ViewController {
         private weak var controller: AttachmentController?
         private let dim: ASDisplayNode
         private let shadowNode: ASImageNode
-        private let container: AttachmentContainer
+        fileprivate let container: AttachmentContainer
         private let makeEntityInputView: () -> AttachmentTextInputPanelInputView?
         let panel: AttachmentPanel
         
@@ -215,7 +217,7 @@ public class AttachmentController: ViewController {
         
         private var validLayout: ContainerViewLayout?
         private var modalProgress: CGFloat = 0.0
-        private var isDismissing = false
+        fileprivate var isDismissing = false
                 
         private let captionDisposable = MetaDisposable()
         private let mediaSelectionCountDisposable = MetaDisposable()
@@ -293,7 +295,7 @@ public class AttachmentController: ViewController {
             
             self.container = AttachmentContainer()
             self.container.canHaveKeyboardFocus = true
-            self.panel = AttachmentPanel(context: controller.context, chatLocation: controller.chatLocation, updatedPresentationData: controller.updatedPresentationData, makeEntityInputView: makeEntityInputView)
+            self.panel = AttachmentPanel(context: controller.context, chatLocation: controller.chatLocation, isScheduledMessages: controller.isScheduledMessages, updatedPresentationData: controller.updatedPresentationData, makeEntityInputView: makeEntityInputView)
             self.panel.fromMenu = controller.fromMenu
             self.panel.isStandalone = controller.isStandalone
             
@@ -312,6 +314,10 @@ public class AttachmentController: ViewController {
             
             self.container.updateModalProgress = { [weak self] progress, transition in
                 if let strongSelf = self, let layout = strongSelf.validLayout, !strongSelf.isDismissing {
+                    var transition = transition
+                    if strongSelf.container.supernode == nil {
+                        transition = .animated(duration: 0.4, curve: .spring)
+                    }
                     strongSelf.controller?.updateModalStyleOverlayTransitionFactor(progress, transition: transition)
                     
                     strongSelf.modalProgress = progress
@@ -440,9 +446,9 @@ public class AttachmentController: ViewController {
             
             if let controller = self.controller {
                 let _ = self.switchToController(controller.initialButton)
-                if case let .app(bot, _, _) = controller.initialButton {
+                if case let .app(bot) = controller.initialButton {
                     if let index = controller.buttons.firstIndex(where: {
-                        if case let .app(otherBot, _, _) = $0, otherBot.id == bot.id {
+                        if case let .app(otherBot) = $0, otherBot.peer.id == bot.peer.id {
                             return true
                         } else {
                             return false
@@ -644,7 +650,7 @@ public class AttachmentController: ViewController {
             } else {
                 ContainedViewLayoutTransition.animated(duration: 0.3, curve: .linear).updateAlpha(node: self.dim, alpha: 1.0)
                 
-                let targetPosition = self.container.position
+                let targetPosition = CGPoint(x: layout.size.width / 2.0, y: layout.size.height / 2.0)
                 let startPosition = targetPosition.offsetBy(dx: 0.0, dy: layout.size.height)
                 
                 self.container.position = startPosition
@@ -673,6 +679,7 @@ public class AttachmentController: ViewController {
                 self.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false, completion: { [weak self] _ in
                     let _ = self?.container.dismiss(transition: .immediate, completion: completion)
                     self?.animating = false
+                    self?.layer.removeAllAnimations()
                 })
             } else {
                 let positionTransition: ContainedViewLayoutTransition = .animated(duration: 0.25, curve: .easeInOut)
@@ -740,12 +747,12 @@ public class AttachmentController: ViewController {
                 let position: CGPoint
                 let positionY = layout.size.height - size.height - insets.bottom - 40.0
                 if let sourceRect = controller.getSourceRect?() {
-                    position = CGPoint(x: floor(sourceRect.midX - size.width / 2.0), y: min(positionY, sourceRect.minY - size.height))
+                    position = CGPoint(x: min(layout.size.width - size.width - 28.0, floor(sourceRect.midX - size.width / 2.0)), y: min(positionY, sourceRect.minY - size.height))
                 } else {
                     position = CGPoint(x: masterWidth - 174.0, y: positionY)
                 }
                 
-                if controller.isStandalone {
+                if controller.isStandalone && !controller.forceSourceRect {
                     var containerY = floorToScreenPixels((layout.size.height - size.height) / 2.0)
                     if let inputHeight = layout.inputHeight, inputHeight > 88.0 {
                         containerY = layout.size.height - inputHeight - size.height - 80.0
@@ -876,7 +883,7 @@ public class AttachmentController: ViewController {
                 
                 self.container.update(layout: containerLayout, controllers: controllers, coveredByModalTransition: 0.0, transition: self.switchingController ? .immediate : transition)
                                     
-                if self.container.supernode == nil, !controllers.isEmpty && self.container.isReady {
+                if self.container.supernode == nil, !controllers.isEmpty && self.container.isReady && !self.isDismissing {
                     self.wrapperNode.addSubnode(self.container)
                     
                     if fromMenu, let _ = controller.getInputContainerNode() {
@@ -901,10 +908,11 @@ public class AttachmentController: ViewController {
     
     public var getSourceRect: (() -> CGRect?)?
     
-    public init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, chatLocation: ChatLocation?, buttons: [AttachmentButtonType], initialButton: AttachmentButtonType = .gallery, fromMenu: Bool = false, hasTextInput: Bool = true, makeEntityInputView: @escaping () -> AttachmentTextInputPanelInputView? = { return nil}) {
+    public init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, chatLocation: ChatLocation?, isScheduledMessages: Bool = false, buttons: [AttachmentButtonType], initialButton: AttachmentButtonType = .gallery, fromMenu: Bool = false, hasTextInput: Bool = true, makeEntityInputView: @escaping () -> AttachmentTextInputPanelInputView? = { return nil}) {
         self.context = context
         self.updatedPresentationData = updatedPresentationData
         self.chatLocation = chatLocation
+        self.isScheduledMessages = isScheduledMessages
         self.buttons = buttons
         self.initialButton = initialButton
         self.fromMenu = fromMenu
@@ -927,6 +935,8 @@ public class AttachmentController: ViewController {
     public required init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
+    
+    public var forceSourceRect = false
     
     fileprivate var isStandalone: Bool {
         return self.buttons.contains(.standalone)
@@ -964,12 +974,17 @@ public class AttachmentController: ViewController {
                     self?.didDismiss()
                     self?._dismiss()
                     completion?()
+                    self?.dismissedFlag = false
+                    self?.node.isDismissing = false
+                    self?.node.container.removeFromSupernode()
                 })
             }
         } else {
             self.didDismiss()
             self._dismiss()
             completion?()
+            self.node.isDismissing = false
+            self.node.container.removeFromSupernode()
         }
     }
     
@@ -1027,7 +1042,7 @@ public class AttachmentController: ViewController {
         |> deliverOnMainQueue).start(next: { bots in
             for bot in bots {
                 for (name, file) in bot.icons {
-                    if [.iOSAnimated, .placeholder].contains(name), let peer = PeerReference(bot.peer) {
+                    if [.iOSAnimated, .placeholder].contains(name), let peer = PeerReference(bot.peer._asPeer()) {
                         if case .placeholder = name {
                             let path = context.account.postbox.mediaBox.cachedRepresentationCompletePath(file.resource.id, representation: CachedPreparedSvgRepresentation())
                             if !FileManager.default.fileExists(atPath: path) {
