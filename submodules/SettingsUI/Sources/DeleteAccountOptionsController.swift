@@ -219,6 +219,7 @@ public func deleteAccountOptionsController(context: AccountContext, navigationCo
                 let controller = PremiumLimitScreen(context: context, subject: .accounts, count: Int32(count), action: {
                     let controller = PremiumIntroScreen(context: context, source: .accounts)
                     replaceImpl?(controller)
+                    return true
                 })
                 replaceImpl = { [weak controller] c in
                     controller?.replace(with: c)
@@ -294,6 +295,12 @@ public func deleteAccountOptionsController(context: AccountContext, navigationCo
             faqUrl = "https://telegram.org/faq#q-can-i-delete-my-messages"
         }
         let resolvedUrl = resolveInstantViewUrl(account: context.account, url: faqUrl)
+        |> mapToSignal { result -> Signal<ResolvedUrl, NoError> in
+            guard case let .result(result) = result else {
+                return .complete()
+            }
+            return .single(result)
+        }
 
         let resolvedUrlPromise = Promise<ResolvedUrl>()
         resolvedUrlPromise.set(resolvedUrl)
@@ -311,7 +318,7 @@ public func deleteAccountOptionsController(context: AccountContext, navigationCo
                 context.sharedContext.openResolvedUrl(resolvedUrl, context: context, urlContext: .generic, navigationController: navigationController, forceExternal: false, openPeer: { peer, navigation in
                 }, sendFile: nil, sendSticker: nil, requestMessageActionUrlAuth: nil, joinVoiceChat: nil, present: { controller, arguments in
                     pushControllerImpl?(controller)
-                }, dismissInput: {}, contentContext: nil)
+                }, dismissInput: {}, contentContext: nil, progress: nil)
             })
         }
         
@@ -329,6 +336,12 @@ public func deleteAccountOptionsController(context: AccountContext, navigationCo
             faqUrl = "https://telegram.org/faq#general"
         }
         let resolvedUrl = resolveInstantViewUrl(account: context.account, url: faqUrl)
+        |> mapToSignal { result -> Signal<ResolvedUrl, NoError> in
+            guard case let .result(result) = result else {
+                return .complete()
+            }
+            return .single(result)
+        }
 
         let resolvedUrlPromise = Promise<ResolvedUrl>()
         resolvedUrlPromise.set(resolvedUrl)
@@ -346,7 +359,7 @@ public func deleteAccountOptionsController(context: AccountContext, navigationCo
                 context.sharedContext.openResolvedUrl(resolvedUrl, context: context, urlContext: .generic, navigationController: navigationController, forceExternal: false, openPeer: { peer, navigation in
                 }, sendFile: nil, sendSticker: nil, requestMessageActionUrlAuth: nil, joinVoiceChat: nil, present: { controller, arguments in
                     pushControllerImpl?(controller)
-                }, dismissInput: {}, contentContext: nil)
+                }, dismissInput: {}, contentContext: nil, progress: nil)
             })
         }
 

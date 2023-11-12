@@ -103,7 +103,8 @@ private let internalMimePrefixes: [String] = [
     "image/jpeg",
     "image/jpg",
     "image/png",
-    "image/heic"
+    "image/heic",
+    "image/jxl"
 ]
 
 public func internalDocumentItemSupportsMimeType(_ type: String, fileName: String?) -> Bool {
@@ -135,7 +136,7 @@ private let boldItalicFont = Font.semiboldItalic(16.0)
 private let fixedFont = UIFont(name: "Menlo-Regular", size: 15.0) ?? textFont
 
 public func galleryCaptionStringWithAppliedEntities(_ text: String, entities: [MessageTextEntity], message: Message?) -> NSAttributedString {
-    return stringWithAppliedEntities(text, entities: entities, baseColor: .white, linkColor: UIColor(rgb: 0x5ac8fa), baseFont: textFont, linkFont: textFont, boldFont: boldFont, italicFont: italicFont, boldItalicFont: boldItalicFont, fixedFont: fixedFont, blockQuoteFont: textFont, underlineLinks: false, message: message)
+    return stringWithAppliedEntities(text, entities: entities, baseColor: .white, linkColor: UIColor(rgb: 0x5ac8fa), baseFont: textFont, linkFont: textFont, boldFont: boldFont, italicFont: italicFont, boldItalicFont: boldItalicFont, fixedFont: fixedFont, blockQuoteFont: textFont, underlineLinks: false, message: message, adjustQuoteFontSize: true)
 }
 
 private func galleryMessageCaptionText(_ message: Message) -> String {
@@ -1119,7 +1120,7 @@ public class GalleryController: ViewController, StandalonePresentableController,
                     if let strongSelf = self, strongSelf.traceVisibility() {
                         let _ = strongSelf.context.engine.messages.addSecretChatMessageScreenshot(peerId: id.peerId).start()
                     }
-                })
+                }).strict()
             }
         default:
             break
@@ -1212,6 +1213,8 @@ public class GalleryController: ViewController, StandalonePresentableController,
                     self?.dismiss(forceAway: true)
                 })
             }
+        }, controller: { [weak self] in
+            return self
         })
         
         let disableTapNavigation = !(self.context.sharedContext.currentMediaDisplaySettings.with { $0 }.showNextMediaOnTap)

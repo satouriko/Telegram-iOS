@@ -251,9 +251,9 @@ class ChatSearchResultsControllerNode: ViewControllerTracingNode, UIScrollViewDe
             switch item.content {
             case let .peer(peerData):
                 if let message = peerData.messages.first {
-                    let chatController = strongSelf.context.sharedContext.makeChatController(context: strongSelf.context, chatLocation: .peer(id: peerData.peer.peerId), subject: .message(id: .id(message.id), highlight: true, timecode: nil), botStart: nil, mode: .standard(previewing: true))
+                    let chatController = strongSelf.context.sharedContext.makeChatController(context: strongSelf.context, chatLocation: .peer(id: peerData.peer.peerId), subject: .message(id: .id(message.id), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil), botStart: nil, mode: .standard(previewing: true))
                     chatController.canReadHistory.set(false)
-                    let contextController = ContextController(account: strongSelf.context.account, presentationData: strongSelf.presentationData, source: .controller(ContextControllerContentSourceImpl(controller: chatController, sourceNode: node)), items: .single(ContextController.Items(content: .list([]))), gesture: gesture)
+                    let contextController = ContextController(presentationData: strongSelf.presentationData, source: .controller(ContextControllerContentSourceImpl(controller: chatController, sourceNode: node)), items: .single(ContextController.Items(content: .list([]))), gesture: gesture)
                     presentInGlobalOverlay(contextController)
                 } else {
                     gesture?.cancel()
@@ -276,7 +276,7 @@ class ChatSearchResultsControllerNode: ViewControllerTracingNode, UIScrollViewDe
         self.interaction = interaction
         
         self.disposable.set((signal
-        |> deliverOnMainQueue).start(next: { [weak self] entries in
+        |> deliverOnMainQueue).startStrict(next: { [weak self] entries in
             if let strongSelf = self {
                 let previousEntries = strongSelf.previousEntries.swap(entries)
                 
@@ -312,7 +312,7 @@ class ChatSearchResultsControllerNode: ViewControllerTracingNode, UIScrollViewDe
         self.isLoadingMore = true
         
         self.loadMoreDisposable.set((self.context.engine.messages.searchMessages(location: self.location, query: self.searchQuery, state: self.searchState)
-        |> deliverOnMainQueue).start(next: { [weak self] (updatedResult, updatedState) in
+        |> deliverOnMainQueue).startStrict(next: { [weak self] (updatedResult, updatedState) in
             guard let strongSelf = self else {
                 return
             }
@@ -345,7 +345,7 @@ class ChatSearchResultsControllerNode: ViewControllerTracingNode, UIScrollViewDe
             }
             
             strongSelf.disposable.set((signal
-            |> deliverOnMainQueue).start(next: { entries in
+            |> deliverOnMainQueue).startStrict(next: { entries in
                 if let strongSelf = self {
                     let previousEntries = strongSelf.previousEntries.swap(entries)
                     

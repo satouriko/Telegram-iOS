@@ -838,7 +838,7 @@ private final class StickerPackContainer: ASDisplayNode {
             }
         })))
         
-        let contextController = ContextController(account: self.context.account, presentationData: self.presentationData, source: .reference(StickerPackContextReferenceContentSource(controller: controller, sourceNode: node)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+        let contextController = ContextController(presentationData: self.presentationData, source: .reference(StickerPackContextReferenceContentSource(controller: controller, sourceNode: node)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
         self.presentInGlobalOverlay(contextController, nil)
     }
     
@@ -2015,7 +2015,7 @@ public final class StickerPackScreenImpl: ViewController {
                 }
             }))
             
-            let contextMenuController = ContextMenuController(actions: actions)
+            let contextMenuController = makeContextMenuController(actions: actions)
             strongSelf.present(contextMenuController, in: .window(.root), with: ContextMenuControllerPresentationArguments(sourceNodeAndRect: { [weak self] in
                 if let strongSelf = self {
                     return (node, frame.insetBy(dx: -40.0, dy: 0.0), strongSelf.controllerNode, strongSelf.controllerNode.view.bounds)
@@ -2029,6 +2029,12 @@ public final class StickerPackScreenImpl: ViewController {
             }
             
             strongSelf.openMentionDisposable.set((strongSelf.context.engine.peers.resolvePeerByName(name: mention)
+            |> mapToSignal { result -> Signal<EnginePeer?, NoError> in
+                guard case let .result(result) = result else {
+                    return .complete()
+                }
+                return .single(result)
+            }
             |> mapToSignal { peer -> Signal<Peer?, NoError> in
                 if let peer = peer {
                     return .single(peer._asPeer())

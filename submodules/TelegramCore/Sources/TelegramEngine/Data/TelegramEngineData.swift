@@ -131,10 +131,10 @@ public extension TelegramEngine {
         public struct Item {
         }
 
-        private let account: Account
+        private let postbox: Postbox
 
-        init(account: Account) {
-            self.account = account
+        public init(postbox: Postbox) {
+            self.postbox = postbox
         }
 
         private func _subscribe(items: [AnyPostboxViewDataItem]) -> Signal<[Any], NoError> {
@@ -144,7 +144,7 @@ public extension TelegramEngine {
                     keys.insert(key)
                 }
             }
-            return self.account.postbox.combinedView(keys: Array(keys))
+            return self.postbox.combinedView(keys: Array(keys))
             |> map { views -> [Any] in
                 var results: [Any] = []
 
@@ -155,6 +155,9 @@ public extension TelegramEngine {
                 return results
             }
         }
+        
+        /*public func subscribe<each T: TelegramEngineDataItem>(_ ts: repeat each T) -> Signal<repeat each T, NoError> {
+        }*/
 
         public func subscribe<T0: TelegramEngineDataItem>(_ t0: T0) -> Signal<T0.Result, NoError> {
             return self._subscribe(items: [t0 as! AnyPostboxViewDataItem])

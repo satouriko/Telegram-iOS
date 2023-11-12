@@ -12,6 +12,7 @@ import SearchUI
 import TelegramUIPreferences
 import ListMessageItem
 import ChatControllerInteraction
+import ChatMessageItemView
 
 private enum ChatHistorySearchEntryStableId: Hashable {
     case messageId(MessageId)
@@ -171,7 +172,7 @@ final class ChatHistorySearchContainerNode: SearchDisplayControllerContentNode {
         let previousEntriesValue = Atomic<[ChatHistorySearchEntry]?>(value: nil)
         
         self.searchQueryDisposable.set((self.searchQuery.get()
-        |> deliverOnMainQueue).start(next: { [weak self] query in
+        |> deliverOnMainQueue).startStrict(next: { [weak self] query in
             if let strongSelf = self {
                 let signal: Signal<([ChatHistorySearchEntry], [MessageId: Message])?, NoError>
                 if let query = query, !query.isEmpty {
@@ -197,7 +198,7 @@ final class ChatHistorySearchContainerNode: SearchDisplayControllerContentNode {
                 }
                 
                 strongSelf.searchDisposable.set((signal
-                |> deliverOnMainQueue).start(next: { entriesAndMessages in
+                |> deliverOnMainQueue).startStrict(next: { entriesAndMessages in
                     if let strongSelf = self {
                         let previousEntries = previousEntriesValue.swap(entriesAndMessages?.0)
                         
@@ -216,7 +217,7 @@ final class ChatHistorySearchContainerNode: SearchDisplayControllerContentNode {
             self?.dismissInput?()
         }
         
-        self.presentationDataDisposable = context.sharedContext.presentationData.start(next: { [weak self] presentationData in
+        self.presentationDataDisposable = context.sharedContext.presentationData.startStrict(next: { [weak self] presentationData in
             if let strongSelf = self {
                 strongSelf.themeAndStringsPromise.set(.single((presentationData.theme, presentationData.strings, presentationData.dateTimeFormat, presentationData.listsFontSize)))
                 
@@ -352,8 +353,6 @@ final class ChatHistorySearchContainerNode: SearchDisplayControllerContentNode {
                 itemNode.updateHiddenMedia()
             } else if let itemNode = itemNode as? ListMessageNode {
                 itemNode.updateHiddenMedia()
-            } else if let itemNode = itemNode as? GridMessageItemNode {
-                itemNode.updateHiddenMedia()
             }
         }
     }
@@ -366,10 +365,6 @@ final class ChatHistorySearchContainerNode: SearchDisplayControllerContentNode {
                     transitionNode = result
                 }
             } else if let itemNode = itemNode as? ListMessageNode {
-                if let result = itemNode.transitionNode(id: messageId, media: media, adjustRect: false) {
-                    transitionNode = result
-                }
-            } else if let itemNode = itemNode as? GridMessageItemNode {
                 if let result = itemNode.transitionNode(id: messageId, media: media, adjustRect: false) {
                     transitionNode = result
                 }

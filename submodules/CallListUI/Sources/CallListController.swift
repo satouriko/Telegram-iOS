@@ -127,7 +127,7 @@ public final class CallListController: TelegramBaseController {
         }
         
         self.presentationDataDisposable = (context.sharedContext.presentationData
-        |> deliverOnMainQueue).start(next: { [weak self] presentationData in
+        |> deliverOnMainQueue).startStrict(next: { [weak self] presentationData in
             if let strongSelf = self {
                 let previousTheme = strongSelf.presentationData.theme
                 let previousStrings = strongSelf.presentationData.strings
@@ -138,7 +138,7 @@ public final class CallListController: TelegramBaseController {
                     strongSelf.updateThemeAndStrings()
                 }
             }
-        })
+        }).strict()
         
         self.scrollToTop = { [weak self] in
             self?.controllerNode.scrollToLatest()
@@ -217,7 +217,7 @@ public final class CallListController: TelegramBaseController {
                 let _ = (strongSelf.context.engine.data.get(
                     TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
                 )
-                |> deliverOnMainQueue).start(next: { peer in
+                |> deliverOnMainQueue).startStandalone(next: { peer in
                     if let strongSelf = self, let peer = peer, let controller = strongSelf.context.sharedContext.makePeerInfoController(context: strongSelf.context, updatedPresentationData: nil, peer: peer._asPeer(), mode: .calls(messages: messages.map({ $0._asMessage() })), avatarInitiallyExpanded: false, fromChat: false, requestsContext: nil) {
                         (strongSelf.navigationController as? NavigationController)?.pushViewController(controller)
                     }
@@ -335,7 +335,7 @@ public final class CallListController: TelegramBaseController {
                 self?.clearDisposable.set(nil)
             }
             strongSelf.clearDisposable.set((signal
-            |> deliverOnMainQueue).start(completed: {
+            |> deliverOnMainQueue).startStrict(completed: {
             }))
         }
         
@@ -377,7 +377,7 @@ public final class CallListController: TelegramBaseController {
             }
         }
     
-        let contextController = ContextController(account: self.context.account, presentationData: self.presentationData, source: .extracted(ExtractedContentSourceImpl(controller: self, sourceNode: buttonNode.contentNode, keepInPlace: false, blurBackground: false)), items: .single(ContextController.Items(content: .list(items))), gesture: nil)
+        let contextController = ContextController(presentationData: self.presentationData, source: .extracted(ExtractedContentSourceImpl(controller: self, sourceNode: buttonNode.contentNode, keepInPlace: false, blurBackground: false)), items: .single(ContextController.Items(content: .list(items))), gesture: nil)
         self.presentInGlobalOverlay(contextController)
     }
     
@@ -386,7 +386,7 @@ public final class CallListController: TelegramBaseController {
         controller.navigationPresentation = .modal
         self.createActionDisposable.set((controller.result
         |> take(1)
-        |> deliverOnMainQueue).start(next: { [weak controller, weak self] result in
+        |> deliverOnMainQueue).startStrict(next: { [weak controller, weak self] result in
             controller?.dismissSearch()
             if let strongSelf = self, let (contactPeers, action, _, _, _) = result, let contactPeer = contactPeers.first,  case let .peer(peer, _, _) = contactPeer {
                 strongSelf.call(peer.id, isVideo: action == .videoCall, began: {
@@ -396,7 +396,7 @@ public final class CallListController: TelegramBaseController {
                         |> timeout(1.0, queue: Queue.mainQueue(), alternate: .single(true))
                         |> delay(0.5, queue: Queue.mainQueue())
                         |> take(1)
-                        |> deliverOnMainQueue).start(next: { _ in
+                        |> deliverOnMainQueue).startStandalone(next: { _ in
                             if let _ = self, let controller = controller, let navigationController = controller.navigationController as? NavigationController {
                                 if navigationController.viewControllers.last === controller {
                                     let _ = navigationController.popViewController(animated: true)
@@ -467,7 +467,7 @@ public final class CallListController: TelegramBaseController {
     private func call(_ peerId: EnginePeer.Id, isVideo: Bool, began: (() -> Void)? = nil) {
         self.peerViewDisposable.set((self.context.account.viewTracker.peerView(peerId)
             |> take(1)
-            |> deliverOnMainQueue).start(next: { [weak self] view in
+            |> deliverOnMainQueue).startStrict(next: { [weak self] view in
             if let strongSelf = self {
                 guard let peer = peerViewMainPeer(view) else {
                     return
@@ -500,7 +500,7 @@ public final class CallListController: TelegramBaseController {
             })
         })))
         
-        let controller = ContextController(account: self.context.account, presentationData: self.presentationData, source: .extracted(CallListTabBarContextExtractedContentSource(controller: self, sourceNode: sourceNode)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
+        let controller = ContextController(presentationData: self.presentationData, source: .extracted(CallListTabBarContextExtractedContentSource(controller: self, sourceNode: sourceNode)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
         self.context.sharedContext.mainWindow?.presentInGlobalOverlay(controller)
     }
 }

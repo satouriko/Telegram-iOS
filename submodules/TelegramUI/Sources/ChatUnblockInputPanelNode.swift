@@ -7,6 +7,7 @@ import Postbox
 import SwiftSignalKit
 import TelegramPresentationData
 import ChatPresentationInterfaceState
+import ChatInputPanelNode
 
 final class ChatUnblockInputPanelNode: ChatInputPanelNode {
     private let button: HighlightableButtonNode
@@ -20,7 +21,7 @@ final class ChatUnblockInputPanelNode: ChatInputPanelNode {
         didSet {
             if self.statusDisposable == nil {
                 if let startingBot = self.interfaceInteraction?.statuses?.unblockingPeer {
-                    self.statusDisposable = (startingBot |> deliverOnMainQueue).start(next: { [weak self] value in
+                    self.statusDisposable = (startingBot |> deliverOnMainQueue).startStrict(next: { [weak self] value in
                         if let strongSelf = self {
                             if value != !strongSelf.activityIndicator.isHidden {
                                 if value {

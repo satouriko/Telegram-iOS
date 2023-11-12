@@ -18,8 +18,8 @@ public func extractImageExtraScans(_ data: Data) -> [Int] {
     }
 }
 
-public func compressImageToJPEG(_ image: UIImage, quality: Float) -> Data? {
-    if let result = compressJPEGData(image) {
+public func compressImageToJPEG(_ image: UIImage, quality: Float, tempFilePath: String) -> Data? {
+    if let result = compressJPEGData(image, tempFilePath) {
         return result
     }
     
@@ -42,6 +42,14 @@ public func compressImageToJPEG(_ image: UIImage, quality: Float) -> Data? {
     }
     
     return data as Data
+}
+
+public func compressImageToJPEGXL(_ image: UIImage, quality: Int) -> Data? {
+    return compressJPEGXLData(image, Int32(quality))
+}
+
+public func decompressImageFromJPEGXL(data: Data) -> UIImage? {
+    return decompressJPEGXLData(data)
 }
 
 @available(iOSApplicationExtension 11.0, iOS 11.0, *)

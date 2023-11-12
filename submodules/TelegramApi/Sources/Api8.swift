@@ -209,6 +209,7 @@ public extension Api {
 public extension Api {
     indirect enum InputInvoice: TypeConstructorDescription {
         case inputInvoiceMessage(peer: Api.InputPeer, msgId: Int32)
+        case inputInvoicePremiumGiftCode(purpose: Api.InputStorePaymentPurpose, option: Api.PremiumGiftCodeOption)
         case inputInvoiceSlug(slug: String)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -219,6 +220,13 @@ public extension Api {
                     }
                     peer.serialize(buffer, true)
                     serializeInt32(msgId, buffer: buffer, boxed: false)
+                    break
+                case .inputInvoicePremiumGiftCode(let purpose, let option):
+                    if boxed {
+                        buffer.appendInt32(-1734841331)
+                    }
+                    purpose.serialize(buffer, true)
+                    option.serialize(buffer, true)
                     break
                 case .inputInvoiceSlug(let slug):
                     if boxed {
@@ -233,6 +241,8 @@ public extension Api {
         switch self {
                 case .inputInvoiceMessage(let peer, let msgId):
                 return ("inputInvoiceMessage", [("peer", peer as Any), ("msgId", msgId as Any)])
+                case .inputInvoicePremiumGiftCode(let purpose, let option):
+                return ("inputInvoicePremiumGiftCode", [("purpose", purpose as Any), ("option", option as Any)])
                 case .inputInvoiceSlug(let slug):
                 return ("inputInvoiceSlug", [("slug", slug as Any)])
     }
@@ -249,6 +259,24 @@ public extension Api {
             let _c2 = _2 != nil
             if _c1 && _c2 {
                 return Api.InputInvoice.inputInvoiceMessage(peer: _1!, msgId: _2!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_inputInvoicePremiumGiftCode(_ reader: BufferReader) -> InputInvoice? {
+            var _1: Api.InputStorePaymentPurpose?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.InputStorePaymentPurpose
+            }
+            var _2: Api.PremiumGiftCodeOption?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.PremiumGiftCodeOption
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.InputInvoice.inputInvoicePremiumGiftCode(purpose: _1!, option: _2!)
             }
             else {
                 return nil
@@ -282,10 +310,11 @@ public extension Api {
         case inputMediaPhoto(flags: Int32, id: Api.InputPhoto, ttlSeconds: Int32?)
         case inputMediaPhotoExternal(flags: Int32, url: String, ttlSeconds: Int32?)
         case inputMediaPoll(flags: Int32, poll: Api.Poll, correctAnswers: [Buffer]?, solution: String?, solutionEntities: [Api.MessageEntity]?)
-        case inputMediaStory(userId: Api.InputUser, id: Int32)
+        case inputMediaStory(peer: Api.InputPeer, id: Int32)
         case inputMediaUploadedDocument(flags: Int32, file: Api.InputFile, thumb: Api.InputFile?, mimeType: String, attributes: [Api.DocumentAttribute], stickers: [Api.InputDocument]?, ttlSeconds: Int32?)
         case inputMediaUploadedPhoto(flags: Int32, file: Api.InputFile, stickers: [Api.InputDocument]?, ttlSeconds: Int32?)
         case inputMediaVenue(geoPoint: Api.InputGeoPoint, title: String, address: String, provider: String, venueId: String, venueType: String)
+        case inputMediaWebPage(flags: Int32, url: String)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
@@ -398,11 +427,11 @@ public extension Api {
                         item.serialize(buffer, true)
                     }}
                     break
-                case .inputMediaStory(let userId, let id):
+                case .inputMediaStory(let peer, let id):
                     if boxed {
-                        buffer.appendInt32(-1702447729)
+                        buffer.appendInt32(-1979852936)
                     }
-                    userId.serialize(buffer, true)
+                    peer.serialize(buffer, true)
                     serializeInt32(id, buffer: buffer, boxed: false)
                     break
                 case .inputMediaUploadedDocument(let flags, let file, let thumb, let mimeType, let attributes, let stickers, let ttlSeconds):
@@ -449,6 +478,13 @@ public extension Api {
                     serializeString(venueId, buffer: buffer, boxed: false)
                     serializeString(venueType, buffer: buffer, boxed: false)
                     break
+                case .inputMediaWebPage(let flags, let url):
+                    if boxed {
+                        buffer.appendInt32(-1038383031)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    serializeString(url, buffer: buffer, boxed: false)
+                    break
     }
     }
     
@@ -478,14 +514,16 @@ public extension Api {
                 return ("inputMediaPhotoExternal", [("flags", flags as Any), ("url", url as Any), ("ttlSeconds", ttlSeconds as Any)])
                 case .inputMediaPoll(let flags, let poll, let correctAnswers, let solution, let solutionEntities):
                 return ("inputMediaPoll", [("flags", flags as Any), ("poll", poll as Any), ("correctAnswers", correctAnswers as Any), ("solution", solution as Any), ("solutionEntities", solutionEntities as Any)])
-                case .inputMediaStory(let userId, let id):
-                return ("inputMediaStory", [("userId", userId as Any), ("id", id as Any)])
+                case .inputMediaStory(let peer, let id):
+                return ("inputMediaStory", [("peer", peer as Any), ("id", id as Any)])
                 case .inputMediaUploadedDocument(let flags, let file, let thumb, let mimeType, let attributes, let stickers, let ttlSeconds):
                 return ("inputMediaUploadedDocument", [("flags", flags as Any), ("file", file as Any), ("thumb", thumb as Any), ("mimeType", mimeType as Any), ("attributes", attributes as Any), ("stickers", stickers as Any), ("ttlSeconds", ttlSeconds as Any)])
                 case .inputMediaUploadedPhoto(let flags, let file, let stickers, let ttlSeconds):
                 return ("inputMediaUploadedPhoto", [("flags", flags as Any), ("file", file as Any), ("stickers", stickers as Any), ("ttlSeconds", ttlSeconds as Any)])
                 case .inputMediaVenue(let geoPoint, let title, let address, let provider, let venueId, let venueType):
                 return ("inputMediaVenue", [("geoPoint", geoPoint as Any), ("title", title as Any), ("address", address as Any), ("provider", provider as Any), ("venueId", venueId as Any), ("venueType", venueType as Any)])
+                case .inputMediaWebPage(let flags, let url):
+                return ("inputMediaWebPage", [("flags", flags as Any), ("url", url as Any)])
     }
     }
     
@@ -725,16 +763,16 @@ public extension Api {
             }
         }
         public static func parse_inputMediaStory(_ reader: BufferReader) -> InputMedia? {
-            var _1: Api.InputUser?
+            var _1: Api.InputPeer?
             if let signature = reader.readInt32() {
-                _1 = Api.parse(reader, signature: signature) as? Api.InputUser
+                _1 = Api.parse(reader, signature: signature) as? Api.InputPeer
             }
             var _2: Int32?
             _2 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             if _c1 && _c2 {
-                return Api.InputMedia.inputMediaStory(userId: _1!, id: _2!)
+                return Api.InputMedia.inputMediaStory(peer: _1!, id: _2!)
             }
             else {
                 return nil
@@ -824,6 +862,20 @@ public extension Api {
             let _c6 = _6 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
                 return Api.InputMedia.inputMediaVenue(geoPoint: _1!, title: _2!, address: _3!, provider: _4!, venueId: _5!, venueType: _6!)
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_inputMediaWebPage(_ reader: BufferReader) -> InputMedia? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            _2 = parseString(reader)
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.InputMedia.inputMediaWebPage(flags: _1!, url: _2!)
             }
             else {
                 return nil

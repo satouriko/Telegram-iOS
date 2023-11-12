@@ -838,7 +838,10 @@ static const NSUInteger MTMaxUnacknowledgedMessageCount = 64;
                 __weak MTProto *weakSelf = self;
                 MTSignal *checkSignal = [[MTConnectionProbing probeProxyWithContext:_context datacenterId:_datacenterId settings:transport.proxySettings] delay:5.0 onQueue:[MTQueue concurrentDefaultQueue]];
                 checkSignal = [[checkSignal then:[[MTSignal complete] delay:20.0 onQueue:[MTQueue concurrentDefaultQueue]]] restart];
-                [_probingDisposable setDisposable:[checkSignal startWithNext:^(NSNumber *next) {
+                if (_probingDisposable == nil) {
+                    _probingDisposable = [[MTMetaDisposable alloc] init];
+                }
+                [_probingDisposable setDisposable:[checkSignal startWithNextStrict:^(NSNumber *next) {
                     [[MTProto managerQueue] dispatchOnQueue:^{
                         __strong MTProto *strongSelf = weakSelf;
                         if (strongSelf == nil) {
@@ -849,7 +852,7 @@ static const NSUInteger MTMaxUnacknowledgedMessageCount = 64;
                             [strongSelf _updateConnectionIssuesStatus:[strongSelf->_probingStatus boolValue]];
                         }
                     }];
-                }]];
+                } file:__FILE_NAME__ line:__LINE__]];
             }
         }
     }];
@@ -865,9 +868,9 @@ static const NSUInteger MTMaxUnacknowledgedMessageCount = 64;
     }
 }
 
-- (NSString *)outgoingMessageDescription:(MTOutgoingMessage *)message messageId:(int64_t)messageId messageSeqNo:(int32_t)messageSeqNo
+- (NSString *)outgoingMessageDescription:(MTOutgoingMessage *)message messageId:(int64_t)messageId messageSeqNo:(int32_t)messageSeqNo authKeyId:(int64_t)authKeyId
 {
-    return [[NSString alloc] initWithFormat:@"%@%@ (%" PRId64 "/%" PRId32 ")", message.metadata, message.additionalDebugDescription != nil ? message.additionalDebugDescription : @"", message.messageId == 0 ? messageId : message.messageId, message.messageSeqNo == 0 ? message.messageSeqNo : messageSeqNo];
+    return [[NSString alloc] initWithFormat:@"%@%@ (%" PRId64 "/%" PRId32 " %" PRId64 ")", message.metadata, message.additionalDebugDescription != nil ? message.additionalDebugDescription : @"", message.messageId == 0 ? messageId : message.messageId, message.messageSeqNo == 0 ? message.messageSeqNo : messageSeqNo, authKeyId];
 }
 
 - (NSString *)outgoingShortMessageDescription:(MTOutgoingMessage *)message messageId:(int64_t)messageId messageSeqNo:(int32_t)messageSeqNo
@@ -1100,7 +1103,7 @@ static const NSUInteger MTMaxUnacknowledgedMessageCount = 64;
                     NSData *data = messageData;
                     
                     if (MTLogEnabled()) {
-                        NSString *messageDescription = [self outgoingMessageDescription:outgoingMessage messageId:messageId messageSeqNo:messageSeqNo];
+                        NSString *messageDescription = [self outgoingMessageDescription:outgoingMessage messageId:messageId messageSeqNo:messageSeqNo authKeyId:authKey.authKeyId];
                         MTLogWithPrefix(_getLogPrefix, @"[MTProto#%p@%p preparing %@]", self, _context, messageDescription);
                     }
                     NSString *shortMessageDescription = [self outgoingShortMessageDescription:outgoingMessage messageId:messageId messageSeqNo:messageSeqNo];

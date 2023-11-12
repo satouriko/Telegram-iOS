@@ -79,6 +79,7 @@ swift_library(
         "//submodules/Utils/RangeSet",
         "//submodules/TelegramUI/Components/Stories/StoryStealthModeSheetScreen",
         "//submodules/TelegramUI/Components/LottieComponent",
+        "//submodules/TelegramUI/Components/LottieComponentResourceContent",
         "//submodules/TextSelectionNode",
         "//submodules/Pasteboard",
         "//submodules/Speak",
@@ -89,6 +90,10 @@ swift_library(
         "//submodules/TelegramUI/Components/NavigationSearchComponent",
         "//submodules/TelegramUI/Components/TabSelectorComponent",
         "//submodules/TelegramUI/Components/OptionButtonComponent",
+        "//submodules/TelegramUI/Components/EmojiTextAttachmentView",
+        "//submodules/Components/BalancedTextComponent",
+        "//submodules/AnimatedCountLabelNode",
+        "//submodules/StickerResources",
     ],
     visibility = [
         "//visibility:public",

@@ -106,6 +106,12 @@ public class LegacyMessageInputPanelNode: ASDisplayNode, TGCaptionPanelView {
         self.currentIsVideo = isVideo
     }
     
+    public func activateInput() {
+        if let view = self.inputPanel.view as? MessageInputPanelComponent.View {
+            view.activateInput()
+        }
+    }
+    
     public func dismissInput() -> Bool {
         if let view = self.inputPanel.view as? MessageInputPanelComponent.View {
             if view.canDeactivateInput() {
@@ -178,6 +184,11 @@ public class LegacyMessageInputPanelNode: ASDisplayNode, TGCaptionPanelView {
             self.scheduledMessageInput = nil
         }
         
+        var hasTimer = self.chatLocation.peerId?.namespace == Namespaces.Peer.CloudUser && !self.isScheduledMessages
+        if self.chatLocation.peerId?.isRepliesOrSavedMessages(accountPeerId: self.context.account.peerId) == true {
+            hasTimer = false
+        }
+        
         self.inputPanel.parentState = self.state
         let inputPanelSize = self.inputPanel.update(
             transition: Transition(transition),
@@ -224,7 +235,7 @@ public class LegacyMessageInputPanelNode: ASDisplayNode, TGCaptionPanelView {
                             self.toggleInputMode()
                         }
                     },
-                    timeoutAction: self.chatLocation.peerId?.namespace == Namespaces.Peer.CloudUser && !self.isScheduledMessages ? { [weak self] sourceView, gesture in
+                    timeoutAction: hasTimer ? { [weak self] sourceView, gesture in
                         if let self {
                             self.presentTimeoutSetup(sourceView: sourceView, gesture: gesture)
                         }
@@ -372,7 +383,7 @@ public class LegacyMessageInputPanelNode: ASDisplayNode, TGCaptionPanelView {
             updateTimeout(nil)
         })))
         
-        let contextController = ContextController(account: self.context.account, presentationData: presentationData, source: .reference(HeaderContextReferenceContentSource(sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+        let contextController = ContextController(presentationData: presentationData, source: .reference(HeaderContextReferenceContentSource(sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
         self.present(contextController)
     }
     

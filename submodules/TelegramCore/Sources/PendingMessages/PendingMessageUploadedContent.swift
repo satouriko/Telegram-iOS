@@ -52,8 +52,8 @@ enum MessageContentToUpload {
     }
 }
 
-func messageContentToUpload(accountPeerId: PeerId, network: Network, postbox: Postbox, auxiliaryMethods: AccountAuxiliaryMethods, transformOutgoingMessageMedia: TransformOutgoingMessageMedia?, messageMediaPreuploadManager: MessageMediaPreuploadManager, revalidationContext: MediaReferenceRevalidationContext, forceReupload: Bool, isGrouped: Bool, message: Message) -> MessageContentToUpload {
-    return messageContentToUpload(accountPeerId: accountPeerId, network: network, postbox: postbox, auxiliaryMethods: auxiliaryMethods, transformOutgoingMessageMedia: transformOutgoingMessageMedia, messageMediaPreuploadManager: messageMediaPreuploadManager, revalidationContext: revalidationContext, forceReupload: forceReupload, isGrouped: isGrouped, passFetchProgress: false, forceNoBigParts: false, peerId: message.id.peerId, messageId: message.id, attributes: message.attributes, text: message.text, media: message.media)
+func messageContentToUpload(accountPeerId: PeerId, network: Network, postbox: Postbox, auxiliaryMethods: AccountAuxiliaryMethods, transformOutgoingMessageMedia: TransformOutgoingMessageMedia?, messageMediaPreuploadManager: MessageMediaPreuploadManager, revalidationContext: MediaReferenceRevalidationContext, forceReupload: Bool, isGrouped: Bool, passFetchProgress: Bool = false, message: Message) -> MessageContentToUpload {
+    return messageContentToUpload(accountPeerId: accountPeerId, network: network, postbox: postbox, auxiliaryMethods: auxiliaryMethods, transformOutgoingMessageMedia: transformOutgoingMessageMedia, messageMediaPreuploadManager: messageMediaPreuploadManager, revalidationContext: revalidationContext, forceReupload: forceReupload, isGrouped: isGrouped, passFetchProgress: passFetchProgress, forceNoBigParts: false, peerId: message.id.peerId, messageId: message.id, attributes: message.attributes, text: message.text, media: message.media)
 }
 
 func messageContentToUpload(accountPeerId: PeerId, network: Network, postbox: Postbox, auxiliaryMethods: AccountAuxiliaryMethods, transformOutgoingMessageMedia: TransformOutgoingMessageMedia?, messageMediaPreuploadManager: MessageMediaPreuploadManager, revalidationContext: MediaReferenceRevalidationContext, forceReupload: Bool, isGrouped: Bool, passFetchProgress: Bool, forceNoBigParts: Bool, peerId: PeerId, messageId: MessageId?, attributes: [MessageAttribute], text: String, media: [Media]) -> MessageContentToUpload {
@@ -88,12 +88,26 @@ func messageContentToUpload(accountPeerId: PeerId, network: Network, postbox: Po
     } else if let contextResult = contextResult {
         return .immediate(.content(PendingMessageUploadedContentAndReuploadInfo(content: .chatContextResult(contextResult), reuploadInfo: nil, cacheReferenceKey: nil)), .text)
     } else if let media = media.first as? TelegramMediaStory {
-        //Signal<PendingMessageUploadedContentResult, PendingMessageUploadError>
         return .signal(postbox.transaction { transaction -> PendingMessageUploadedContentResult in
-            guard let inputUser = transaction.getPeer(media.storyId.peerId).flatMap(apiInputUser) else {
+            guard let inputPeer = transaction.getPeer(media.storyId.peerId).flatMap(apiInputPeer) else {
                 return .progress(0.0)
             }
-            return .content(PendingMessageUploadedContentAndReuploadInfo(content: .media(.inputMediaStory(userId: inputUser, id: media.storyId.id), ""), reuploadInfo: nil, cacheReferenceKey: nil))
+            return .content(PendingMessageUploadedContentAndReuploadInfo(content: .media(.inputMediaStory(peer: inputPeer, id: media.storyId.id), ""), reuploadInfo: nil, cacheReferenceKey: nil))
+        }
+        |> castError(PendingMessageUploadError.self), .text)
+    } else if let media = media.first as? TelegramMediaWebpage, case let .Loaded(content) = media.content {
+        return .signal(postbox.transaction { transaction -> PendingMessageUploadedContentResult in
+            var flags: Int32 = 0
+            if let attribute = attributes.first(where: { $0 is WebpagePreviewMessageAttribute }) as? WebpagePreviewMessageAttribute {
+                if let forceLargeMedia = attribute.forceLargeMedia {
+                    if forceLargeMedia {
+                        flags |= 1 << 0
+                    } else {
+                        flags |= 1 << 1
+                    }
+                }
+            }
+            return .content(PendingMessageUploadedContentAndReuploadInfo(content: .media(.inputMediaWebPage(flags: flags, url: content.url), text), reuploadInfo: nil, cacheReferenceKey: nil))
         }
         |> castError(PendingMessageUploadError.self), .text)
     } else if let media = media.first, let mediaResult = mediaContentToUpload(accountPeerId: accountPeerId, network: network, postbox: postbox, auxiliaryMethods: auxiliaryMethods, transformOutgoingMessageMedia: transformOutgoingMessageMedia, messageMediaPreuploadManager: messageMediaPreuploadManager, revalidationContext: revalidationContext, forceReupload: forceReupload, isGrouped: isGrouped, passFetchProgress: passFetchProgress, forceNoBigParts: forceNoBigParts, peerId: peerId, media: media, text: text, autoremoveMessageAttribute: autoremoveMessageAttribute, autoclearMessageAttribute: autoclearMessageAttribute, messageId: messageId, attributes: attributes) {
@@ -223,6 +237,18 @@ func mediaContentToUpload(accountPeerId: PeerId, network: Network, postbox: Post
     } else if let media = media as? TelegramMediaDice {
         let inputDice = Api.InputMedia.inputMediaDice(emoticon: media.emoji)
         return .single(.content(PendingMessageUploadedContentAndReuploadInfo(content: .media(inputDice, text), reuploadInfo: nil, cacheReferenceKey: nil)))
+    } else if let media = media as? TelegramMediaWebpage, case let .Loaded(content) = media.content {
+        var flags: Int32 = 0
+        if let attribute = attributes.first(where: { $0 is WebpagePreviewMessageAttribute }) as? WebpagePreviewMessageAttribute {
+            if let forceLargeMedia = attribute.forceLargeMedia {
+                if forceLargeMedia {
+                    flags |= 1 << 0
+                } else {
+                    flags |= 1 << 1
+                }
+            }
+        }
+        return .single(.content(PendingMessageUploadedContentAndReuploadInfo(content: .media(.inputMediaWebPage(flags: flags, url: content.url), text), reuploadInfo: nil, cacheReferenceKey: nil)))
     } else {
         return nil
     }
@@ -937,5 +963,15 @@ private func uploadedMediaFileContent(network: Network, postbox: Postbox, auxili
                     }
             }
         }
+        |> take(until: { result in
+            var complete = false
+            switch result {
+            case .content:
+                complete = true
+            case .progress:
+                complete = false
+            }
+            return SignalTakeAction(passthrough: true, complete: complete)
+        })
     }
 }

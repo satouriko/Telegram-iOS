@@ -100,7 +100,7 @@ class BazelCommandLine:
 
             # https://github.com/bazelbuild/rules_swift
             # Use -Osize instead of -O when building swift modules.
-            '--features=swift.opt_uses_osize',
+            #'--features=swift.opt_uses_osize',
 
             # --num-threads 0 forces swiftc to generate one object file per module; it:
             # 1. resolves issues with the linker caused by the swift-objc mixing.
@@ -546,6 +546,7 @@ def generate_project(bazel, arguments):
 
     disable_extensions = False
     disable_provisioning_profiles = False
+    project_include_release = False
     generate_dsym = False
     target_name = "Telegram"
 
@@ -553,6 +554,8 @@ def generate_project(bazel, arguments):
         disable_extensions = arguments.disableExtensions
     if arguments.disableProvisioningProfiles is not None:
         disable_provisioning_profiles = arguments.disableProvisioningProfiles
+    if arguments.projectIncludeRelease is not None:
+        project_include_release = arguments.projectIncludeRelease
     if arguments.xcodeManagedCodesigning is not None and arguments.xcodeManagedCodesigning == True:
         disable_extensions = True
     if arguments.generateDsym is not None:
@@ -566,6 +569,7 @@ def generate_project(bazel, arguments):
         build_environment=bazel_command_line.build_environment,
         disable_extensions=disable_extensions,
         disable_provisioning_profiles=disable_provisioning_profiles,
+        include_release=project_include_release,
         generate_dsym=generate_dsym,
         configuration_path=bazel_command_line.configuration_path,
         bazel_app_arguments=bazel_command_line.get_project_generation_arguments(),
@@ -622,7 +626,7 @@ def build(bazel, arguments):
             sys.exit(1)
         shutil.copyfile(ipa_paths[0], artifacts_path + '/Telegram.ipa')
 
-        dsym_paths = glob.glob('bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/*.dSYM')
+        dsym_paths = glob.glob('bazel-bin/Telegram/**/*.dSYM')
         for dsym_path in dsym_paths:
             file_name = os.path.basename(dsym_path)
             shutil.copytree(dsym_path, artifacts_path + '/DSYMs/{}'.format(file_name))
@@ -836,6 +840,15 @@ if __name__ == '__main__':
         help='''
             This allows to build the project for simulator without having any codesigning identities installed.
             Building for an actual device will fail.
+            '''
+    )
+
+    generateProjectParser.add_argument(
+        '--projectIncludeRelease',
+        action='store_true',
+        default=False,
+        help='''
+            Generate the Xcode project with Debug and Release configurations.
             '''
     )
 

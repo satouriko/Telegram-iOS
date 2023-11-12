@@ -409,7 +409,15 @@ public final class TextFieldComponent: Component {
         }
         
         public func textViewDidBeginEditing(_ textView: UITextView) {
+            guard let component = self.component else {
+                return
+            }
             self.state?.updated(transition: Transition(animation: .curve(duration: 0.5, curve: .spring)).withUserData(AnimationHint(kind: .textFocusChanged)))
+            if component.isOneLineWhenUnfocused {
+                Queue.mainQueue().justDispatch {
+                    self.textView.selectedTextRange = self.textView.textRange(from: self.textView.endOfDocument, to: self.textView.endOfDocument)
+                }
+            }
         }
         
         public func textViewDidEndEditing(_ textView: UITextView) {
@@ -655,7 +663,7 @@ public final class TextFieldComponent: Component {
             }
 
             var spoilerRects: [CGRect] = []
-            var customEmojiRects: [(CGRect, ChatTextInputTextCustomEmojiAttribute)] = []
+            var customEmojiRects: [(CGRect, ChatTextInputTextCustomEmojiAttribute, CGFloat)] = []
 
             let textView = self.textView
             if let attributedText = textView.attributedText {
@@ -699,9 +707,13 @@ public final class TextFieldComponent: Component {
                     
                     if let value = attributes[ChatTextInputAttributes.customEmoji] as? ChatTextInputTextCustomEmojiAttribute {
                         if let start = textView.position(from: beginning, offset: range.location), let end = textView.position(from: start, offset: range.length), let textRange = textView.textRange(from: start, to: end) {
+                            var emojiFontSize = component.fontSize
+                            if let font = attributes[.font] as? UIFont {
+                                emojiFontSize = font.pointSize
+                            }
                             let textRects = textView.selectionRects(for: textRange)
                             for textRect in textRects {
-                                customEmojiRects.append((textRect.rect, value))
+                                customEmojiRects.append((textRect.rect, value, emojiFontSize))
                                 break
                             }
                         }
@@ -862,17 +874,23 @@ public final class TextFieldComponent: Component {
                 }
             }
             
+            let wasEditing = component.externalState.isEditing
+            let isEditing = self.textView.isFirstResponder
+            
             if self.textView.textContainerInset != component.insets {
                 self.textView.textContainerInset = component.insets
             }
+            
+            var availableSize = availableSize
+            if !isEditing && component.isOneLineWhenUnfocused {
+                availableSize.width += 32.0
+            }
+            
             self.textContainer.size = CGSize(width: availableSize.width - self.textView.textContainerInset.left - self.textView.textContainerInset.right, height: 10000000.0)
             self.layoutManager.ensureLayout(for: self.textContainer)
             
             let boundingRect = self.layoutManager.boundingRect(forGlyphRange: NSRange(location: 0, length: self.textStorage.length), in: self.textContainer)
             let size = CGSize(width: availableSize.width, height: min(availableSize.height, ceil(boundingRect.height) + self.textView.textContainerInset.top + self.textView.textContainerInset.bottom))
-            
-            let wasEditing = component.externalState.isEditing
-            let isEditing = self.textView.isFirstResponder
             
             var refreshScrolling = self.textView.bounds.size != size
             if component.isOneLineWhenUnfocused && !isEditing && isEditing != wasEditing {
@@ -901,21 +919,30 @@ public final class TextFieldComponent: Component {
                 if self.textView.inputView == nil {
                     self.textView.inputView = inputView
                     if self.textView.isFirstResponder {
-                        self.textView.reloadInputViews()
+                        // Avoid layout cycle
+                        DispatchQueue.main.async { [weak self] in
+                            self?.textView.reloadInputViews()
+                        }
                     }
                 }
             } else if component.hideKeyboard {
                 if self.textView.inputView == nil {
                     self.textView.inputView = EmptyInputView()
                     if self.textView.isFirstResponder {
-                        self.textView.reloadInputViews()
+                        // Avoid layout cycle
+                        DispatchQueue.main.async { [weak self] in
+                            self?.textView.reloadInputViews()
+                        }
                     }
                 }
             } else {
                 if self.textView.inputView != nil {
                     self.textView.inputView = nil
                     if self.textView.isFirstResponder {
-                        self.textView.reloadInputViews()
+                        // Avoid layout cycle
+                        DispatchQueue.main.async { [weak self] in
+                            self?.textView.reloadInputViews()
+                        }
                     }
                 }
             }
@@ -936,6 +963,7 @@ public final class TextFieldComponent: Component {
                 if let view = self.ellipsisView.view {
                     if view.superview == nil {
                         view.alpha = 0.0
+                        view.isUserInteractionEnabled = false
                         self.textView.addSubview(view)
                     }
                     let ellipsisFrame = CGRect(origin: CGPoint(x: position.x - 8.0, y: position.y), size: ellipsisSize)

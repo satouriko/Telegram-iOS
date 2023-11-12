@@ -253,7 +253,12 @@ func _internal_createForumChannelTopic(account: Account, peerId: PeerId, title: 
     }
 }
 
-func _internal_fetchForumChannelTopic(account: Account, peerId: PeerId, threadId: Int64) -> Signal<EngineMessageHistoryThread.Info?, NoError> {
+public enum FetchForumChannelTopicResult {
+    case progress
+    case result(EngineMessageHistoryThread.Info?)
+}
+
+func _internal_fetchForumChannelTopic(account: Account, peerId: PeerId, threadId: Int64) -> Signal<FetchForumChannelTopicResult, NoError> {
     return account.postbox.transaction { transaction -> (info: EngineMessageHistoryThread.Info?, inputChannel: Api.InputChannel?) in
         if let data = transaction.getMessageHistoryThreadInfo(peerId: peerId, threadId: threadId)?.data.get(MessageHistoryThreadData.self) {
             return (data.info, nil)
@@ -261,20 +266,20 @@ func _internal_fetchForumChannelTopic(account: Account, peerId: PeerId, threadId
             return (nil, transaction.getPeer(peerId).flatMap(apiInputChannel))
         }
     }
-    |> mapToSignal { info, _ -> Signal<EngineMessageHistoryThread.Info?, NoError> in
+    |> mapToSignal { info, _ -> Signal<FetchForumChannelTopicResult, NoError> in
         if let info = info {
-            return .single(info)
+            return .single(.result(info))
         } else {
-            return resolveForumThreads(accountPeerId: account.peerId, postbox: account.postbox, network: account.network, ids: [MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: Int32(clamping: threadId))])
-            |> mapToSignal { _ -> Signal<EngineMessageHistoryThread.Info?, NoError> in
-                return account.postbox.transaction { transaction -> EngineMessageHistoryThread.Info?  in
+            return .single(.progress) |> then(resolveForumThreads(accountPeerId: account.peerId, postbox: account.postbox, network: account.network, ids: [MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: Int32(clamping: threadId))])
+            |> mapToSignal { _ -> Signal<FetchForumChannelTopicResult, NoError> in
+                return account.postbox.transaction { transaction -> FetchForumChannelTopicResult in
                     if let data = transaction.getMessageHistoryThreadInfo(peerId: peerId, threadId: threadId)?.data.get(MessageHistoryThreadData.self) {
-                        return data.info
+                        return .result(data.info)
                     } else {
-                        return nil
+                        return .result(nil)
                     }
                 }
-            }
+            })
         }
     }
 }
@@ -484,15 +489,15 @@ func _internal_setForumChannelPinnedTopics(account: Account, id: EnginePeer.Id, 
     }
 }
 
-func _internal_setChannelForumMode(account: Account, peerId: PeerId, isForum: Bool) -> Signal<Never, NoError> {
-    return account.postbox.transaction { transaction -> Api.InputChannel? in
+func _internal_setChannelForumMode(postbox: Postbox, network: Network, stateManager: AccountStateManager, peerId: PeerId, isForum: Bool) -> Signal<Never, NoError> {
+    return postbox.transaction { transaction -> Api.InputChannel? in
         return transaction.getPeer(peerId).flatMap(apiInputChannel)
     }
     |> mapToSignal { inputChannel -> Signal<Never, NoError> in
         guard let inputChannel = inputChannel else {
             return .complete()
         }
-        return account.network.request(Api.functions.channels.toggleForum(channel: inputChannel, enabled: isForum ? .boolTrue : .boolFalse))
+        return network.request(Api.functions.channels.toggleForum(channel: inputChannel, enabled: isForum ? .boolTrue : .boolFalse))
         |> map(Optional.init)
         |> `catch` { _ -> Signal<Api.Updates?, NoError> in
             return .single(nil)
@@ -501,7 +506,7 @@ func _internal_setChannelForumMode(account: Account, peerId: PeerId, isForum: Bo
             guard let result = result else {
                 return .complete()
             }
-            account.stateManager.addUpdates(result)
+            stateManager.addUpdates(result)
             
             return .complete()
         }

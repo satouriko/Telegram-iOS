@@ -7,7 +7,9 @@ import TelegramApi
 public enum BotPaymentInvoiceSource {
     case message(MessageId)
     case slug(String)
+    case premiumGiveaway(boostPeer: EnginePeer.Id, additionalPeerIds: [EnginePeer.Id], countries: [String], onlyNewSubscribers: Bool, randomId: Int64, untilDate: Int32, currency: String, amount: Int64, option: PremiumGiftCodeOption)
 }
+
 
 public struct BotPaymentInvoiceFields: OptionSet {
     public var rawValue: Int32
@@ -47,6 +49,7 @@ public struct BotPaymentInvoice : Equatable {
     
     public struct RecurrentInfo: Equatable {
         public var termsUrl: String
+        public var isRecurrent: Bool
     }
 
     public let isTest: Bool
@@ -54,7 +57,7 @@ public struct BotPaymentInvoice : Equatable {
     public let currency: String
     public let prices: [BotPaymentPrice]
     public let tip: Tip?
-    public let recurrentInfo: RecurrentInfo?
+    public let termsInfo: RecurrentInfo?
 }
 
 public struct BotPaymentNativeProvider : Equatable {
@@ -144,7 +147,7 @@ public enum BotPaymentFormRequestError {
 extension BotPaymentInvoice {
     init(apiInvoice: Api.Invoice) {
         switch apiInvoice {
-        case let .invoice(flags, currency, prices, maxTipAmount, suggestedTipAmounts, recurrentTermsUrl):
+        case let .invoice(flags, currency, prices, maxTipAmount, suggestedTipAmounts, termsUrl):
             var fields = BotPaymentInvoiceFields()
             if (flags & (1 << 1)) != 0 {
                 fields.insert(.name)
@@ -167,9 +170,10 @@ extension BotPaymentInvoice {
             if (flags & (1 << 7)) != 0 {
                 fields.insert(.emailAvailableToProvider)
             }
-            var recurrentInfo: BotPaymentInvoice.RecurrentInfo?
-            if let recurrentTermsUrl = recurrentTermsUrl {
-                recurrentInfo = BotPaymentInvoice.RecurrentInfo(termsUrl: recurrentTermsUrl)
+            let isRecurrent = (flags & (1 << 9)) != 0
+            var termsInfo: BotPaymentInvoice.RecurrentInfo?
+            if let termsUrl = termsUrl {
+                termsInfo = BotPaymentInvoice.RecurrentInfo(termsUrl: termsUrl, isRecurrent: isRecurrent)
             }
             var parsedTip: BotPaymentInvoice.Tip?
             if let maxTipAmount = maxTipAmount, let suggestedTipAmounts = suggestedTipAmounts {
@@ -180,7 +184,7 @@ extension BotPaymentInvoice {
                 case let .labeledPrice(label, amount):
                     return BotPaymentPrice(label: label, amount: amount)
                 }
-            }, tip: parsedTip, recurrentInfo: recurrentInfo)
+            }, tip: parsedTip, termsInfo: termsInfo)
         }
     }
 }
@@ -201,17 +205,55 @@ extension BotPaymentRequestedInfo {
     }
 }
 
+private func _internal_parseInputInvoice(transaction: Transaction, source: BotPaymentInvoiceSource) -> Api.InputInvoice? {
+    switch source {
+    case let .message(messageId):
+        guard let inputPeer = transaction.getPeer(messageId.peerId).flatMap(apiInputPeer) else {
+            return nil
+        }
+        return .inputInvoiceMessage(peer: inputPeer, msgId: messageId.id)
+    case let .slug(slug):
+        return .inputInvoiceSlug(slug: slug)
+    case let .premiumGiveaway(boostPeerId, additionalPeerIds, countries, onlyNewSubscribers, randomId, untilDate, currency, amount, option):
+        guard let peer = transaction.getPeer(boostPeerId), let apiBoostPeer = apiInputPeer(peer) else {
+            return nil
+        }
+        var flags: Int32 = 0
+        if onlyNewSubscribers {
+            flags |= (1 << 0)
+        }
+        var additionalPeers: [Api.InputPeer] = []
+        if !additionalPeerIds.isEmpty {
+            flags |= (1 << 1)
+            for peerId in additionalPeerIds {
+                if let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer) {
+                    additionalPeers.append(inputPeer)
+                }
+            }
+        }
+        if !countries.isEmpty {
+            flags |= (1 << 2)
+        }
+        let input: Api.InputStorePaymentPurpose = .inputStorePaymentPremiumGiveaway(flags: flags, boostPeer: apiBoostPeer, additionalPeers: additionalPeers, countriesIso2: countries, randomId: randomId, untilDate: untilDate, currency: currency, amount: amount)
+
+        flags = 0
+        
+        if let _ = option.storeProductId {
+            flags |= (1 << 0)
+        }
+        if option.storeQuantity > 0 {
+            flags |= (1 << 1)
+        }
+        
+        let option: Api.PremiumGiftCodeOption = .premiumGiftCodeOption(flags: flags, users: option.users, months: option.months, storeProduct: option.storeProductId, storeQuantity: option.storeQuantity, currency: option.currency, amount: option.amount)
+        
+        return .inputInvoicePremiumGiftCode(purpose: input, option: option)
+    }
+}
+
 func _internal_fetchBotPaymentInvoice(postbox: Postbox, network: Network, source: BotPaymentInvoiceSource) -> Signal<TelegramMediaInvoice, BotPaymentFormRequestError> {
     return postbox.transaction { transaction -> Api.InputInvoice? in
-        switch source {
-        case let .message(messageId):
-            guard let inputPeer = transaction.getPeer(messageId.peerId).flatMap(apiInputPeer) else {
-                return nil
-            }
-            return .inputInvoiceMessage(peer: inputPeer, msgId: messageId.id)
-        case let .slug(slug):
-            return .inputInvoiceSlug(slug: slug)
-        }
+        return _internal_parseInputInvoice(transaction: transaction, source: source)
     }
     |> castError(BotPaymentFormRequestError.self)
     |> mapToSignal { invoice -> Signal<TelegramMediaInvoice, BotPaymentFormRequestError> in
@@ -249,15 +291,7 @@ func _internal_fetchBotPaymentInvoice(postbox: Postbox, network: Network, source
 
 func _internal_fetchBotPaymentForm(accountPeerId: PeerId, postbox: Postbox, network: Network, source: BotPaymentInvoiceSource, themeParams: [String: Any]?) -> Signal<BotPaymentForm, BotPaymentFormRequestError> {
     return postbox.transaction { transaction -> Api.InputInvoice? in
-        switch source {
-        case let .message(messageId):
-            guard let inputPeer = transaction.getPeer(messageId.peerId).flatMap(apiInputPeer) else {
-                return nil
-            }
-            return .inputInvoiceMessage(peer: inputPeer, msgId: messageId.id)
-        case let .slug(slug):
-            return .inputInvoiceSlug(slug: slug)
-        }
+        return _internal_parseInputInvoice(transaction: transaction, source: source)
     }
     |> castError(BotPaymentFormRequestError.self)
     |> mapToSignal { invoice -> Signal<BotPaymentForm, BotPaymentFormRequestError> in
@@ -352,15 +386,7 @@ extension BotPaymentShippingOption {
 
 func _internal_validateBotPaymentForm(account: Account, saveInfo: Bool, source: BotPaymentInvoiceSource, formInfo: BotPaymentRequestedInfo) -> Signal<BotPaymentValidatedFormInfo, ValidateBotPaymentFormError> {
     return account.postbox.transaction { transaction -> Api.InputInvoice? in
-        switch source {
-        case let .message(messageId):
-            guard let inputPeer = transaction.getPeer(messageId.peerId).flatMap(apiInputPeer) else {
-                return nil
-            }
-            return .inputInvoiceMessage(peer: inputPeer, msgId: messageId.id)
-        case let .slug(slug):
-            return .inputInvoiceSlug(slug: slug)
-        }
+        return _internal_parseInputInvoice(transaction: transaction, source: source)
     }
     |> castError(ValidateBotPaymentFormError.self)
     |> mapToSignal { invoice -> Signal<BotPaymentValidatedFormInfo, ValidateBotPaymentFormError> in
@@ -438,15 +464,7 @@ public enum SendBotPaymentResult {
 
 func _internal_sendBotPaymentForm(account: Account, formId: Int64, source: BotPaymentInvoiceSource, validatedInfoId: String?, shippingOptionId: String?, tipAmount: Int64?, credentials: BotPaymentCredentials) -> Signal<SendBotPaymentResult, SendBotPaymentFormError> {
     return account.postbox.transaction { transaction -> Api.InputInvoice? in
-        switch source {
-        case let .message(messageId):
-            guard let inputPeer = transaction.getPeer(messageId.peerId).flatMap(apiInputPeer) else {
-                return nil
-            }
-            return .inputInvoiceMessage(peer: inputPeer, msgId: messageId.id)
-        case let .slug(slug):
-            return .inputInvoiceSlug(slug: slug)
-        }
+        return _internal_parseInputInvoice(transaction: transaction, source: source)
     }
     |> castError(SendBotPaymentFormError.self)
     |> mapToSignal { invoice -> Signal<SendBotPaymentResult, SendBotPaymentFormError> in
@@ -506,6 +524,12 @@ func _internal_sendBotPaymentForm(account: Account, formId: Int64, source: BotPa
                                                             receiptMessageId = id
                                                         }
                                                     }
+                                                }
+                                            }
+                                        case let .premiumGiveaway(_, _, _, _, randomId, _, _, _, _):
+                                            if message.globallyUniqueId == randomId {
+                                                if case let .Id(id) = message.id {
+                                                    receiptMessageId = id
                                                 }
                                             }
                                         }

@@ -3,6 +3,7 @@ import UIKit
 import AsyncDisplayKit
 import Display
 import TelegramCore
+import Postbox
 import SwiftSignalKit
 import TelegramPresentationData
 import AnimationUI
@@ -12,6 +13,7 @@ import Emoji
 import Accelerate
 import ComponentFlow
 import AvatarStoryIndicatorComponent
+import DirectMediaImageCache
 
 private let deletedIcon = UIImage(bundleImageName: "Avatar/DeletedIcon")?.precomposed()
 private let phoneIcon = generateTintedImage(image: UIImage(bundleImageName: "Avatar/PhoneIcon"), color: .white)
@@ -61,7 +63,7 @@ private class AvatarNodeParameters: NSObject {
     }
 }
 
-private func calculateColors(explicitColorIndex: Int?, peerId: EnginePeer.Id?, icon: AvatarNodeIcon, theme: PresentationTheme?) -> [UIColor] {
+private func calculateColors(context: AccountContext?, explicitColorIndex: Int?, peerId: EnginePeer.Id?, nameColor: PeerNameColor?, icon: AvatarNodeIcon, theme: PresentationTheme?) -> [UIColor] {
     let colorIndex: Int
     if let explicitColorIndex = explicitColorIndex {
         colorIndex = explicitColorIndex
@@ -108,7 +110,33 @@ private func calculateColors(explicitColorIndex: Int?, peerId: EnginePeer.Id?, i
             colors = AvatarNode.grayscaleColors
         }
     } else {
-        colors = AvatarNode.gradientColors[colorIndex % AvatarNode.gradientColors.count]
+        if let nameColor {
+            if let context, nameColor.rawValue > 13 {
+                let nameColors = context.peerNameColors.get(nameColor)
+                let hue = nameColors.main.hsb.h
+                var index: Int = 0
+                if hue > 0.9 || hue < 0.02 {
+                    index = 0
+                } else if hue < 0.1 {
+                    index = 1
+                } else if hue < 0.4 {
+                    index = 3
+                } else if hue < 0.5 {
+                    index = 4
+                } else if hue < 0.6 {
+                    index = 5
+                } else if hue < 0.75 {
+                    index = 2
+                } else {
+                    index = 6
+                }
+                colors = AvatarNode.gradientColors[index % AvatarNode.gradientColors.count]
+            } else {
+                colors = AvatarNode.gradientColors[Int(nameColor.rawValue) % AvatarNode.gradientColors.count]
+            }
+        } else {
+            colors = AvatarNode.gradientColors[colorIndex % AvatarNode.gradientColors.count]
+        }
     }
     
     return colors
@@ -120,7 +148,7 @@ public enum AvatarNodeExplicitIcon {
 
 private enum AvatarNodeState: Equatable {
     case empty
-    case peerAvatar(EnginePeer.Id, [String], TelegramMediaImageRepresentation?, AvatarNodeClipStyle)
+    case peerAvatar(EnginePeer.Id, PeerNameColor?, [String], TelegramMediaImageRepresentation?, AvatarNodeClipStyle)
     case custom(letter: [String], explicitColorIndex: Int?, explicitIcon: AvatarNodeExplicitIcon?)
 }
 
@@ -128,8 +156,8 @@ private func ==(lhs: AvatarNodeState, rhs: AvatarNodeState) -> Bool {
     switch (lhs, rhs) {
         case (.empty, .empty):
             return true
-        case let (.peerAvatar(lhsPeerId, lhsLetters, lhsPhotoRepresentations, lhsClipStyle), .peerAvatar(rhsPeerId, rhsLetters, rhsPhotoRepresentations, rhsClipStyle)):
-            return lhsPeerId == rhsPeerId && lhsLetters == rhsLetters && lhsPhotoRepresentations == rhsPhotoRepresentations && lhsClipStyle == rhsClipStyle
+        case let (.peerAvatar(lhsPeerId, lhsPeerNameColor, lhsLetters, lhsPhotoRepresentations, lhsClipStyle), .peerAvatar(rhsPeerId, rhsPeerNameColor, rhsLetters, rhsPhotoRepresentations, rhsClipStyle)):
+            return lhsPeerId == rhsPeerId && lhsPeerNameColor == rhsPeerNameColor && lhsLetters == rhsLetters && lhsPhotoRepresentations == rhsPhotoRepresentations && lhsClipStyle == rhsClipStyle
         case let (.custom(lhsLetters, lhsIndex, lhsIcon), .custom(rhsLetters, rhsIndex, rhsIcon)):
             return lhsLetters == rhsLetters && lhsIndex == rhsIndex && lhsIcon == rhsIcon
         default:
@@ -227,6 +255,19 @@ public final class AvatarNode: ASDisplayNode {
     ]
     
     public final class ContentNode: ASDisplayNode {
+        private struct Params: Equatable {
+            let peerId: EnginePeer.Id?
+            let resourceId: String?
+            
+            init(
+                peerId: EnginePeer.Id?,
+                resourceId: String?
+            ) {
+                self.peerId = peerId
+                self.resourceId = resourceId
+            }
+        }
+        
         public var font: UIFont {
             didSet {
                 if oldValue.pointSize != font.pointSize {
@@ -253,6 +294,9 @@ public final class AvatarNode: ASDisplayNode {
         
         public var unroundedImage: UIImage?
         private var currentImage: UIImage?
+        
+        private var params: Params?
+        private var loadDisposable: Disposable?
         
         public var badgeView: AvatarBadgeView? {
             didSet {
@@ -316,6 +360,10 @@ public final class AvatarNode: ASDisplayNode {
                     badgeView.update(content: .image(image))
                 }
             }
+        }
+        
+        deinit {
+            self.loadDisposable?.dispose()
         }
         
         override public func didLoad() {
@@ -382,6 +430,172 @@ public final class AvatarNode: ASDisplayNode {
         }
         
         public func setPeer(
+            accountPeerId: EnginePeer.Id,
+            postbox: Postbox,
+            network: Network,
+            contentSettings: ContentSettings,
+            theme: PresentationTheme,
+            peer: EnginePeer?,
+            authorOfMessage: MessageReference? = nil,
+            overrideImage: AvatarNodeImageOverride? = nil,
+            emptyColor: UIColor? = nil,
+            clipStyle: AvatarNodeClipStyle = .round,
+            synchronousLoad: Bool = false,
+            displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0),
+            storeUnrounded: Bool = false
+        ) {
+            var synchronousLoad = synchronousLoad
+            var representation: TelegramMediaImageRepresentation?
+            var icon = AvatarNodeIcon.none
+            if let overrideImage = overrideImage {
+                switch overrideImage {
+                    case .none:
+                        representation = nil
+                    case let .image(image):
+                        representation = image
+                        synchronousLoad = false
+                    case .savedMessagesIcon:
+                        representation = nil
+                        icon = .savedMessagesIcon
+                    case .repliesIcon:
+                        representation = nil
+                        icon = .repliesIcon
+                    case let .archivedChatsIcon(hiddenByDefault):
+                        representation = nil
+                        icon = .archivedChatsIcon(hiddenByDefault: hiddenByDefault)
+                    case let .editAvatarIcon(forceNone):
+                        representation = forceNone ? nil : peer?.smallProfileImage
+                        icon = .editAvatarIcon
+                    case .deletedIcon:
+                        representation = nil
+                        icon = .deletedIcon
+                    case .phoneIcon:
+                        representation = nil
+                        icon = .phoneIcon
+                }
+            } else if peer?.restrictionText(platform: "ios", contentSettings: contentSettings) == nil {
+                representation = peer?.smallProfileImage
+            }
+            let updatedState: AvatarNodeState = .peerAvatar(peer?.id ?? EnginePeer.Id(0), peer?.nameColor, peer?.displayLetters ?? [], representation, clipStyle)
+            if updatedState != self.state || overrideImage != self.overrideImage || theme !== self.theme {
+                self.state = updatedState
+                self.overrideImage = overrideImage
+                self.theme = theme
+                
+                let parameters: AvatarNodeParameters
+                
+                if let peer = peer, let signal = peerAvatarImage(postbox: postbox, network: network, peerReference: PeerReference(peer._asPeer()), authorOfMessage: authorOfMessage, representation: representation, displayDimensions: displayDimensions, clipStyle: clipStyle, emptyColor: emptyColor, synchronousLoad: synchronousLoad, provideUnrounded: storeUnrounded) {
+                    self.contents = nil
+                    self.displaySuspended = true
+                    self.imageReady.set(self.imageNode.contentReady)
+                    self.imageNode.setSignal(signal |> beforeNext { [weak self] next in
+                        Queue.mainQueue().async {
+                            self?.unroundedImage = next?.1
+                        }
+                    }
+                    |> map { next -> UIImage? in
+                        return next?.0
+                    })
+                    
+                    if case .editAvatarIcon = icon {
+                        if self.editOverlayNode == nil {
+                            let editOverlayNode = AvatarEditOverlayNode()
+                            editOverlayNode.frame = self.imageNode.frame
+                            editOverlayNode.isUserInteractionEnabled = false
+                            self.addSubnode(editOverlayNode)
+                            
+                            self.editOverlayNode = editOverlayNode
+                        }
+                        self.editOverlayNode?.isHidden = false
+                    } else {
+                        self.editOverlayNode?.isHidden = true
+                    }
+                    
+                    parameters = AvatarNodeParameters(theme: theme, accountPeerId: accountPeerId, peerId: peer.id, colors: calculateColors(context: nil, explicitColorIndex: nil, peerId: peer.id, nameColor: peer.nameColor, icon: icon, theme: theme), letters: peer.displayLetters, font: self.font, icon: icon, explicitColorIndex: nil, hasImage: true, clipStyle: clipStyle)
+                } else {
+                    self.imageReady.set(.single(true))
+                    self.displaySuspended = false
+                    if self.isNodeLoaded {
+                        self.imageNode.contents = nil
+                    }
+                    
+                    self.editOverlayNode?.isHidden = true
+                    let colors = calculateColors(context: nil, explicitColorIndex: nil, peerId: peer?.id ?? EnginePeer.Id(0), nameColor: peer?.nameColor, icon: icon, theme: theme)
+                    parameters = AvatarNodeParameters(theme: theme, accountPeerId: accountPeerId, peerId: peer?.id ?? EnginePeer.Id(0), colors: colors, letters: peer?.displayLetters ?? [], font: self.font, icon: icon, explicitColorIndex: nil, hasImage: false, clipStyle: clipStyle)
+                    
+                    if let badgeView = self.badgeView {
+                        let badgeColor: UIColor
+                        if colors.isEmpty {
+                            badgeColor = .white
+                        } else {
+                            badgeColor = colors[colors.count - 1]
+                        }
+                        badgeView.update(content: .color(badgeColor))
+                    }
+                }
+                if self.parameters == nil || self.parameters != parameters {
+                    self.parameters = parameters
+                    self.setNeedsDisplay()
+                    if synchronousLoad {
+                        self.recursivelyEnsureDisplaySynchronously(true)
+                    }
+                }
+            }
+        }
+        
+        func setPeerV2(
+            context genericContext: AccountContext,
+            account: Account? = nil,
+            theme: PresentationTheme,
+            peer: EnginePeer?,
+            authorOfMessage: MessageReference? = nil,
+            overrideImage: AvatarNodeImageOverride? = nil,
+            emptyColor: UIColor? = nil,
+            clipStyle: AvatarNodeClipStyle = .round,
+            synchronousLoad: Bool = false,
+            displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0),
+            storeUnrounded: Bool = false
+        ) {
+            let smallProfileImage = peer?.smallProfileImage
+            let params = Params(
+                peerId: peer?.id,
+                resourceId: smallProfileImage?.resource.id.stringRepresentation
+            )
+            if self.params == params {
+                return
+            }
+            self.params = params
+            
+            switch clipStyle {
+            case .none:
+                self.imageNode.clipsToBounds = false
+                self.imageNode.cornerRadius = 0.0
+            case .round:
+                self.imageNode.clipsToBounds = true
+                self.imageNode.cornerRadius = displayDimensions.height * 0.5
+            case .roundedRect:
+                self.imageNode.clipsToBounds = true
+                self.imageNode.cornerRadius = displayDimensions.height * 0.25
+            }
+            
+            if let imageCache = genericContext.imageCache as? DirectMediaImageCache, let peer, let smallProfileImage = peer.smallProfileImage, let peerReference = PeerReference(peer._asPeer()) {
+                if let result = imageCache.getAvatarImage(peer: peerReference, resource: MediaResourceReference.avatar(peer: peerReference, resource: smallProfileImage.resource), immediateThumbnail: peer.profileImageRepresentations.first?.immediateThumbnailData, size: Int(displayDimensions.width * UIScreenScale), synchronous: synchronousLoad) {
+                    if let image = result.image {
+                        self.imageNode.contents = image.cgImage
+                    }
+                    if let loadSignal = result.loadSignal {
+                        self.loadDisposable = (loadSignal |> deliverOnMainQueue).start(next: { [weak self] image in
+                            guard let self else {
+                                return
+                            }
+                            self.imageNode.contents = image?.cgImage
+                        }).strict()
+                    }
+                }
+            }
+        }
+        
+        public func setPeer(
             context genericContext: AccountContext,
             account: Account? = nil,
             theme: PresentationTheme,
@@ -426,7 +640,7 @@ public final class AvatarNode: ASDisplayNode {
             } else if peer?.restrictionText(platform: "ios", contentSettings: genericContext.currentContentSettings.with { $0 }) == nil {
                 representation = peer?.smallProfileImage
             }
-            let updatedState: AvatarNodeState = .peerAvatar(peer?.id ?? EnginePeer.Id(0), peer?.displayLetters ?? [], representation, clipStyle)
+            let updatedState: AvatarNodeState = .peerAvatar(peer?.id ?? EnginePeer.Id(0), peer?.nameColor, peer?.displayLetters ?? [], representation, clipStyle)
             if updatedState != self.state || overrideImage != self.overrideImage || theme !== self.theme {
                 self.state = updatedState
                 self.overrideImage = overrideImage
@@ -463,7 +677,7 @@ public final class AvatarNode: ASDisplayNode {
                         self.editOverlayNode?.isHidden = true
                     }
                     
-                    parameters = AvatarNodeParameters(theme: theme, accountPeerId: account.peerId, peerId: peer.id, colors: calculateColors(explicitColorIndex: nil, peerId: peer.id, icon: icon, theme: theme), letters: peer.displayLetters, font: self.font, icon: icon, explicitColorIndex: nil, hasImage: true, clipStyle: clipStyle)
+                    parameters = AvatarNodeParameters(theme: theme, accountPeerId: account.peerId, peerId: peer.id, colors: calculateColors(context: genericContext, explicitColorIndex: nil, peerId: peer.id, nameColor: peer.nameColor, icon: icon, theme: theme), letters: peer.displayLetters, font: self.font, icon: icon, explicitColorIndex: nil, hasImage: true, clipStyle: clipStyle)
                 } else {
                     self.imageReady.set(.single(true))
                     self.displaySuspended = false
@@ -472,7 +686,7 @@ public final class AvatarNode: ASDisplayNode {
                     }
                     
                     self.editOverlayNode?.isHidden = true
-                    let colors = calculateColors(explicitColorIndex: nil, peerId: peer?.id ?? EnginePeer.Id(0), icon: icon, theme: theme)
+                    let colors = calculateColors(context: genericContext, explicitColorIndex: nil, peerId: peer?.id ?? EnginePeer.Id(0), nameColor: peer?.nameColor, icon: icon, theme: theme)
                     parameters = AvatarNodeParameters(theme: theme, accountPeerId: account.peerId, peerId: peer?.id ?? EnginePeer.Id(0), colors: colors, letters: peer?.displayLetters ?? [], font: self.font, icon: icon, explicitColorIndex: nil, hasImage: false, clipStyle: clipStyle)
                     
                     if let badgeView = self.badgeView {
@@ -509,9 +723,9 @@ public final class AvatarNode: ASDisplayNode {
                 
                 let parameters: AvatarNodeParameters
                 if let icon = icon, case .phone = icon {
-                    parameters = AvatarNodeParameters(theme: nil, accountPeerId: nil, peerId: nil, colors: calculateColors(explicitColorIndex: explicitIndex, peerId: nil, icon: .phoneIcon, theme: nil), letters: [], font: self.font, icon: .phoneIcon, explicitColorIndex: explicitIndex, hasImage: false, clipStyle: .round)
+                    parameters = AvatarNodeParameters(theme: nil, accountPeerId: nil, peerId: nil, colors: calculateColors(context: nil, explicitColorIndex: explicitIndex, peerId: nil, nameColor: nil, icon: .phoneIcon, theme: nil), letters: [], font: self.font, icon: .phoneIcon, explicitColorIndex: explicitIndex, hasImage: false, clipStyle: .round)
                 } else {
-                    parameters = AvatarNodeParameters(theme: nil, accountPeerId: nil, peerId: nil, colors: calculateColors(explicitColorIndex: explicitIndex, peerId: nil, icon: .none, theme: nil), letters: letters, font: self.font, icon: .none, explicitColorIndex: explicitIndex, hasImage: false, clipStyle: .round)
+                    parameters = AvatarNodeParameters(theme: nil, accountPeerId: nil, peerId: nil, colors: calculateColors(context: nil, explicitColorIndex: explicitIndex, peerId: nil, nameColor: nil, icon: .none, theme: nil), letters: letters, font: self.font, icon: .none, explicitColorIndex: explicitIndex, hasImage: false, clipStyle: .round)
                 }
                 
                 self.displaySuspended = true
@@ -540,6 +754,10 @@ public final class AvatarNode: ASDisplayNode {
                 context.setBlendMode(.copy)
                 context.setFillColor(UIColor.clear.cgColor)
                 context.fill(bounds)
+            }
+            
+            if !(parameters is AvatarNodeParameters) {
+                return
             }
             
             let colors: [UIColor]
@@ -675,15 +893,18 @@ public final class AvatarNode: ASDisplayNode {
         public var totalCount: Int
         public var unseenCount: Int
         public var hasUnseenCloseFriendsItems: Bool
+        public var progress: Float?
         
         public init(
             totalCount: Int,
             unseenCount: Int,
-            hasUnseenCloseFriendsItems: Bool
+            hasUnseenCloseFriendsItems: Bool,
+            progress: Float? = nil
         ) {
             self.totalCount = totalCount
             self.unseenCount = unseenCount
             self.hasUnseenCloseFriendsItems = hasUnseenCloseFriendsItems
+            self.progress = progress
         }
     }
     
@@ -776,6 +997,64 @@ public final class AvatarNode: ASDisplayNode {
     
     public func playArchiveAnimation() {
         self.contentNode.playArchiveAnimation()
+    }
+    
+    public func setPeer(
+        accountPeerId: EnginePeer.Id,
+        postbox: Postbox,
+        network: Network,
+        contentSettings: ContentSettings,
+        theme: PresentationTheme,
+        peer: EnginePeer?,
+        authorOfMessage: MessageReference? = nil,
+        overrideImage: AvatarNodeImageOverride? = nil,
+        emptyColor: UIColor? = nil,
+        clipStyle: AvatarNodeClipStyle = .round,
+        synchronousLoad: Bool = false,
+        displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0),
+        storeUnrounded: Bool = false
+    ) {
+        self.contentNode.setPeer(
+            accountPeerId: accountPeerId,
+            postbox: postbox,
+            network: network,
+            contentSettings: contentSettings,
+            theme: theme,
+            peer: peer,
+            authorOfMessage: authorOfMessage,
+            overrideImage: overrideImage,
+            emptyColor: emptyColor,
+            clipStyle: clipStyle,
+            synchronousLoad: synchronousLoad,
+            displayDimensions: displayDimensions,
+            storeUnrounded: storeUnrounded
+        )
+    }
+    
+    public func setPeerV2(
+        context genericContext: AccountContext,
+        theme: PresentationTheme,
+        peer: EnginePeer?,
+        authorOfMessage: MessageReference? = nil,
+        overrideImage: AvatarNodeImageOverride? = nil,
+        emptyColor: UIColor? = nil,
+        clipStyle: AvatarNodeClipStyle = .round,
+        synchronousLoad: Bool = false,
+        displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0),
+        storeUnrounded: Bool = false
+    ) {
+        self.contentNode.setPeerV2(
+            context: genericContext,
+            theme: theme,
+            peer: peer,
+            authorOfMessage: authorOfMessage,
+            overrideImage: overrideImage,
+            emptyColor: emptyColor,
+            clipStyle: clipStyle,
+            synchronousLoad: synchronousLoad,
+            displayDimensions: displayDimensions,
+            storeUnrounded: storeUnrounded
+        )
     }
     
     public func setPeer(
@@ -885,6 +1164,12 @@ public final class AvatarNode: ASDisplayNode {
                 storyIndicator = ComponentView()
                 self.storyIndicator = storyIndicator
             }
+            var mappedProgress: AvatarStoryIndicatorComponent.Progress?
+            if let value = storyStats.progress {
+                mappedProgress = .definite(value)
+            } else if !self.loadingStatuses.isEmpty {
+                mappedProgress = .indefinite
+            }
             let _ = storyIndicator.update(
                 transition: indicatorTransition,
                 component: AnyComponent(AvatarStoryIndicatorComponent(
@@ -901,14 +1186,14 @@ public final class AvatarNode: ASDisplayNode {
                         totalCount: storyStats.totalCount,
                         unseenCount: storyStats.unseenCount
                     ),
-                    displayProgress: !self.loadingStatuses.isEmpty
+                    progress: mappedProgress
                 )),
                 environment: {},
                 containerSize: indicatorSize
             )
             if let storyIndicatorView = storyIndicator.view {
                 if storyIndicatorView.superview == nil {
-                    self.view.addSubview(storyIndicatorView)
+                    self.view.insertSubview(storyIndicatorView, aboveSubview: self.contentNode.view)
                 }
                 indicatorTransition.setFrame(view: storyIndicatorView, frame: CGRect(origin: CGPoint(x: (size.width - indicatorSize.width) * 0.5, y: (size.height - indicatorSize.height) * 0.5), size: indicatorSize))
             }

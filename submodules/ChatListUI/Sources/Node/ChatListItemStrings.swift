@@ -305,6 +305,16 @@ public func chatListItemStrings(strings: PresentationStrings, nameDisplayOrder: 
                         } else {
                             messageText = strings.Notification_Story
                         }
+                    case _ as TelegramMediaGiveaway:
+                        if let forwardInfo = message.forwardInfo, let author = forwardInfo.author {
+                            messageText = strings.Message_GiveawayStartedOther(EnginePeer(author).compactDisplayTitle).string
+                        } else {
+                            messageText = strings.Message_GiveawayStarted
+                        }
+                    case let webpage as TelegramMediaWebpage:
+                        if messageText.isEmpty, case let .Loaded(content) = webpage.content {
+                            messageText = content.displayUrl
+                        }
                     default:
                         break
                 }

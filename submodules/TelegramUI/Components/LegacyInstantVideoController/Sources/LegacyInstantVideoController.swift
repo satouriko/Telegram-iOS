@@ -202,9 +202,11 @@ public func legacyInstantVideoController(theme: PresentationTheme, forStory: Boo
                         finalDuration = adjustments.trimEndValue - adjustments.trimStartValue
                     }
                     
-                    let adjustmentsData = MemoryBuffer(data: NSKeyedArchiver.archivedData(withRootObject: adjustments.dictionary()!))
-                    let digest = MemoryBuffer(data: adjustmentsData.md5Digest())
-                    resourceAdjustments = VideoMediaResourceAdjustments(data: adjustmentsData, digest: digest, isStory: false)
+                    if let dict = adjustments.dictionary(), let data = try? NSKeyedArchiver.archivedData(withRootObject: dict, requiringSecureCoding: false) {
+                        let adjustmentsData = MemoryBuffer(data: data)
+                        let digest = MemoryBuffer(data: adjustmentsData.md5Digest())
+                        resourceAdjustments = VideoMediaResourceAdjustments(data: adjustmentsData, digest: digest, isStory: false)
+                    }
                 }
                 
                 if finalDuration.isZero || finalDuration.isNaN {
@@ -220,13 +222,17 @@ public func legacyInstantVideoController(theme: PresentationTheme, forStory: Boo
                 }
                 
                 if let previewImage = previewImage {
-                    if let data = compressImageToJPEG(previewImage, quality: 0.7) {
+                    let tempFile = TempBox.shared.tempFile(fileName: "file")
+                    defer {
+                        TempBox.shared.dispose(tempFile)
+                    }
+                    if let data = compressImageToJPEG(previewImage, quality: 0.7, tempFilePath: tempFile.path) {
                     context.account.postbox.mediaBox.storeCachedResourceRepresentation(resource, representation: CachedVideoFirstFrameRepresentation(), data: data)
                     }
                 }
                 
                 let media = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: Int64.random(in: Int64.min ... Int64.max)), partialReference: nil, resource: resource, previewRepresentations: previewRepresentations, videoThumbnails: [], immediateThumbnailData: nil, mimeType: "video/mp4", size: nil, attributes: [.FileName(fileName: "video.mp4"), .Video(duration: finalDuration, size: PixelDimensions(finalDimensions), flags: [.instantRoundVideo], preloadSize: nil)])
-                var message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: media), replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+                var message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: media), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
                 
                 let scheduleTime: Int32? = scheduleTimestamp > 0 ? scheduleTimestamp : nil
                 

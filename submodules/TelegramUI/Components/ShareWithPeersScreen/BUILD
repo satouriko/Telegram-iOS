@@ -39,6 +39,9 @@ swift_library(
         "//submodules/TelegramUI/Components/SwitchComponent",
         "//submodules/TooltipUI",
         "//submodules/OverlayStatusController",
+        "//submodules/UndoUI",
+        "//submodules/TemporaryCachedPeerDataManager",
+        "//submodules/CountrySelectionUI",
     ],
     visibility = [
         "//visibility:public",

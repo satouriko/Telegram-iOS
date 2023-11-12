@@ -14,6 +14,7 @@ import ChatPresentationInterfaceState
 import WallpaperBackgroundNode
 import ComponentFlow
 import EmojiStatusComponent
+import ChatLoadingNode
 
 private protocol ChatEmptyNodeContent {
     func updateLayout(interfaceState: ChatPresentationInterfaceState, subject: ChatEmptyNode.Subject, size: CGSize, transition: ContainedViewLayoutTransition) -> CGSize
@@ -180,7 +181,7 @@ final class ChatEmptyNodeGreetingChatContent: ASDisplayNode, ChatEmptyNodeSticke
             
             self.didSetupSticker = true
             self.disposable.set((sticker
-            |> deliverOnMainQueue).start(next: { [weak self] sticker in
+            |> deliverOnMainQueue).startStrict(next: { [weak self] sticker in
                 if let strongSelf = self, let sticker = sticker {
                     let inputNodeInteraction = ChatMediaInputNodeInteraction(
                         navigateToCollectionId: { _ in
@@ -351,7 +352,7 @@ final class ChatEmptyNodeNearbyChatContent: ASDisplayNode, ChatEmptyNodeStickerC
             
             self.didSetupSticker = true
             self.disposable.set((sticker
-            |> deliverOnMainQueue).start(next: { [weak self] sticker in
+            |> deliverOnMainQueue).startStrict(next: { [weak self] sticker in
                 if let strongSelf = self, let sticker = sticker {
                     let inputNodeInteraction = ChatMediaInputNodeInteraction(
                         navigateToCollectionId: { _ in

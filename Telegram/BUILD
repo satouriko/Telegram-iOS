@@ -74,6 +74,12 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
+bool_flag(
+    name = "projectIncludeRelease",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
 config_setting(
     name = "disableExtensionsSetting",
     flag_values = {
@@ -85,6 +91,13 @@ config_setting(
     name = "disableProvisioningProfilesSetting",
     flag_values = {
         ":disableProvisioningProfiles": "True",
+    },
+)
+
+config_setting(
+    name = "projectIncludeReleaseSetting",
+    flag_values = {
+        ":projectIncludeRelease": "True",
     },
 )
 
@@ -127,7 +140,7 @@ genrule(
     ],
 )
 
-minimum_os_version = "11.0"
+minimum_os_version = "12.0"
 minimum_watchos_version="9.0"
 
 empty_languages = [
@@ -436,6 +449,7 @@ official_apple_pay_merchants = [
     "merchant.org.telegram.billinenet.test",
     "merchant.org.telegram.billinenet.prod",
     "merchant.org.telegram.portmone.test",
+    "merchant.org.telegram.ecommpay.test",
 ]
 
 official_bundle_ids = [
@@ -1198,7 +1212,8 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
-        "//submodules/TelegramUI:TelegramUI"
+        "//submodules/TelegramUI",
+        "//submodules/TelegramUI/Components/ShareExtensionContext"
     ],
 )
 

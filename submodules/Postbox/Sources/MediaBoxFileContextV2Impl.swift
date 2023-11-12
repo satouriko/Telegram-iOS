@@ -158,6 +158,10 @@ final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
             }
         }
         
+        deinit {
+            self.pendingFetch?.disposable.dispose()
+        }
+        
         func request(
             range: Range<Int64>,
             isFullRange: Bool,
@@ -336,7 +340,7 @@ final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
                             self.hasPerformedAnyFetch = true
                             
                             let queue = self.queue
-                            disposable.set(fetchImpl(pendingFetch.ranges.get()).start(next: { [weak self] result in
+                            disposable.set(fetchImpl(pendingFetch.ranges.get()).startStrict(next: { [weak self] result in
                                 queue.async {
                                     guard let `self` = self else {
                                         return

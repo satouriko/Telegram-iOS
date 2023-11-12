@@ -18,17 +18,20 @@ public final class StoryPreloadInfo {
     public let peer: PeerReference
     public let storyId: Int32
     public let media: EngineMedia
+    public let reactions: [MessageReaction.Reaction]
     public let priority: Priority
     
     public init(
         peer: PeerReference,
         storyId: Int32,
         media: EngineMedia,
+        reactions: [MessageReaction.Reaction],
         priority: Priority
     ) {
         self.peer = peer
         self.storyId = storyId
         self.media = media
+        self.reactions = reactions
         self.priority = priority
     }
 }
@@ -115,8 +118,8 @@ public extension TelegramEngine {
             return _internal_clearAuthorHistory(account: self.account, peerId: peerId, memberId: memberId)
         }
 
-        public func requestEditMessage(messageId: MessageId, text: String, media: RequestEditMessageMedia, entities: TextEntitiesMessageAttribute?, inlineStickers: [MediaId: Media], disableUrlPreview: Bool = false, scheduleTime: Int32? = nil) -> Signal<RequestEditMessageResult, RequestEditMessageError> {
-            return _internal_requestEditMessage(account: self.account, messageId: messageId, text: text, media: media, entities: entities, inlineStickers: inlineStickers, disableUrlPreview: disableUrlPreview, scheduleTime: scheduleTime)
+        public func requestEditMessage(messageId: MessageId, text: String, media: RequestEditMessageMedia, entities: TextEntitiesMessageAttribute?, inlineStickers: [MediaId: Media], webpagePreviewAttribute: WebpagePreviewMessageAttribute? = nil, disableUrlPreview: Bool = false, scheduleTime: Int32? = nil) -> Signal<RequestEditMessageResult, RequestEditMessageError> {
+            return _internal_requestEditMessage(account: self.account, messageId: messageId, text: text, media: media, entities: entities, inlineStickers: inlineStickers, webpagePreviewAttribute: webpagePreviewAttribute, disableUrlPreview: disableUrlPreview, scheduleTime: scheduleTime)
         }
 
         public func requestEditLiveLocation(messageId: MessageId, stop: Bool, coordinate: (latitude: Double, longitude: Double, accuracyRadius: Int32?)?, heading: Int32?, proximityNotificationRadius: Int32?) -> Signal<Void, NoError> {
@@ -156,7 +159,7 @@ public extension TelegramEngine {
             return _internal_markAllChatsAsRead(postbox: self.account.postbox, network: self.account.network, stateManager: self.account.stateManager)
         }
 
-        public func getMessagesLoadIfNecessary(_ messageIds: [MessageId], strategy: GetMessagesStrategy = .cloud(skipLocal: false)) -> Signal <[Message], NoError> {
+        public func getMessagesLoadIfNecessary(_ messageIds: [MessageId], strategy: GetMessagesStrategy = .cloud(skipLocal: false)) -> Signal<GetMessagesResult, NoError> {
             return _internal_getMessagesLoadIfNecessary(messageIds, postbox: self.account.postbox, network: self.account.network, accountPeerId: self.account.peerId, strategy: strategy)
         }
 
@@ -217,12 +220,13 @@ public extension TelegramEngine {
         }
 
         public func exportMessageLink(peerId: PeerId, messageId: MessageId, isThread: Bool = false) -> Signal<String?, NoError> {
-            return _internal_exportMessageLink(account: self.account, peerId: peerId, messageId: messageId, isThread: isThread)
+            return _internal_exportMessageLink(postbox: self.account.postbox, network: self.account.network, peerId: peerId, messageId: messageId, isThread: isThread)
         }
         
         public func enqueueOutgoingMessage(
             to peerId: EnginePeer.Id,
-            replyTo replyToMessageId: EngineMessage.Id?,
+            replyTo replyToMessageId: EngineMessageReplySubject?,
+            threadId: Int64? = nil,
             storyId: StoryId? = nil,
             content: EngineOutgoingMessageContent,
             silentPosting: Bool = false,
@@ -258,6 +262,7 @@ public extension TelegramEngine {
                     attributes: attributes,
                     inlineStickers: [:],
                     mediaReference: mediaReference,
+                    threadId: threadId,
                     replyToMessageId: replyToMessageId,
                     replyToStoryId: storyId,
                     localGroupingKey: nil,
@@ -265,8 +270,6 @@ public extension TelegramEngine {
                     bubbleUpEmojiOrStickersets: []
                 )
             }
-            
-            
             
             guard let message = message else {
                 return .complete()
@@ -279,11 +282,11 @@ public extension TelegramEngine {
             )
         }
 
-        public func enqueueOutgoingMessageWithChatContextResult(to peerId: PeerId, threadId: Int64?, botId: PeerId, result: ChatContextResult, replyToMessageId: MessageId? = nil, replyToStoryId: StoryId? = nil, hideVia: Bool = false, silentPosting: Bool = false, scheduleTime: Int32? = nil, correlationId: Int64? = nil) -> Bool {
+        public func enqueueOutgoingMessageWithChatContextResult(to peerId: PeerId, threadId: Int64?, botId: PeerId, result: ChatContextResult, replyToMessageId: EngineMessageReplySubject? = nil, replyToStoryId: StoryId? = nil, hideVia: Bool = false, silentPosting: Bool = false, scheduleTime: Int32? = nil, correlationId: Int64? = nil) -> Bool {
             return _internal_enqueueOutgoingMessageWithChatContextResult(account: self.account, to: peerId, threadId: threadId, botId: botId, result: result, replyToMessageId: replyToMessageId, replyToStoryId: replyToStoryId, hideVia: hideVia, silentPosting: silentPosting, scheduleTime: scheduleTime, correlationId: correlationId)
         }
         
-        public func outgoingMessageWithChatContextResult(to peerId: PeerId, threadId: Int64?, botId: PeerId, result: ChatContextResult, replyToMessageId: MessageId?, replyToStoryId: StoryId?, hideVia: Bool, silentPosting: Bool, scheduleTime: Int32?, correlationId: Int64?) -> EnqueueMessage? {
+        public func outgoingMessageWithChatContextResult(to peerId: PeerId, threadId: Int64?, botId: PeerId, result: ChatContextResult, replyToMessageId: EngineMessageReplySubject?, replyToStoryId: StoryId?, hideVia: Bool, silentPosting: Bool, scheduleTime: Int32?, correlationId: Int64?) -> EnqueueMessage? {
             return _internal_outgoingMessageWithChatContextResult(to: peerId, threadId: threadId, botId: botId, result: result, replyToMessageId: replyToMessageId, replyToStoryId: replyToStoryId, hideVia: hideVia, silentPosting: silentPosting, scheduleTime: scheduleTime, correlationId: correlationId)
         }
         
@@ -488,6 +491,22 @@ public extension TelegramEngine {
             |> ignoreValues
         }
         
+        public func storeLocallyDerivedData(messageId: MessageId, data: [String: CodableEntry]) -> Signal<Never, NoError> {
+            return self.account.postbox.transaction { transaction -> Void in
+                transaction.updateMessage(messageId, update: { currentMessage in
+                    let storeForwardInfo = currentMessage.forwardInfo.flatMap(StoreMessageForwardInfo.init)
+                    var attributes = currentMessage.attributes.filter { !($0 is DerivedDataMessageAttribute) }
+                    
+                    if !data.isEmpty {
+                        attributes.append(DerivedDataMessageAttribute(data: data))
+                    }
+                    
+                    return .update(StoreMessage(id: currentMessage.id, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
+                })
+            }
+            |> ignoreValues
+        }
+        
         public func rateAudioTranscription(messageId: MessageId, id: Int64, isGood: Bool) -> Signal<Never, NoError> {
             return _internal_rateAudioTranscription(postbox: self.account.postbox, network: self.account.network, messageId: messageId, id: id, isGood: isGood)
         }
@@ -518,6 +537,10 @@ public extension TelegramEngine {
 
         public func invokeBotCustomMethod(botId: PeerId, method: String, params: String) -> Signal<String, InvokeBotCustomMethodError> {
             return _internal_invokeBotCustomMethod(postbox: self.account.postbox, network: self.account.network, botId: botId, method: method, params: params)
+        }
+        
+        public func refreshAttachMenuBots() {
+            let _ = managedSynchronizeAttachMenuBots(accountPeerId: self.account.peerId, postbox: self.account.postbox, network: self.account.network, force: true).startStandalone()
         }
                 
         public func addBotToAttachMenu(botId: PeerId, allowWrite: Bool) -> Signal<Bool, AddBotToAttachMenuError> {
@@ -687,7 +710,12 @@ public extension TelegramEngine {
                 self.account.postbox.combinedView(keys: [
                     basicPeerKey,
                     storySubscriptionsKey,
-                    PostboxViewKey.storiesState(key: .subscriptions(subscriptionsKey))
+                    PostboxViewKey.storiesState(
+                        key: .subscriptions(subscriptionsKey)
+                    ),
+                    PostboxViewKey.storiesState(
+                        key: .local
+                    )
                 ]))
                 |> mapToSignal { debugTimer, views -> Signal<EngineStorySubscriptions, NoError> in
                     guard let basicPeerView = views.views[basicPeerKey] as? BasicPeerView, let accountPeer = basicPeerView.peer else {
@@ -730,7 +758,19 @@ public extension TelegramEngine {
                     additionalDataKeys.append(contentsOf: subscriptionPeerIds.map { peerId -> PostboxViewKey in
                         return PostboxViewKey.storiesState(key: .peer(peerId))
                     })
-                    additionalDataKeys.append(contentsOf: subscriptionPeerIds.map { peerId -> PostboxViewKey in
+                    
+                    var additionalPeerIds = subscriptionPeerIds
+                    if let view = views.views[PostboxViewKey.storiesState(key: .local)] as? StoryStatesView, let localState = view.value?.get(Stories.LocalState.self) {
+                        for item in localState.items {
+                            if case let .peer(id) = item.target {
+                                if !additionalPeerIds.contains(id) {
+                                    additionalPeerIds.append(id)
+                                }
+                            }
+                        }
+                    }
+                    
+                    additionalDataKeys.append(contentsOf: additionalPeerIds.map { peerId -> PostboxViewKey in
                         return PostboxViewKey.basicPeer(peerId)
                     })
                     
@@ -749,9 +789,18 @@ public extension TelegramEngine {
                             hasMoreToken = ""
                         }
                         
+                        var localState: Stories.LocalState?
+                        if let view = views.views[PostboxViewKey.storiesState(key: .local)] as? StoryStatesView {
+                            localState = view.value?.get(Stories.LocalState.self)
+                        }
+                        
                         var accountPendingItemCount = 0
-                        if let view = views.views[PostboxViewKey.storiesState(key: .local)] as? StoryStatesView, let localState = view.value?.get(Stories.LocalState.self) {
-                            accountPendingItemCount = localState.items.count
+                        if let localState = localState {
+                            for item in localState.items {
+                                if case .myStories = item.target {
+                                    accountPendingItemCount += 1
+                                }
+                            }
                         }
                         
                         var accountItem: EngineStorySubscriptions.Item = EngineStorySubscriptions.Item(
@@ -814,6 +863,17 @@ public extension TelegramEngine {
                             guard let peer = peerView.peer else {
                                 continue
                             }
+                            
+                            var isPeerHidden = false
+                            if let user = peer as? TelegramUser {
+                                isPeerHidden = user.storiesHidden ?? false
+                            } else if let channel = peer as? TelegramChannel {
+                                isPeerHidden = channel.storiesHidden ?? false
+                            }
+                            if isPeerHidden != isHidden {
+                                continue
+                            }
+                            
                             guard let itemsView = views.views[PostboxViewKey.storyItems(peerId: peerId)] as? StoryItemsView else {
                                 continue
                             }
@@ -843,15 +903,31 @@ public extension TelegramEngine {
                                     }
                                 }
                             }
+                            var maxPendingTimestamp: Int32?
+                            if let localState = localState {
+                                for item in localState.items {
+                                    if case .peer(peerId) = item.target {
+                                        if let maxPendingTimestampValue = maxPendingTimestamp {
+                                            maxPendingTimestamp = max(maxPendingTimestampValue, item.timestamp)
+                                        } else {
+                                            maxPendingTimestamp = item.timestamp
+                                        }
+                                    }
+                                }
+                            }
                             
+                            var lastItemTimestamp = lastEntry.timestamp
+                            if let maxPendingTimestamp = maxPendingTimestamp, maxPendingTimestamp > lastItemTimestamp {
+                                lastItemTimestamp = maxPendingTimestamp
+                            }
                             let item = EngineStorySubscriptions.Item(
                                 peer: EnginePeer(peer),
                                 hasUnseen: hasUnseen,
                                 hasUnseenCloseFriends: hasUnseenCloseFriends,
-                                hasPending: false,
+                                hasPending: maxPendingTimestamp != nil,
                                 storyCount: itemsView.items.count,
                                 unseenCount: unseenCount,
-                                lastTimestamp: lastEntry.timestamp
+                                lastTimestamp: lastItemTimestamp
                             )
                             
                             if peerId == accountPeer.id {
@@ -861,9 +937,46 @@ public extension TelegramEngine {
                             }
                         }
                         
+                        if let localState = localState {
+                            for item in localState.items {
+                                if case let .peer(peerId) = item.target, !items.contains(where: { $0.peer.id == peerId }) {
+                                    guard let peerView = views.views[PostboxViewKey.basicPeer(peerId)] as? BasicPeerView else {
+                                        continue
+                                    }
+                                    guard let peer = peerView.peer else {
+                                        continue
+                                    }
+                                    
+                                    var isPeerHidden = false
+                                    if let user = peer as? TelegramUser {
+                                        isPeerHidden = user.storiesHidden ?? false
+                                    } else if let channel = peer as? TelegramChannel {
+                                        isPeerHidden = channel.storiesHidden ?? false
+                                    }
+                                    if isPeerHidden != isHidden {
+                                        continue
+                                    }
+                                    
+                                    let item = EngineStorySubscriptions.Item(
+                                        peer: EnginePeer(peer),
+                                        hasUnseen: false,
+                                        hasUnseenCloseFriends: false,
+                                        hasPending: true,
+                                        storyCount: 0,
+                                        unseenCount: 0,
+                                        lastTimestamp: 0
+                                    )
+                                    items.append(item)
+                                }
+                            }
+                        }
+                        
                         items.sort(by: { lhs, rhs in
-                            if lhs.hasUnseen != rhs.hasUnseen {
-                                if lhs.hasUnseen {
+                            let lhsUnseenOrPending = lhs.hasUnseen || lhs.hasPending
+                            let rhsUnseenOrPending = rhs.hasUnseen || rhs.hasPending
+                            
+                            if lhsUnseenOrPending != rhsUnseenOrPending {
+                                if lhsUnseenOrPending {
                                     return true
                                 } else {
                                     return false
@@ -888,6 +1001,10 @@ public extension TelegramEngine {
                             }
                             return lhs.peer.id < rhs.peer.id
                         })
+                        
+                        if !isHidden {
+                            assert(true)
+                        }
                         
                         return EngineStorySubscriptions(accountItem: accountItem, items: items, hasMoreToken: hasMoreToken)
                     }
@@ -1002,11 +1119,20 @@ public extension TelegramEngine {
                         guard let media = itemAndPeer.item.media, let mediaId = media.id else {
                             continue
                         }
+                        var reactions: [MessageReaction.Reaction] = []
+                        for mediaArea in itemAndPeer.item.mediaAreas {
+                            if case let .reaction(_, reaction, _) = mediaArea {
+                                if !reactions.contains(reaction) {
+                                    reactions.append(reaction)
+                                }
+                            }
+                        }
                         
                         resultResources[mediaId] = StoryPreloadInfo(
                             peer: peerReference,
                             storyId: itemAndPeer.item.id,
                             media: EngineMedia(media),
+                            reactions: reactions,
                             priority: .top(position: nextPriority)
                         )
                         nextPriority += 1
@@ -1022,11 +1148,11 @@ public extension TelegramEngine {
         }
         
         public func refreshStoryViews(peerId: EnginePeer.Id, ids: [Int32]) -> Signal<Never, NoError> {
-            if peerId != self.account.peerId {
+            if peerId != self.account.peerId && peerId.namespace != Namespaces.Peer.CloudChannel {
                 return .complete()
             }
             
-            return _internal_getStoryViews(account: self.account, ids: ids)
+            return _internal_getStoryViews(account: self.account, peerId: peerId, ids: ids)
             |> mapToSignal { views -> Signal<Never, NoError> in
                 return self.account.postbox.transaction { transaction -> Void in
                     var currentItems = transaction.getStoryItems(peerId: peerId)
@@ -1051,6 +1177,7 @@ public extension TelegramEngine {
                                     isSelectedContacts: item.isSelectedContacts,
                                     isForwardingDisabled: item.isForwardingDisabled,
                                     isEdited: item.isEdited,
+                                    isMy: item.isMy,
                                     myReaction: item.myReaction
                                 ))
                                 if let entry = CodableEntry(updatedItem) {
@@ -1065,8 +1192,8 @@ public extension TelegramEngine {
             }
         }
         
-        public func uploadStory(media: EngineStoryInputMedia, mediaAreas: [MediaArea], text: String, entities: [MessageTextEntity], pin: Bool, privacy: EngineStoryPrivacy, isForwardingDisabled: Bool, period: Int, randomId: Int64) -> Signal<Int32, NoError> {
-            return _internal_uploadStory(account: self.account, media: media, mediaAreas: mediaAreas, text: text, entities: entities, pin: pin, privacy: privacy, isForwardingDisabled: isForwardingDisabled, period: period, randomId: randomId)
+        public func uploadStory(target: Stories.PendingTarget, media: EngineStoryInputMedia, mediaAreas: [MediaArea], text: String, entities: [MessageTextEntity], pin: Bool, privacy: EngineStoryPrivacy, isForwardingDisabled: Bool, period: Int, randomId: Int64) -> Signal<Int32, NoError> {
+            return _internal_uploadStory(account: self.account, target: target, media: media, mediaAreas: mediaAreas, text: text, entities: entities, pin: pin, privacy: privacy, isForwardingDisabled: isForwardingDisabled, period: period, randomId: randomId)
         }
         
         public func allStoriesUploadEvents() -> Signal<(Int32, Int32), NoError> {
@@ -1076,13 +1203,13 @@ public extension TelegramEngine {
             return pendingStoryManager.allStoriesUploadEvents()
         }
         
-        public func lookUpPendingStoryIdMapping(stableId: Int32) -> Int32? {
-            return self.account.pendingStoryManager?.lookUpPendingStoryIdMapping(stableId: stableId)
+        public func lookUpPendingStoryIdMapping(peerId: EnginePeer.Id, stableId: Int32) -> Int32? {
+            return self.account.pendingStoryManager?.lookUpPendingStoryIdMapping(peerId: peerId, stableId: stableId)
         }
         
-        public func allStoriesUploadProgress() -> Signal<Float?, NoError> {
+        public func allStoriesUploadProgress() -> Signal<[EnginePeer.Id: Float], NoError> {
             guard let pendingStoryManager = self.account.pendingStoryManager else {
-                return .single(nil)
+                return .single([:])
             }
             return pendingStoryManager.allStoriesUploadProgress
         }
@@ -1098,32 +1225,32 @@ public extension TelegramEngine {
             _internal_cancelStoryUpload(account: self.account, stableId: stableId)
         }
         
-        public func editStory(id: Int32, media: EngineStoryInputMedia?, mediaAreas: [MediaArea]?, text: String?, entities: [MessageTextEntity]?, privacy: EngineStoryPrivacy?) -> Signal<StoryUploadResult, NoError> {
-            return _internal_editStory(account: self.account, id: id, media: media, mediaAreas: mediaAreas, text: text, entities: entities, privacy: privacy)
+        public func editStory(peerId: EnginePeer.Id, id: Int32, media: EngineStoryInputMedia?, mediaAreas: [MediaArea]?, text: String?, entities: [MessageTextEntity]?, privacy: EngineStoryPrivacy?) -> Signal<StoryUploadResult, NoError> {
+            return _internal_editStory(account: self.account, peerId: peerId, id: id, media: media, mediaAreas: mediaAreas, text: text, entities: entities, privacy: privacy)
         }
         
         public func editStoryPrivacy(id: Int32, privacy: EngineStoryPrivacy) -> Signal<Never, NoError> {
             return _internal_editStoryPrivacy(account: self.account, id: id, privacy: privacy)
         }
         
-        public func checkStoriesUploadAvailability() -> Signal<StoriesUploadAvailability, NoError> {
-            return _internal_checkStoriesUploadAvailability(account: self.account)
+        public func checkStoriesUploadAvailability(target: Stories.PendingTarget) -> Signal<StoriesUploadAvailability, NoError> {
+            return _internal_checkStoriesUploadAvailability(account: self.account, target: target)
         }
         
-        public func deleteStories(ids: [Int32]) -> Signal<Never, NoError> {
-            return _internal_deleteStories(account: self.account, ids: ids)
+        public func deleteStories(peerId: EnginePeer.Id, ids: [Int32]) -> Signal<Never, NoError> {
+            return _internal_deleteStories(account: self.account, peerId: peerId, ids: ids)
         }
         
         public func markStoryAsSeen(peerId: EnginePeer.Id, id: Int32, asPinned: Bool) -> Signal<Never, NoError> {
             return _internal_markStoryAsSeen(account: self.account, peerId: peerId, id: id, asPinned: asPinned)
         }
         
-        public func updateStoriesArePinned(ids: [Int32: EngineStoryItem], isPinned: Bool) -> Signal<Never, NoError> {
-            return _internal_updateStoriesArePinned(account: self.account, ids: ids, isPinned: isPinned)
+        public func updateStoriesArePinned(peerId: EnginePeer.Id, ids: [Int32: EngineStoryItem], isPinned: Bool) -> Signal<Never, NoError> {
+            return _internal_updateStoriesArePinned(account: self.account, peerId: peerId, ids: ids, isPinned: isPinned)
         }
         
-        public func storyViewList(id: Int32, views: EngineStoryItem.Views, listMode: EngineStoryViewListContext.ListMode, sortMode: EngineStoryViewListContext.SortMode, searchQuery: String? = nil, parentSource: EngineStoryViewListContext? = nil) -> EngineStoryViewListContext {
-            return EngineStoryViewListContext(account: self.account, storyId: id, views: views, listMode: listMode, sortMode: sortMode, searchQuery: searchQuery, parentSource: parentSource)
+        public func storyViewList(peerId: EnginePeer.Id, id: Int32, views: EngineStoryItem.Views, listMode: EngineStoryViewListContext.ListMode, sortMode: EngineStoryViewListContext.SortMode, searchQuery: String? = nil, parentSource: EngineStoryViewListContext? = nil) -> EngineStoryViewListContext {
+            return EngineStoryViewListContext(account: self.account, peerId: peerId, storyId: id, views: views, listMode: listMode, sortMode: sortMode, searchQuery: searchQuery, parentSource: parentSource)
         }
         
         public func exportStoryLink(peerId: EnginePeer.Id, id: Int32) -> Signal<String?, NoError> {

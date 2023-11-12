@@ -138,6 +138,8 @@
         _playerItemDisposable = [[SMetaDisposable alloc] init];
         _facesDisposable = [[SMetaDisposable alloc] init];
         
+        _thumbnailsDisposable = [[SMetaDisposable alloc] init];
+        
         _videoDurationVar = [[SVariable alloc] init];
         _videoDurationDisposable = [[SMetaDisposable alloc] init];
         
@@ -354,7 +356,7 @@
     [self setProgressVisible:true value:0.027 animated:true];
     
     __weak TGMediaPickerGalleryVideoItemView *weakSelf = self;
-    [_downloadDisposable setDisposable:[[[TGMediaAssetImageSignals avAssetForVideoAsset:(TGMediaAsset *)self.item.asset allowNetworkAccess:true] deliverOn:[SQueue mainQueue]] startWithNext:^(id next)
+    [_downloadDisposable setDisposable:[[[TGMediaAssetImageSignals avAssetForVideoAsset:(TGMediaAsset *)self.item.asset allowNetworkAccess:true] deliverOn:[SQueue mainQueue]] startStrictWithNext:^(id next)
     {
         __strong TGMediaPickerGalleryVideoItemView *strongSelf = weakSelf;
         if (strongSelf == nil)
@@ -379,7 +381,7 @@
         strongSelf->_downloaded = true;
         if (strongSelf->_currentAvailabilityObserver != nil)
             strongSelf->_currentAvailabilityObserver(true);
-    }]];
+    } file:__FILE_NAME__ line:__LINE__]];
 }
 
 - (id<TGModernGalleryItem>)item {
@@ -413,7 +415,7 @@
         [self _playerCleanup];
      
         if (!item.asFile) {
-            [_facesDisposable setDisposable:[[TGPaintFaceDetector detectFacesInItem:item.editableMediaItem editingContext:item.editingContext] startWithNext:nil]];
+            [_facesDisposable setDisposable:[[TGPaintFaceDetector detectFacesInItem:item.editableMediaItem editingContext:item.editingContext] startStrictWithNext:nil file:__FILE_NAME__ line:__LINE__]];
         }
     }
     
@@ -421,7 +423,8 @@
     _videoDimensions = item.dimensions;
     
     if (_entitiesView == nil) {
-        _entitiesView = [item.stickersContext drawingEntitiesViewWithSize:item.dimensions];
+        CGSize maxSize = CGSizeMake(1920.0, 1920.0);
+        _entitiesView = [item.stickersContext drawingEntitiesViewWithSize:TGFitSize(item.dimensions, maxSize)];
         _entitiesView.hidden = true;
         _entitiesView.userInteractionEnabled = false;
         [_contentWrapperView addSubview:_entitiesView];
@@ -488,7 +491,7 @@
         SSignal *adjustmentsSignal = [[self editableItemSignal] mapToSignal:^SSignal *(id<TGMediaEditableItem> editableItem) {
             return [item.editingContext adjustmentsSignalForItem:editableItem];
         }];
-        [_adjustmentsDisposable setDisposable:[[adjustmentsSignal deliverOn:[SQueue mainQueue]] startWithNext:^(id<TGMediaEditAdjustments> adjustments)
+        [_adjustmentsDisposable setDisposable:[[adjustmentsSignal deliverOn:[SQueue mainQueue]] startStrictWithNext:^(id<TGMediaEditAdjustments> adjustments)
         {
             __strong TGMediaPickerGalleryVideoItemView *strongSelf = weakSelf;
             if (strongSelf == nil)
@@ -511,7 +514,7 @@
             if (!strongSelf.isPlaying) {
                 [strongSelf->_photoEditor reprocess];
             }
-        }]];
+        } file:__FILE_NAME__ line:__LINE__]];
     }
     else
     {
@@ -531,7 +534,7 @@
     }
     
     _fileInfoLabel.text = nil;
-    [_attributesDisposable setDisposable:[[[TGMediaAssetImageSignals fileAttributesForAsset:asset] deliverOn:[SQueue mainQueue]] startWithNext:^(TGMediaAssetImageFileAttributes *next)
+    [_attributesDisposable setDisposable:[[[TGMediaAssetImageSignals fileAttributesForAsset:asset] deliverOn:[SQueue mainQueue]] startStrictWithNext:^(TGMediaAssetImageFileAttributes *next)
     {
         __strong TGMediaPickerGalleryVideoItemView *strongSelf = weakSelf;
         if (strongSelf == nil)
@@ -545,7 +548,7 @@
         [components addObject:[TGMediaPickerGalleryVideoItemView _stringForDimensions:next.dimensions]];
         
         strongSelf->_fileInfoLabel.text = [components componentsJoinedByString:@" • "];
-    }]];
+    } file:__FILE_NAME__ line:__LINE__]];
 }
 
 - (void)setIsCurrent:(bool)isCurrent
@@ -575,7 +578,7 @@
     __weak TGMediaPickerGalleryVideoItemView *weakSelf = self;
     void (^block)(void) = ^
     {
-        [_videoDurationDisposable setDisposable:[[_videoDurationVar.signal deliverOn:[SQueue mainQueue]] startWithNext:^(NSNumber *next)
+        [_videoDurationDisposable setDisposable:[[_videoDurationVar.signal deliverOn:[SQueue mainQueue]] startStrictWithNext:^(NSNumber *next)
         {
             __strong TGMediaPickerGalleryVideoItemView *strongSelf = weakSelf;
             if (strongSelf == nil || next == nil)
@@ -610,7 +613,7 @@
                 [strongSelf->_scrubberView resetToStart];
                 strongSelf->_appeared = true;
             }
-        }]];
+        } file:__FILE_NAME__ line:__LINE__]];
     };
     
     if (_scrubberView.frame.size.width < FLT_EPSILON)
@@ -755,7 +758,7 @@
     if (self.bounds.size.width > self.bounds.size.height)
         _containerView.frame = self.bounds;
     else
-        _containerView.frame = CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height - 44.0);
+        _containerView.frame = CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height);
     
     [self _layoutPlayerView];
     
@@ -812,7 +815,6 @@
     _paintingImageView.frame = _imageView.frame;
     _videoView.frame = _imageView.frame;
     
-
     CGSize originalSize = self.item.asset.originalSize;
     
     CGSize rotatedCropSize = cropRect.size;
@@ -831,8 +833,10 @@
     _contentWrapperView.frame = CGRectMake(0.0f, 0.0f, _contentView.bounds.size.width, _contentView.bounds.size.height);
     
     CGRect rect = [TGPhotoDrawingController fittedCropRect:cropRect originalSize:originalSize keepOriginalSize:true];
-    _entitiesView.frame = CGRectMake(0, 0, rect.size.width, rect.size.height);
-    _entitiesView.transform = CGAffineTransformMakeRotation(0.0);
+    _entitiesView.bounds = CGRectMake(0, 0, rect.size.width, rect.size.height);
+    _entitiesView.center = CGPointMake(_contentWrapperView.bounds.size.width / 2.0, _contentWrapperView.bounds.size.height / 2.0);
+    CGFloat entitiesScale = _contentWrapperView.bounds.size.width / rect.size.width;
+    _entitiesView.transform = CGAffineTransformMakeScale(entitiesScale, entitiesScale);
     
     CGSize fittedOriginalSize = TGScaleToSize(originalSize, [TGPhotoDrawingController maximumPaintingSize]);
     CGSize rotatedSize = TGRotatedContentSize(fittedOriginalSize, 0.0);
@@ -949,10 +953,12 @@
         CGSize originalSize = _videoDimensions;
         CGRect cropRect = CGRectMake(0, 0, _videoDimensions.width, _videoDimensions.height);
         UIImageOrientation cropOrientation = UIImageOrientationUp;
+        bool cropMirrored = false;
         if (adjustments != nil)
         {
             cropRect = adjustments.cropRect;
             cropOrientation = adjustments.cropOrientation;
+            cropMirrored = adjustments.cropMirrored;
         }
         
         CGContextConcatCTM(UIGraphicsGetCurrentContext(), TGVideoCropTransformForOrientation(cropOrientation, _playerWrapperView.bounds.size, false));
@@ -1147,7 +1153,7 @@
         }];
     }
     
-    [_playerItemDisposable setDisposable:[[itemSignal deliverOn:[SQueue mainQueue]] startWithNext:^(AVPlayerItem *playerItem)
+    [_playerItemDisposable setDisposable:[[itemSignal deliverOn:[SQueue mainQueue]] startStrictWithNext:^(AVPlayerItem *playerItem)
     {
         __strong TGMediaPickerGalleryVideoItemView *strongSelf = weakSelf;
         if (strongSelf == nil || ![playerItem isKindOfClass:[AVPlayerItem class]])
@@ -1202,7 +1208,7 @@
         [strongSelf positionTimerEvent];
         
         [strongSelf _mutePlayer:strongSelf->_sendAsGif];
-    }]];
+    } file:__FILE_NAME__ line:__LINE__]];
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)__unused change context:(void *)__unused context
@@ -1678,7 +1684,7 @@
         } else {
             return images;
         }
-    }] deliverOn:[SQueue mainQueue]] startWithNext:^(NSArray *images)
+    }] deliverOn:[SQueue mainQueue]] startStrictWithNext:^(NSArray *images)
     {
         __strong TGMediaPickerGalleryVideoItemView *strongSelf = weakSelf;
         if (strongSelf == nil)
@@ -1694,7 +1700,7 @@
         __strong TGMediaPickerGalleryVideoItemView *strongSelf = weakSelf;
         if (strongSelf != nil)
             strongSelf->_requestingThumbnails = false;
-    }]];
+    } file:__FILE_NAME__ line:__LINE__]];
 }
 
 - (void)videoScrubberDidFinishRequestingThumbnails:(TGMediaPickerGalleryVideoScrubber *)__unused videoScrubber

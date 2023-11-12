@@ -180,6 +180,11 @@ private enum ApplicationSpecificGlobalNotice: Int32 {
     case displayStoryReactionTooltip = 46
     case storyStealthModeReplyCount = 47
     case viewOnceTooltip = 48
+    case displayStoryUnmuteTooltip = 49
+    case chatReplyOptionsTip = 50
+    case displayStoryInteractionGuide = 51
+    case dismissedPremiumAppIconsBadge = 52
+    case replyQuoteTextSelectionTip = 53
     
     var key: ValueBoxKey {
         let v = ValueBoxKey(length: 4)
@@ -354,6 +359,10 @@ private struct ApplicationSpecificNoticeKeys {
         return NoticeEntryKey(namespace: noticeNamespace(namespace: globalNamespace), key: ApplicationSpecificGlobalNotice.chatForwardOptionsTip.key)
     }
     
+    static func chatReplyOptionsTip() -> NoticeEntryKey {
+        return NoticeEntryKey(namespace: noticeNamespace(namespace: globalNamespace), key: ApplicationSpecificGlobalNotice.chatReplyOptionsTip.key)
+    }
+    
     static func interactiveEmojiSyncTip() -> NoticeEntryKey {
         return NoticeEntryKey(namespace: noticeNamespace(namespace: globalNamespace), key: ApplicationSpecificGlobalNotice.interactiveEmojiSyncTip.key)
     }
@@ -428,6 +437,22 @@ private struct ApplicationSpecificNoticeKeys {
     
     static func viewOnceTooltip() -> NoticeEntryKey {
         return NoticeEntryKey(namespace: noticeNamespace(namespace: globalNamespace), key: ApplicationSpecificGlobalNotice.viewOnceTooltip.key)
+    }
+    
+    static func displayStoryUnmuteTooltip() -> NoticeEntryKey {
+        return NoticeEntryKey(namespace: noticeNamespace(namespace: globalNamespace), key: ApplicationSpecificGlobalNotice.displayStoryUnmuteTooltip.key)
+    }
+    
+    static func displayStoryInteractionGuide() -> NoticeEntryKey {
+        return NoticeEntryKey(namespace: noticeNamespace(namespace: globalNamespace), key: ApplicationSpecificGlobalNotice.displayStoryInteractionGuide.key)
+    }
+    
+    static func dismissedPremiumAppIconsBadge() -> NoticeEntryKey {
+        return NoticeEntryKey(namespace: noticeNamespace(namespace: globalNamespace), key: ApplicationSpecificGlobalNotice.dismissedPremiumAppIconsBadge.key)
+    }
+    
+    static func replyQuoteTextSelectionTip() -> NoticeEntryKey {
+        return NoticeEntryKey(namespace: noticeNamespace(namespace: globalNamespace), key: ApplicationSpecificGlobalNotice.replyQuoteTextSelectionTip.key)
     }
 }
 
@@ -904,6 +929,30 @@ public struct ApplicationSpecificNotice {
             }
         }
     }
+    
+    public static func getReplyQuoteTextSelectionTips(accountManager: AccountManager<TelegramAccountManagerTypes>) -> Signal<Int32, NoError> {
+        return accountManager.transaction { transaction -> Int32 in
+            if let value = transaction.getNotice(ApplicationSpecificNoticeKeys.replyQuoteTextSelectionTip())?.get(ApplicationSpecificCounterNotice.self) {
+                return value.value
+            } else {
+                return 0
+            }
+        }
+    }
+    
+    public static func incrementReplyQuoteTextSelectionTips(accountManager: AccountManager<TelegramAccountManagerTypes>, count: Int32 = 1) -> Signal<Void, NoError> {
+        return accountManager.transaction { transaction -> Void in
+            var currentValue: Int32 = 0
+            if let value = transaction.getNotice(ApplicationSpecificNoticeKeys.replyQuoteTextSelectionTip())?.get(ApplicationSpecificCounterNotice.self) {
+                currentValue = value.value
+            }
+            currentValue += count
+
+            if let entry = CodableEntry(ApplicationSpecificCounterNotice(value: currentValue)) {
+                transaction.setNotice(ApplicationSpecificNoticeKeys.replyQuoteTextSelectionTip(), entry)
+            }
+        }
+    }
 
     public static func getMessageViewsPrivacyTips(accountManager: AccountManager<TelegramAccountManagerTypes>) -> Signal<Int32, NoError> {
         return accountManager.transaction { transaction -> Int32 in
@@ -1234,6 +1283,33 @@ public struct ApplicationSpecificNotice {
 
             if let entry = CodableEntry(ApplicationSpecificCounterNotice(value: currentValue)) {
                 transaction.setNotice(ApplicationSpecificNoticeKeys.chatForwardOptionsTip(), entry)
+            }
+            
+            return Int(previousValue)
+        }
+    }
+    
+    public static func getChatReplyOptionsTip(accountManager: AccountManager<TelegramAccountManagerTypes>) -> Signal<Int32, NoError> {
+        return accountManager.transaction { transaction -> Int32 in
+            if let value = transaction.getNotice(ApplicationSpecificNoticeKeys.chatReplyOptionsTip())?.get(ApplicationSpecificCounterNotice.self) {
+                return value.value
+            } else {
+                return 0
+            }
+        }
+    }
+    
+    public static func incrementChatReplyOptionsTip(accountManager: AccountManager<TelegramAccountManagerTypes>, count: Int = 1) -> Signal<Int, NoError> {
+        return accountManager.transaction { transaction -> Int in
+            var currentValue: Int32 = 0
+            if let value = transaction.getNotice(ApplicationSpecificNoticeKeys.chatReplyOptionsTip())?.get(ApplicationSpecificCounterNotice.self) {
+                currentValue = value.value
+            }
+            let previousValue = currentValue
+            currentValue += Int32(count)
+
+            if let entry = CodableEntry(ApplicationSpecificCounterNotice(value: currentValue)) {
+                transaction.setNotice(ApplicationSpecificNoticeKeys.chatReplyOptionsTip(), entry)
             }
             
             return Int(previousValue)
@@ -1632,5 +1708,68 @@ public struct ApplicationSpecificNotice {
             
             return Int(previousValue)
         }
+    }
+    
+    public static func setDisplayStoryUnmuteTooltip(accountManager: AccountManager<TelegramAccountManagerTypes>) -> Signal<Never, NoError> {
+        return accountManager.transaction { transaction -> Void in
+            if let entry = CodableEntry(ApplicationSpecificBoolNotice()) {
+                transaction.setNotice(ApplicationSpecificNoticeKeys.displayStoryUnmuteTooltip(), entry)
+            }
+        }
+        |> ignoreValues
+    }
+    
+    public static func displayStoryUnmuteTooltip(accountManager: AccountManager<TelegramAccountManagerTypes>) -> Signal<Bool, NoError> {
+        return accountManager.noticeEntry(key: ApplicationSpecificNoticeKeys.displayStoryUnmuteTooltip())
+        |> map { view -> Bool in
+            if let _ = view.value?.get(ApplicationSpecificBoolNotice.self) {
+                return true
+            } else {
+                return false
+            }
+        }
+        |> take(1)
+    }
+    
+    public static func setDisplayStoryInteractionGuide(accountManager: AccountManager<TelegramAccountManagerTypes>) -> Signal<Never, NoError> {
+        return accountManager.transaction { transaction -> Void in
+            if let entry = CodableEntry(ApplicationSpecificBoolNotice()) {
+                transaction.setNotice(ApplicationSpecificNoticeKeys.displayStoryInteractionGuide(), entry)
+            }
+        }
+        |> ignoreValues
+    }
+    
+    public static func displayStoryInteractionGuide(accountManager: AccountManager<TelegramAccountManagerTypes>) -> Signal<Bool, NoError> {
+        return accountManager.noticeEntry(key: ApplicationSpecificNoticeKeys.displayStoryInteractionGuide())
+        |> map { view -> Bool in
+            if let _ = view.value?.get(ApplicationSpecificBoolNotice.self) {
+                return true
+            } else {
+                return false
+            }
+        }
+        |> take(1)
+    }
+    
+    public static func setDismissedPremiumAppIconsBadge(accountManager: AccountManager<TelegramAccountManagerTypes>) -> Signal<Never, NoError> {
+        return accountManager.transaction { transaction -> Void in
+            if let entry = CodableEntry(ApplicationSpecificBoolNotice()) {
+                transaction.setNotice(ApplicationSpecificNoticeKeys.dismissedPremiumAppIconsBadge(), entry)
+            }
+        }
+        |> ignoreValues
+    }
+    
+    public static func dismissedPremiumAppIconsBadge(accountManager: AccountManager<TelegramAccountManagerTypes>) -> Signal<Bool, NoError> {
+        return accountManager.noticeEntry(key: ApplicationSpecificNoticeKeys.dismissedPremiumAppIconsBadge())
+        |> map { view -> Bool in
+            if let _ = view.value?.get(ApplicationSpecificBoolNotice.self) {
+                return true
+            } else {
+                return false
+            }
+        }
+        |> take(1)
     }
 }

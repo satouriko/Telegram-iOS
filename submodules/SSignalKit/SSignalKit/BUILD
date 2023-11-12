@@ -15,6 +15,8 @@ objc_library(
     includes = [
       "Source",
     ],
+    deps = [
+    ],
     sdk_frameworks = [
       "Foundation",
     ],

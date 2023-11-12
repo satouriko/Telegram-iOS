@@ -10,6 +10,7 @@ import AccountContext
 import SwiftSignalKit
 import ChatPresentationInterfaceState
 import ChatControllerInteraction
+import ChatInputContextPanelNode
 
 private enum VerticalChatContextResultsEntryStableId: Hashable {
     case action
@@ -213,7 +214,7 @@ final class VerticalListContextResultsChatInputContextPanelNode: ChatInputContex
                     interfaceInteraction.botSwitchChatWithPayload(results.botId, switchPeer.startParam)
                 } else if let webView = results.webView {
                     let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: results.botId))
-                    |> deliverOnMainQueue).start(next: { bot in
+                    |> deliverOnMainQueue).startStandalone(next: { bot in
                         if let bot {
                             interfaceInteraction.openWebView(webView.text, webView.url, true, .inline(bot: bot))
                         }
@@ -358,7 +359,7 @@ final class VerticalListContextResultsChatInputContextPanelNode: ChatInputContex
         |> map { results -> ChatContextResultCollection? in
             return results?.results
         }
-        |> deliverOnMainQueue).start(next: { [weak self] nextResults in
+        |> deliverOnMainQueue).startStrict(next: { [weak self] nextResults in
             guard let strongSelf = self, let nextResults = nextResults else {
                 return
             }

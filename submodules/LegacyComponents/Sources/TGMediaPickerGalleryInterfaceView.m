@@ -125,7 +125,7 @@
 
 @synthesize safeAreaInset = _safeAreaInset;
 
-- (instancetype)initWithContext:(id<LegacyComponentsContext>)context focusItem:(id<TGModernGalleryItem>)focusItem selectionContext:(TGMediaSelectionContext *)selectionContext editingContext:(TGMediaEditingContext *)editingContext stickersContext:(id<TGPhotoPaintStickersContext>)stickersContext hasSelectionPanel:(bool)hasSelectionPanel hasCameraButton:(bool)hasCameraButton recipientName:(NSString *)recipientName
+- (instancetype)initWithContext:(id<LegacyComponentsContext>)context focusItem:(id<TGModernGalleryItem>)focusItem selectionContext:(TGMediaSelectionContext *)selectionContext editingContext:(TGMediaEditingContext *)editingContext stickersContext:(id<TGPhotoPaintStickersContext>)stickersContext hasSelectionPanel:(bool)hasSelectionPanel hasCameraButton:(bool)hasCameraButton recipientName:(NSString *)recipientName isScheduledMessages:(bool)isScheduledMessages
 {
     self = [super initWithFrame:CGRectZero];
     if (self != nil)
@@ -133,6 +133,12 @@
         [[LegacyComponentsGlobals provider] makeViewDisableInteractiveKeyboardGestureRecognizer:self];
         
         _actionHandle = [[ASHandle alloc] initWithDelegate:self releaseOnMainThread:true];
+        
+        _adjustmentsDisposable = [[SMetaDisposable alloc] init];
+        _captionDisposable = [[SMetaDisposable alloc] init];
+        _itemSelectedDisposable = [[SMetaDisposable alloc] init];
+        _itemAvailabilityDisposable = [[SMetaDisposable alloc] init];
+        _tooltipDismissDisposable = [[SMetaDisposable alloc] init];
         
         _context = context;
         _selectionContext = selectionContext;
@@ -255,7 +261,7 @@
             _photoCounterButton.userInteractionEnabled = false;
             [_wrapperView addSubview:_photoCounterButton];
             
-            _selectionChangedDisposable = [[_selectionContext selectionChangedSignal] startWithNext:^(id next)
+            _selectionChangedDisposable = [[_selectionContext selectionChangedSignal] startStrictWithNext:^(id next)
             {
                 __strong TGMediaPickerGalleryInterfaceView *strongSelf = weakSelf;
                 if (strongSelf == nil)
@@ -269,29 +275,29 @@
                     [strongSelf->_checkButton setNumber:[strongSelf->_selectionContext indexOfItem:selectableItem]];
                 
                 [strongSelf updateGroupingButtonVisibility];
-            }];
+            } file:__FILE_NAME__ line:__LINE__];
             
             if (_selectionContext.allowGrouping)
             {
                 if (_editingContext != nil)
                 {
-                    _timersChangedDisposable = [_editingContext.timersUpdatedSignal startWithNext:^(__unused NSNumber *next)
+                    _timersChangedDisposable = [_editingContext.timersUpdatedSignal startStrictWithNext:^(__unused NSNumber *next)
                     {
                         __strong TGMediaPickerGalleryInterfaceView *strongSelf = weakSelf;
                         if (strongSelf == nil)
                             return;
                         
                         [strongSelf updateGroupingButtonVisibility];
-                    }];
+                    } file:__FILE_NAME__ line:__LINE__];
                     
-                    _adjustmentsChangedDisposable = [_editingContext.adjustmentsUpdatedSignal startWithNext:^(__unused NSNumber *next)
+                    _adjustmentsChangedDisposable = [_editingContext.adjustmentsUpdatedSignal startStrictWithNext:^(__unused NSNumber *next)
                     {
                         __strong TGMediaPickerGalleryInterfaceView *strongSelf = weakSelf;
                         if (strongSelf == nil)
                             return;
                         
                         [strongSelf updateGroupingButtonVisibility];
-                    }];
+                    } file:__FILE_NAME__ line:__LINE__];
                 }
                 
                 [self updateGroupingButtonVisibility];
@@ -299,11 +305,6 @@
         }
         
         [self updateEditorButtonsForItem:focusItem animated:false];
-        
-        _adjustmentsDisposable = [[SMetaDisposable alloc] init];
-        _captionDisposable = [[SMetaDisposable alloc] init];
-        _itemSelectedDisposable = [[SMetaDisposable alloc] init];
-        _itemAvailabilityDisposable = [[SMetaDisposable alloc] init];
         
         _captionMixin = [[TGPhotoCaptionInputMixin alloc] init];
         _captionMixin.panelParentView = ^UIView *
@@ -391,13 +392,15 @@
         _captionMixin.stickersContext = stickersContext;
         [_captionMixin createInputPanelIfNeeded];
         
-        _portraitToolbarView = [[TGPhotoToolbarView alloc] initWithContext:_context backButton:TGPhotoEditorBackButtonBack doneButton:TGPhotoEditorDoneButtonSend solidBackground:false];
+        TGPhotoEditorDoneButton doneButton = isScheduledMessages ? TGPhotoEditorDoneButtonSchedule : TGPhotoEditorDoneButtonSend;
+        
+        _portraitToolbarView = [[TGPhotoToolbarView alloc] initWithContext:_context backButton:TGPhotoEditorBackButtonBack doneButton:doneButton solidBackground:false];
         _portraitToolbarView.cancelPressed = toolbarCancelPressed;
         _portraitToolbarView.donePressed = toolbarDonePressed;
         _portraitToolbarView.doneLongPressed = toolbarDoneLongPressed;
         [_wrapperView addSubview:_portraitToolbarView];
         
-        _landscapeToolbarView = [[TGPhotoToolbarView alloc] initWithContext:_context backButton:TGPhotoEditorBackButtonBack doneButton:TGPhotoEditorDoneButtonSend solidBackground:false];
+        _landscapeToolbarView = [[TGPhotoToolbarView alloc] initWithContext:_context backButton:TGPhotoEditorBackButtonBack doneButton:doneButton solidBackground:false];
         _landscapeToolbarView.cancelPressed = toolbarCancelPressed;
         _landscapeToolbarView.donePressed = toolbarDonePressed;
         _landscapeToolbarView.doneLongPressed = toolbarDoneLongPressed;
@@ -418,6 +421,7 @@
     [_itemAvailabilityDisposable dispose];
     [_selectionChangedDisposable dispose];
     [_timersChangedDisposable dispose];
+    [_adjustmentsChangedDisposable dispose];
 }
 
 - (bool)updateGroupingButtonVisibility
@@ -566,7 +570,7 @@
         }
         [_checkButton setNumber:[_selectionContext indexOfItem:selectableItem]];
         signal = [_selectionContext itemInformativeSelectedSignal:selectableItem];
-        [_itemSelectedDisposable setDisposable:[signal startWithNext:^(TGMediaSelectionChange *next)
+        [_itemSelectedDisposable setDisposable:[signal startStrictWithNext:^(TGMediaSelectionChange *next)
         {
             __strong TGMediaPickerGalleryInterfaceView *strongSelf = weakSelf;
             if (strongSelf == nil)
@@ -574,13 +578,13 @@
             
             if (next.sender != strongSelf->_checkButton)
                 [strongSelf->_checkButton setSelected:next.selected animated:next.animated];
-        }]];
+        } file:__FILE_NAME__ line:__LINE__]];
     }
     
     [self updateEditorButtonsForItem:item animated:true];
     
     __weak TGModernGalleryItemView *weakItemView = itemView;
-    [_itemAvailabilityDisposable setDisposable:[[[itemView contentAvailabilityStateSignal] deliverOn:[SQueue mainQueue]] startWithNext:^(id next)
+    [_itemAvailabilityDisposable setDisposable:[[[itemView contentAvailabilityStateSignal] deliverOn:[SQueue mainQueue]] startStrictWithNext:^(id next)
     {
         __strong TGMediaPickerGalleryInterfaceView *strongSelf = weakSelf;
         __strong TGModernGalleryItemView *strongItemView = weakItemView;
@@ -611,7 +615,7 @@
             }
             strongSelf->_muteButton.hidden = !sendableAsGif;
         }
-    }]];
+    } file:__FILE_NAME__ line:__LINE__]];
     
     UIImage *muteIcon = [TGPhotoEditorInterfaceAssets muteIcon];
     UIImage *muteActiveIcon = [TGPhotoEditorInterfaceAssets muteActiveIcon];
@@ -764,13 +768,13 @@
     if ([item conformsToProtocol:@protocol(TGModernGalleryEditableItem)])
     {
         id<TGMediaEditableItem> editableMediaItem = [galleryEditableItem editableMediaItem];
-        [_captionDisposable setDisposable:[[galleryEditableItem.editingContext captionSignalForItem:editableMediaItem] startWithNext:^(NSAttributedString *caption)
+        [_captionDisposable setDisposable:[[galleryEditableItem.editingContext captionSignalForItem:editableMediaItem] startStrictWithNext:^(NSAttributedString *caption)
         {
             __strong TGMediaPickerGalleryInterfaceView *strongSelf = weakSelf;
             if (strongSelf == nil)
                 return;
             [strongSelf->_captionMixin setCaption:caption animated:animated];
-        }]];
+        } file:__FILE_NAME__ line:__LINE__]];
     }
     
     if (_editingContext == nil || _editingContext.inhibitEditing)
@@ -829,7 +833,7 @@
             } else {
                 return [SSignal never];
             }
-        }] deliverOn:[SQueue mainQueue]] startWithNext:^(NSDictionary *dict)
+        }] deliverOn:[SQueue mainQueue]] startStrictWithNext:^(NSDictionary *dict)
         {
             __strong TGMediaPickerGalleryInterfaceView *strongSelf = weakSelf;
             if (strongSelf == nil)
@@ -855,7 +859,7 @@
                 originalSize = editableMediaItem.originalSize;
 
             [strongSelf updateEditorButtonsForAdjustments:adjustments dimensions:originalSize timer:timer];
-        }]];
+        } file:__FILE_NAME__ line:__LINE__]];
     }
     else
     {

@@ -985,6 +985,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
     
     private var cachedChatListText: (String, String)?
     private var cachedChatListSearchResult: CachedChatListSearchResult?
+    private var cachedChatListQuoteSearchResult: CachedChatListSearchResult?
     private var cachedCustomTextEntities: CachedCustomTextEntities?
     
     var layoutParams: (ChatListItem, first: Bool, last: Bool, firstWithHeader: Bool, nextIsPinned: Bool, ListViewItemLayoutParams, countersSize: CGFloat)?
@@ -1255,7 +1256,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
         
         self.avatarContainerNode.addSubnode(self.avatarNode)
         self.contextContainer.addSubnode(self.avatarContainerNode)
-        self.contextContainer.addSubnode(self.onlineNode)
+        self.avatarNode.addSubnode(self.onlineNode)
         
         self.mainContentContainerNode.addSubnode(self.titleNode)
         self.mainContentContainerNode.addSubnode(self.authorNode)
@@ -1395,7 +1396,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
             if peer.isPremium && peer.id != item.context.account.peerId {
                 let context = item.context
                 self.cachedDataDisposable.set((context.account.postbox.peerView(id: peer.id)
-                |> deliverOnMainQueue).start(next: { [weak self] peerView in
+                |> deliverOnMainQueue).startStrict(next: { [weak self] peerView in
                     guard let strongSelf = self else {
                         return
                     }
@@ -1457,7 +1458,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                         strongSelf.updateVideoVisibility()
                     } else {
                         if let photo = peer.largeProfileImage, photo.hasVideo {
-                            let _ = context.engine.peers.fetchAndUpdateCachedPeerData(peerId: peer.id).start()
+                            let _ = context.engine.peers.fetchAndUpdateCachedPeerData(peerId: peer.id).startStandalone()
                         }
                     }
                 }))
@@ -1585,6 +1586,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
         let currentItem = self.layoutParams?.0
         let currentChatListText = self.cachedChatListText
         let currentChatListSearchResult = self.cachedChatListSearchResult
+        let currentChatListQuoteSearchResult = self.cachedChatListQuoteSearchResult
         let currentCustomTextEntities = self.cachedCustomTextEntities
         
         return { item, params, first, last, firstWithHeader, nextIsPinned in
@@ -1869,6 +1871,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
             
             var chatListText: (String, String)?
             var chatListSearchResult: CachedChatListSearchResult?
+            var chatListQuoteSearchResult: CachedChatListSearchResult?
             var customTextEntities: CachedCustomTextEntities?
             
             let contentImageSide: CGFloat = max(10.0, min(20.0, floor(item.presentationData.fontSize.baseDisplaySize * 18.0 / 17.0)))
@@ -2016,15 +2019,45 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                             composedString = NSMutableAttributedString(attributedString: messageString)
                         }
                         
+                        var composedReplyString: NSMutableAttributedString?
                         if let searchQuery = item.interaction.searchTextHighightState {
+                            var quoteText: String?
+                            for attribute in message.attributes {
+                                if let attribute = attribute as? ReplyMessageAttribute {
+                                    if let quote = attribute.quote {
+                                        quoteText = quote.text
+                                    }
+                                } else if let attribute = attribute as? QuotedReplyMessageAttribute {
+                                    if let quote = attribute.quote {
+                                        quoteText = quote.text
+                                    }
+                                }
+                            }
+                            if let quoteText {
+                                let quoteString = foldLineBreaks(stringWithAppliedEntities(quoteText, entities: [], baseColor: theme.messageTextColor, linkColor: theme.messageTextColor, baseFont: textFont, linkFont: textFont, boldFont: textFont, italicFont: italicTextFont, boldItalicFont: textFont, fixedFont: textFont, blockQuoteFont: textFont, underlineLinks: false, message: nil))
+                                composedReplyString = NSMutableAttributedString(attributedString: quoteString)
+                            }
+                            
                             if let cached = currentChatListSearchResult, cached.matches(text: composedString.string, searchQuery: searchQuery) {
                                 chatListSearchResult = cached
                             } else {
                                 let (ranges, text) = findSubstringRanges(in: composedString.string, query: searchQuery)
                                 chatListSearchResult = CachedChatListSearchResult(text: text, searchQuery: searchQuery, resultRanges: ranges)
                             }
+                            
+                            if let composedReplyString {
+                                if let cached = currentChatListQuoteSearchResult, cached.matches(text: composedReplyString.string, searchQuery: searchQuery) {
+                                    chatListQuoteSearchResult = cached
+                                } else {
+                                    let (ranges, text) = findSubstringRanges(in: composedReplyString.string, query: searchQuery)
+                                    chatListQuoteSearchResult = CachedChatListSearchResult(text: text, searchQuery: searchQuery, resultRanges: ranges)
+                                }
+                            } else {
+                                chatListQuoteSearchResult = nil
+                            }
                         } else {
                             chatListSearchResult = nil
+                            chatListQuoteSearchResult = nil
                         }
                         
                         if let chatListSearchResult = chatListSearchResult, let firstRange = chatListSearchResult.resultRanges.first {
@@ -2053,6 +2086,34 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                                 composedString = composedString.attributedSubstring(from: NSMakeRange(leftOrigin, composedString.length - leftOrigin)).mutableCopy() as! NSMutableAttributedString
                                 composedString.insert(NSAttributedString(string: "\u{2026}", attributes: [NSAttributedString.Key.font: textFont, NSAttributedString.Key.foregroundColor: theme.messageTextColor]), at: 0)
                             }
+                        } else if var composedReplyString, let chatListQuoteSearchResult, let firstRange = chatListQuoteSearchResult.resultRanges.first {
+                            for range in chatListQuoteSearchResult.resultRanges {
+                                let stringRange = NSRange(range, in: chatListQuoteSearchResult.text)
+                                if stringRange.location >= 0 && stringRange.location + stringRange.length <= composedReplyString.length {
+                                    var stringRange = stringRange
+                                    if stringRange.location > composedReplyString.length {
+                                        continue
+                                    } else if stringRange.location + stringRange.length > composedReplyString.length {
+                                        stringRange.length = composedReplyString.length - stringRange.location
+                                    }
+                                    composedReplyString.addAttribute(.foregroundColor, value: theme.messageHighlightedTextColor, range: stringRange)
+                                }
+                            }
+                            
+                            let firstRangeOrigin = chatListQuoteSearchResult.text.distance(from: chatListQuoteSearchResult.text.startIndex, to: firstRange.lowerBound)
+                            if firstRangeOrigin > 24 {
+                                var leftOrigin: Int = 0
+                                (composedReplyString.string as NSString).enumerateSubstrings(in: NSMakeRange(0, firstRangeOrigin), options: [.byWords, .reverse]) { (str, range1, _, _) in
+                                    let distanceFromEnd = firstRangeOrigin - range1.location
+                                    if (distanceFromEnd > 12 || range1.location == 0) && leftOrigin == 0 {
+                                        leftOrigin = range1.location
+                                    }
+                                }
+                                composedReplyString = composedReplyString.attributedSubstring(from: NSMakeRange(leftOrigin, composedReplyString.length - leftOrigin)).mutableCopy() as! NSMutableAttributedString
+                                composedReplyString.insert(NSAttributedString(string: "\u{2026}", attributes: [NSAttributedString.Key.font: textFont, NSAttributedString.Key.foregroundColor: theme.messageTextColor]), at: 0)
+                            }
+                            
+                            composedString = composedReplyString
                         }
                         
                         attributedText = composedString
@@ -2712,6 +2773,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                     strongSelf.currentItemHeight = itemHeight
                     strongSelf.cachedChatListText = chatListText
                     strongSelf.cachedChatListSearchResult = chatListSearchResult
+                    strongSelf.cachedChatListQuoteSearchResult = chatListQuoteSearchResult
                     strongSelf.cachedCustomTextEntities = customTextEntities
                     strongSelf.onlineIsVoiceChat = onlineIsVoiceChat
                     
@@ -3001,9 +3063,9 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                     
                     let onlineFrame: CGRect
                     if onlineIsVoiceChat {
-                        onlineFrame = CGRect(origin: CGPoint(x: avatarFrame.maxX - onlineLayout.width + 1.0 - UIScreenPixel, y: avatarFrame.maxY - onlineLayout.height + 1.0 - UIScreenPixel), size: onlineLayout)
+                        onlineFrame = CGRect(origin: CGPoint(x: avatarFrame.width - onlineLayout.width + 1.0 - UIScreenPixel, y: avatarFrame.height - onlineLayout.height + 1.0 - UIScreenPixel), size: onlineLayout)
                     } else {
-                        onlineFrame = CGRect(origin: CGPoint(x: avatarFrame.maxX - onlineLayout.width - 2.0, y: avatarFrame.maxY - onlineLayout.height - 2.0), size: onlineLayout)
+                        onlineFrame = CGRect(origin: CGPoint(x: avatarFrame.width - onlineLayout.width - 2.0, y: avatarFrame.height - onlineLayout.height - 2.0), size: onlineLayout)
                     }
                     transition.updateFrame(node: strongSelf.onlineNode, frame: onlineFrame)
                     
@@ -3040,11 +3102,11 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                             avatarTimerTransition = .immediate
                             avatarTimerBadge = AvatarBadgeView(frame: CGRect())
                             strongSelf.avatarTimerBadge = avatarTimerBadge
-                            strongSelf.contextContainer.view.addSubview(avatarTimerBadge)
+                            strongSelf.avatarNode.view.addSubview(avatarTimerBadge)
                         }
                         let avatarBadgeSize = CGSize(width: avatarTimerBadgeDiameter, height: avatarTimerBadgeDiameter)
                         avatarTimerBadge.update(size: avatarBadgeSize, text: shortTimeIntervalString(strings: item.presentationData.strings, value: autoremoveTimeout, useLargeFormat: true))
-                        let avatarBadgeFrame = CGRect(origin: CGPoint(x: avatarFrame.maxX - avatarBadgeSize.width, y: avatarFrame.maxY - avatarBadgeSize.height), size: avatarBadgeSize)
+                        let avatarBadgeFrame = CGRect(origin: CGPoint(x: avatarFrame.width - avatarBadgeSize.width, y: avatarFrame.height - avatarBadgeSize.height), size: avatarBadgeSize)
                         avatarTimerTransition.updatePosition(layer: avatarTimerBadge.layer, position: avatarBadgeFrame.center)
                         avatarTimerTransition.updateBounds(layer: avatarTimerBadge.layer, bounds: CGRect(origin: CGPoint(), size: avatarBadgeFrame.size))
                         avatarTimerTransition.updateTransformScale(layer: avatarTimerBadge.layer, scale: autoremoveTimeoutFraction * 1.0 + (1.0 - autoremoveTimeoutFraction) * 0.00001)

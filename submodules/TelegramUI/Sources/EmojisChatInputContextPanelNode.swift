@@ -21,6 +21,7 @@ import StickerPeekUI
 import UndoUI
 import Pasteboard
 import ChatContextQuery
+import ChatInputContextPanelNode
 
 private enum EmojisChatInputContextPanelEntryStableId: Hashable, Equatable {
     case symbol(String)
@@ -331,7 +332,7 @@ final class EmojisChatInputContextPanelNode: ChatInputContextPanelNode {
                         return
                     }
                     
-                    let _ = self.context.engine.accountData.setEmojiStatus(file: file, expirationDate: nil).start()
+                    let _ = self.context.engine.accountData.setEmojiStatus(file: file, expirationDate: nil).startStandalone()
                     
                     var animateInAsReplacement = false
                     animateInAsReplacement = false

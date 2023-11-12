@@ -487,7 +487,14 @@ final class AuthorizedApplicationContext {
                     |> deliverOnMainQueue).start(completed: {
                         controller?.dismiss()
                         if let strongSelf = self, let botName = botName {
-                            strongSelf.termsOfServiceProceedToBotDisposable.set((strongSelf.context.engine.peers.resolvePeerByName(name: botName, ageLimit: 10) |> take(1) |> deliverOnMainQueue).start(next: { peer in
+                            strongSelf.termsOfServiceProceedToBotDisposable.set((strongSelf.context.engine.peers.resolvePeerByName(name: botName, ageLimit: 10)
+                            |> mapToSignal { result -> Signal<EnginePeer?, NoError> in
+                                guard case let .result(result) = result else {
+                                    return .complete()
+                                }
+                                return .single(result)
+                            }
+                            |> deliverOnMainQueue).start(next: { peer in
                                 if let strongSelf = self, let peer = peer {
                                     self?.rootController.pushViewController(ChatControllerImpl(context: strongSelf.context, chatLocation: .peer(id: peer.id)))
                                 }
@@ -785,7 +792,7 @@ final class AuthorizedApplicationContext {
                                     return
                                 }
                                 
-                                strongSelf.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: strongSelf.rootController, context: strongSelf.context, chatLocation: .peer(peer), subject: .message(id: .id(messageId), highlight: true, timecode: nil)))
+                                strongSelf.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: strongSelf.rootController, context: strongSelf.context, chatLocation: .peer(peer), subject: .message(id: .id(messageId), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil)))
                             })
                         }
                         
@@ -865,56 +872,6 @@ final class AuthorizedApplicationContext {
             self.rootController.setViewControllers(controllers, animated: false)
             
             self.rootController.chatListController?.openStoriesFromNotification(peerId: storyId.peerId, storyId: storyId.id)
-
-            /*if let chatListController = self.rootController.chatListController as? ChatListControllerImpl {
-                let _ = (chatListController.context.account.postbox.transaction { transaction -> Bool in
-                    if let peer = transaction.getPeer(storyId.peerId) as? TelegramUser, let storiesHidden = peer.storiesHidden, storiesHidden {
-                        return true
-                    } else {
-                        return false
-                    }
-                }
-                |> deliverOnMainQueue).start(next: { [weak self] isArchived in
-                    guard let self, let chatListController = self.rootController.chatListController as? ChatListControllerImpl else {
-                        return
-                    }
-                    if isArchived {
-                        if let navigationController = (chatListController.navigationController as? NavigationController) {
-                            var viewControllers = navigationController.viewControllers
-                            if let index = viewControllers.firstIndex(where: { c in
-                                if let c = c as? ChatListControllerImpl {
-                                    if case .chatList(groupId: .archive) = c.location {
-                                        return true
-                                    }
-                                }
-                                return false
-                            }) {
-                                (viewControllers[index] as? ChatListControllerImpl)?.scrollToStories()
-                                viewControllers.removeSubrange((index + 1) ..< viewControllers.count)
-                                navigationController.setViewControllers(viewControllers, animated: false)
-                            } else {
-                                let archive = ChatListControllerImpl(context: chatListController.context, location: .chatList(groupId: .archive), controlsHistoryPreload: false, hideNetworkActivityStatus: false, previewing: false, enableDebugActions: false)
-                                archive.onDidAppear = { [weak archive] in
-                                    Queue.mainQueue().after(0.1, {
-                                        guard let archive else {
-                                            return
-                                        }
-                                        if archive.hasStorySubscriptions {
-                                            archive.scrollToStoriesAnimated()
-                                        }
-                                    })
-                                }
-                                navigationController.pushViewController(archive, animated: false, completion: {})
-                            }
-                        }
-                    } else {
-                        chatListController.scrollToStories()
-                        if let navigationController = (chatListController.navigationController as? NavigationController) {
-                            navigationController.popToRoot(animated: true)
-                        }
-                    }
-                })
-            }*/
         } else {
             var visiblePeerId: PeerId?
             if let controller = self.rootController.topViewController as? ChatControllerImpl, controller.chatLocation.peerId == peerId, controller.chatLocation.threadId == threadId {
@@ -954,7 +911,7 @@ final class AuthorizedApplicationContext {
                         chatLocation = .peer(peer)
                     }
                     
-                    self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: self.rootController, context: self.context, chatLocation: chatLocation, subject: isOutgoingMessage ? messageId.flatMap { .message(id: .id($0), highlight: true, timecode: nil) } : nil, activateInput: activateInput ? .text : nil))
+                    self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: self.rootController, context: self.context, chatLocation: chatLocation, subject: isOutgoingMessage ? messageId.flatMap { .message(id: .id($0), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil) } : nil, activateInput: activateInput ? .text : nil))
                 })
             }
         }

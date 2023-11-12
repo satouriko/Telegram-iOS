@@ -18,6 +18,10 @@ public enum ConnectionStatus: Equatable {
     case online(proxyAddress: String?)
 }
 
+public func legacy_unarchiveDeprecated(data: Data) -> Any? {
+    return MTDeprecated.unarchiveDeprecated(with: data)
+}
+
 private struct MTProtoConnectionFlags: OptionSet {
     let rawValue: Int
     
@@ -658,6 +662,9 @@ private final class NetworkHelper: NSObject, MTContextChangeListener {
         self.contextLoggedOutUpdated = contextLoggedOutUpdated
     }
     
+    deinit {
+    }
+    
     func fetchContextDatacenterPublicKeys(_ context: MTContext, datacenterId: Int) -> MTSignal {
         return MTSignal { subscriber in
             let disposable = self.requestPublicKeys(datacenterId).start(next: { next in
@@ -733,6 +740,7 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
     private let queue: Queue
     public let datacenterId: Int
     public let context: MTContext
+    private var networkHelper: NetworkHelper?
     let mtProto: MTProto
     let requestService: MTRequestMessageService
     let basePath: String
@@ -807,7 +815,7 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
         }
         
         let _contextProxyId = self._contextProxyId
-        context.add(NetworkHelper(requestPublicKeys: { [weak self] id in
+        let networkHelper = NetworkHelper(requestPublicKeys: { [weak self] id in
             if let strongSelf = self {
                 return strongSelf.request(Api.functions.help.getCdnConfig())
                 |> map(Optional.init)
@@ -848,7 +856,9 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
         }, contextLoggedOutUpdated: { [weak self] in
             Logger.shared.log("Network", "contextLoggedOut")
             self?.loggedOut?()
-        }))
+        })
+        self.networkHelper = networkHelper
+        context.add(networkHelper)
         requestService.delegate = self
         
         self._multiplexedRequestManager = MultiplexedRequestManager(takeWorker: { [weak self] target, tag, continueInBackground in
@@ -1126,21 +1136,38 @@ class Keychain: NSObject, MTKeychain {
             return
         }
         MTContext.perform(objCTry: {
-            let data = NSKeyedArchiver.archivedData(withRootObject: object)
-            self.set(group + ":" + aKey, data)
+            if let data = try? NSKeyedArchiver.archivedData(withRootObject: object, requiringSecureCoding: false) {
+                self.set(group + ":" + aKey, data)
+            }
         })
     }
     
-    func object(forKey aKey: String!, group: String!) -> Any! {
+    func dictionary(forKey aKey: String!, group: String!) -> [AnyHashable : Any]? {
         guard let aKey = aKey, let group = group else {
             return nil
         }
         if let data = self.get(group + ":" + aKey) {
-            var result: Any?
-            MTContext.perform(objCTry: {
-                result = NSKeyedUnarchiver.unarchiveObject(with: data as Data)
-            })
-            return result
+            var result: NSDictionary?
+            result = MTDeprecated.unarchiveDeprecated(with: data as Data) as? NSDictionary
+            if let result = result {
+                return result as? [AnyHashable : Any]
+            }
+            assertionFailure("Unexpected keychain entry type")
+        }
+        return nil
+    }
+    
+    func number(forKey aKey: String!, group: String!) -> NSNumber? {
+        guard let aKey = aKey, let group = group else {
+            return nil
+        }
+        if let data = self.get(group + ":" + aKey) {
+            var result: NSNumber?
+            result = MTDeprecated.unarchiveDeprecated(with: data as Data) as? NSNumber
+            if let result = result {
+                return result
+            }
+            assertionFailure("Unexpected keychain entry type")
         }
         return nil
     }

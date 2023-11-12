@@ -141,6 +141,24 @@ static MTDatacenterAuthInfoMapKeyStruct parseAuthInfoMapKeyInteger(NSNumber *key
     return parseAuthInfoMapKey([key longLongValue]);
 }
 
+@interface MTWeakContextChangeListener : NSObject
+
+@property (nonatomic, weak) id<MTContextChangeListener> target;
+
+@end
+
+@implementation MTWeakContextChangeListener
+
+- (instancetype)initWithTarget:(id<MTContextChangeListener>)target {
+    self = [super init];
+    if (self != nil) {
+        _target = target;
+    }
+    return self;
+}
+
+@end
+
 @interface MTContext () <MTDiscoverDatacenterAddressActionDelegate, MTDatacenterTransferAuthActionDelegate>
 {
     int64_t _uniqueId;
@@ -160,7 +178,7 @@ static MTDatacenterAuthInfoMapKeyStruct parseAuthInfoMapKeyInteger(NSNumber *key
     
     NSMutableDictionary *_authTokenById;
     
-    NSMutableArray *_changeListeners;
+    NSMutableArray<MTWeakContextChangeListener *> *_changeListeners;
     
     MTSignal *_discoverBackupAddressListSignal;
     
@@ -291,18 +309,25 @@ static int32_t fixedTimeDifferenceValue = 0;
     }
 }
 
-static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, id<MTKeychain> _Nonnull fromKeychain, id<MTKeychain> _Nonnull toKeychain) {
-    id value = [fromKeychain objectForKey:key group:group];
+static void copyKeychainNumberKey(NSString * _Nonnull group, NSString * _Nonnull key, id<MTKeychain> _Nonnull fromKeychain, id<MTKeychain> _Nonnull toKeychain) {
+    id value = [fromKeychain numberForKey:key group:group];
+    if (value) {
+        [toKeychain setObject:value forKey:key group:group];
+    }
+}
+
+static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Nonnull key, id<MTKeychain> _Nonnull fromKeychain, id<MTKeychain> _Nonnull toKeychain) {
+    id value = [fromKeychain dictionaryForKey:key group:group];
     if (value) {
         [toKeychain setObject:value forKey:key group:group];
     }
 }
 
 + (void)copyAuthInfoFrom:(id<MTKeychain> _Nonnull)keychain toTempKeychain:(id<MTKeychain> _Nonnull)tempKeychain {
-    copyKeychainKey(@"temp", @"globalTimeDifference", keychain, tempKeychain);
-    copyKeychainKey(@"persistent", @"datacenterAddressSetById", keychain, tempKeychain);
-    copyKeychainKey(@"persistent", @"datacenterAuthInfoById", keychain, tempKeychain);
-    copyKeychainKey(@"ephemeral", @"datacenterPublicKeysById", keychain, tempKeychain);
+    copyKeychainNumberKey(@"temp", @"globalTimeDifference", keychain, tempKeychain);
+    copyKeychainDictionaryKey(@"persistent", @"datacenterAddressSetById", keychain, tempKeychain);
+    copyKeychainDictionaryKey(@"persistent", @"datacenterAuthInfoById", keychain, tempKeychain);
+    copyKeychainDictionaryKey(@"ephemeral", @"datacenterPublicKeysById", keychain, tempKeychain);
     //copyKeychainKey(@"persistent", @"authTokenById", keychain, tempKeychain);
 }
 
@@ -375,11 +400,11 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
         
         if (_keychain != nil)
         {
-            NSNumber *nGlobalTimeDifference = [keychain objectForKey:@"globalTimeDifference" group:@"temp"];
+            NSNumber *nGlobalTimeDifference = [keychain numberForKey:@"globalTimeDifference" group:@"temp"];
             if (nGlobalTimeDifference != nil)
                 _globalTimeDifference = [nGlobalTimeDifference doubleValue];
             
-            NSDictionary *datacenterAddressSetById = [keychain objectForKey:@"datacenterAddressSetById" group:@"persistent"];
+            NSDictionary *datacenterAddressSetById = [keychain dictionaryForKey:@"datacenterAddressSetById" group:@"persistent"];
             if (datacenterAddressSetById != nil) {
                 _datacenterAddressSetById = [[NSMutableDictionary alloc] initWithDictionary:datacenterAddressSetById];
                 if (MTLogEnabled()) {
@@ -387,7 +412,7 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
                 }
             }
             
-            NSDictionary *datacenterManuallySelectedSchemeById = [keychain objectForKey:@"datacenterManuallySelectedSchemeById_v1" group:@"persistent"];
+            NSDictionary *datacenterManuallySelectedSchemeById = [keychain dictionaryForKey:@"datacenterManuallySelectedSchemeById_v1" group:@"persistent"];
             if (datacenterManuallySelectedSchemeById != nil) {
                 _datacenterManuallySelectedSchemeById = [[NSMutableDictionary alloc] initWithDictionary:datacenterManuallySelectedSchemeById];
                 if (MTLogEnabled()) {
@@ -399,7 +424,7 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
                 _datacenterAddressSetById[nDatacenterId] = [[MTDatacenterAddressSet alloc] initWithAddressList:@[address]];
             }];
             
-            NSDictionary *datacenterAuthInfoById = [keychain objectForKey:@"datacenterAuthInfoById" group:@"persistent"];
+            NSDictionary *datacenterAuthInfoById = [keychain dictionaryForKey:@"datacenterAuthInfoById" group:@"persistent"];
             if (datacenterAuthInfoById != nil) {
                 _datacenterAuthInfoById = [[NSMutableDictionary alloc] initWithDictionary:datacenterAuthInfoById];
 
@@ -417,12 +442,12 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
                 }
             }
             
-            NSDictionary *datacenterPublicKeysById = [keychain objectForKey:@"datacenterPublicKeysById" group:@"ephemeral"];
+            NSDictionary *datacenterPublicKeysById = [keychain dictionaryForKey:@"datacenterPublicKeysById" group:@"ephemeral"];
             if (datacenterPublicKeysById != nil) {
                 _datacenterPublicKeysById = [[NSMutableDictionary alloc] initWithDictionary:datacenterPublicKeysById];
             }
             
-            NSDictionary *transportSchemeStats = [keychain objectForKey:@"transportSchemeStats_v1" group:@"temp"];
+            NSDictionary *transportSchemeStats = [keychain dictionaryForKey:@"transportSchemeStats_v1" group:@"temp"];
             if (transportSchemeStats != nil) {
                 [_transportSchemeStats removeAllObjects];
                 [transportSchemeStats enumerateKeysAndObjectsUsingBlock:^(NSNumber *nDatacenterId, NSDictionary<MTDatacenterAddress *, MTTransportSchemeStats *> *values, __unused BOOL *stop) {
@@ -433,11 +458,11 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
                 }
             }
             
-            NSDictionary *authTokenById = [keychain objectForKey:@"authTokenById" group:@"persistent"];
+            NSDictionary *authTokenById = [keychain dictionaryForKey:@"authTokenById" group:@"persistent"];
             if (authTokenById != nil)
                 _authTokenById = [[NSMutableDictionary alloc] initWithDictionary:authTokenById];
             
-            NSDictionary *cleanupSessionIdsByAuthKeyId = [keychain objectForKey:@"cleanupSessionIdsByAuthKeyId" group:@"cleanup"];
+            NSDictionary *cleanupSessionIdsByAuthKeyId = [keychain dictionaryForKey:@"cleanupSessionIdsByAuthKeyId" group:@"cleanup"];
             if (cleanupSessionIdsByAuthKeyId != nil)
                 _cleanupSessionIdsByAuthKeyId = [[NSMutableDictionary alloc] initWithDictionary:cleanupSessionIdsByAuthKeyId];
             
@@ -456,9 +481,17 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
 {
     [[MTContext contextQueue] dispatchOnQueue:^
     {
-        if (![_changeListeners containsObject:changeListener])
-        {
-            [_changeListeners addObject:changeListener];
+        bool alreadyContains = false;
+        for (MTWeakContextChangeListener *value in _changeListeners) {
+            id<MTContextChangeListener> target = value.target;
+            if (target == changeListener) {
+                alreadyContains = true;
+                break;
+            }
+        }
+        
+        if (!alreadyContains) {
+            [_changeListeners addObject:[[MTWeakContextChangeListener alloc] initWithTarget:changeListener]];
         }
     }];
 }
@@ -467,7 +500,15 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
 {
     [[MTContext contextQueue] dispatchOnQueue:^
     {
-        [_changeListeners removeObject:changeListener];
+        for (NSInteger i = 0; i < _changeListeners.count; i++) {
+            MTWeakContextChangeListener *value = _changeListeners[i];
+            id<MTContextChangeListener> target = value.target;
+            if (target == changeListener) {
+                [_changeListeners removeObjectAtIndex:i];
+                break;
+            }
+        }
+        
     } synchronous:true];
 }
 
@@ -537,19 +578,25 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
             _datacenterAddressSetById[@(datacenterId)] = addressSet;
             [_keychain setObject:_datacenterAddressSetById forKey:@"datacenterAddressSetById" group:@"persistent"];
             
-            NSArray *currentListeners = [[NSArray alloc] initWithArray:_changeListeners];
+            NSArray<MTWeakContextChangeListener *> *changeListeners = [[NSArray alloc] initWithArray:_changeListeners];
             
-            for (id<MTContextChangeListener> listener in currentListeners)
-            {
-                if ([listener respondsToSelector:@selector(contextDatacenterAddressSetUpdated:datacenterId:addressSet:)])
-                    [listener contextDatacenterAddressSetUpdated:self datacenterId:datacenterId addressSet:addressSet];
+            for (MTWeakContextChangeListener *listenerWrapper in changeListeners) {
+                id<MTContextChangeListener> listener = listenerWrapper.target;
+                if (listener) {
+                    if ([listener respondsToSelector:@selector(contextDatacenterAddressSetUpdated:datacenterId:addressSet:)]) {
+                        [listener contextDatacenterAddressSetUpdated:self datacenterId:datacenterId addressSet:addressSet];
+                    }
+                }
             }
             
             if (true) {
                 bool shouldReset = previousAddressSetWasEmpty || updateSchemes;
-                for (id<MTContextChangeListener> listener in currentListeners) {
-                    if ([listener respondsToSelector:@selector(contextDatacenterTransportSchemesUpdated:datacenterId:shouldReset:)]) {
-                        [listener contextDatacenterTransportSchemesUpdated:self datacenterId:datacenterId shouldReset:shouldReset];
+                for (MTWeakContextChangeListener *listenerWrapper in changeListeners) {
+                    id<MTContextChangeListener> listener = listenerWrapper.target;
+                    if (listener) {
+                        if ([listener respondsToSelector:@selector(contextDatacenterTransportSchemesUpdated:datacenterId:shouldReset:)]) {
+                            [listener contextDatacenterTransportSchemesUpdated:self datacenterId:datacenterId shouldReset:shouldReset];
+                        }
                     }
                 }
             } else {
@@ -626,12 +673,14 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
             _datacenterAddressSetById[@(datacenterId)] = addressSet;
             [_keychain setObject:_datacenterAddressSetById forKey:@"datacenterAddressSetById" group:@"persistent"];
             
-            NSArray *currentListeners = [[NSArray alloc] initWithArray:_changeListeners];
-            
-            for (id<MTContextChangeListener> listener in currentListeners)
-            {
-                if ([listener respondsToSelector:@selector(contextDatacenterAddressSetUpdated:datacenterId:addressSet:)])
-                    [listener contextDatacenterAddressSetUpdated:self datacenterId:datacenterId addressSet:addressSet];
+            NSArray *changeListeners = [[NSArray alloc] initWithArray:_changeListeners];
+            for (MTWeakContextChangeListener *value in changeListeners) {
+                id<MTContextChangeListener> listener = value.target;
+                if (listener) {
+                    if ([listener respondsToSelector:@selector(contextDatacenterAddressSetUpdated:datacenterId:addressSet:)]) {
+                        [listener contextDatacenterAddressSetUpdated:self datacenterId:datacenterId addressSet:addressSet];
+                    }
+                }
             }
         }
     }];
@@ -664,12 +713,13 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
             
             [_keychain setObject:_datacenterAuthInfoById forKey:@"datacenterAuthInfoById" group:@"persistent"];
             
-            NSArray *currentListeners = [[NSArray alloc] initWithArray:_changeListeners];
-            
-            for (id<MTContextChangeListener> listener in currentListeners)
-            {
-                if ([listener respondsToSelector:@selector(contextDatacenterAuthInfoUpdated:datacenterId:authInfo:selector:)])
-                    [listener contextDatacenterAuthInfoUpdated:self datacenterId:datacenterId authInfo:authInfo selector:selector];
+            NSArray *changeListeners = [[NSArray alloc] initWithArray:_changeListeners];
+            for (MTWeakContextChangeListener *value in changeListeners) {
+                id<MTContextChangeListener> listener = value.target;
+                if (listener) {
+                    if ([listener respondsToSelector:@selector(contextDatacenterAuthInfoUpdated:datacenterId:authInfo:selector:)])
+                        [listener contextDatacenterAuthInfoUpdated:self datacenterId:datacenterId authInfo:authInfo selector:selector];
+                }
             }
             
             if (wasNil && authInfo != nil && selector == MTDatacenterAuthInfoSelectorPersistent) {
@@ -705,12 +755,14 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
     {
         [[MTContext contextQueue] dispatchOnQueue:^
         {
-            NSArray *currentListeners = [[NSArray alloc] initWithArray:_changeListeners];
-            
-            for (id<MTContextChangeListener> listener in currentListeners)
-            {
-                if ([listener respondsToSelector:@selector(contextIsPasswordRequiredUpdated:datacenterId:)])
-                    [listener contextIsPasswordRequiredUpdated:self datacenterId:datacenterId];
+            NSArray *changeListeners = [[NSArray alloc] initWithArray:_changeListeners];
+            for (MTWeakContextChangeListener *value in changeListeners) {
+                id<MTContextChangeListener> listener = value.target;
+                if (listener) {
+                    if ([listener respondsToSelector:@selector(contextIsPasswordRequiredUpdated:datacenterId:)]) {
+                        [listener contextIsPasswordRequiredUpdated:self datacenterId:datacenterId];
+                    }
+                }
             }
         }];
     }
@@ -731,15 +783,18 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
                 return current;
             }];
             
-            NSArray *currentListeners = [[NSArray alloc] initWithArray:_changeListeners];
+            NSArray *changeListeners = [[NSArray alloc] initWithArray:_changeListeners];
             
             if (MTLogEnabled()) {
                 MTLog(@"[MTContext#%" PRIxPTR ": %@ transport scheme updated for %d: %@]", (intptr_t)self, media ? @"media" : @"generic", datacenterId, transportScheme);
             }
             
-            for (id<MTContextChangeListener> listener in currentListeners) {
-                if ([listener respondsToSelector:@selector(contextDatacenterTransportSchemesUpdated:datacenterId:shouldReset:)])
-                    [listener contextDatacenterTransportSchemesUpdated:self datacenterId:datacenterId shouldReset:false];
+            for (MTWeakContextChangeListener *value in changeListeners) {
+                id<MTContextChangeListener> listener = value.target;
+                if (listener) {
+                    if ([listener respondsToSelector:@selector(contextDatacenterTransportSchemesUpdated:datacenterId:shouldReset:)])
+                        [listener contextDatacenterTransportSchemesUpdated:self datacenterId:datacenterId shouldReset:false];
+                }
             }
         }
     }];
@@ -1004,9 +1059,12 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
             _datacenterPublicKeysById[@(datacenterId)] = publicKeys;
             [_keychain setObject:_datacenterPublicKeysById forKey:@"datacenterPublicKeysById" group:@"ephemeral"];
             
-            for (id<MTContextChangeListener> listener in _changeListeners) {
-                if ([listener respondsToSelector:@selector(contextDatacenterPublicKeysUpdated:datacenterId:publicKeys:)]) {
-                    [listener contextDatacenterPublicKeysUpdated:self datacenterId:datacenterId publicKeys:publicKeys];
+            for (MTWeakContextChangeListener *value in _changeListeners) {
+                id<MTContextChangeListener> listener = value.target;
+                if (listener) {
+                    if ([listener respondsToSelector:@selector(contextDatacenterPublicKeysUpdated:datacenterId:publicKeys:)]) {
+                        [listener contextDatacenterPublicKeysUpdated:self datacenterId:datacenterId publicKeys:publicKeys];
+                    }
                 }
             }
         }
@@ -1016,22 +1074,28 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
 - (void)publicKeysForDatacenterWithIdRequired:(NSInteger)datacenterId {
     [[MTContext contextQueue] dispatchOnQueue:^{
         if (_fetchPublicKeysActions[@(datacenterId)] == nil) {
-            for (id<MTContextChangeListener> listener in _changeListeners) {
+            for (MTWeakContextChangeListener *value in _changeListeners) {
+                id<MTContextChangeListener> listener = value.target;
+                if (!listener) {
+                    continue;
+                }
                 if ([listener respondsToSelector:@selector(fetchContextDatacenterPublicKeys:datacenterId:)]) {
                     MTSignal *signal = [listener fetchContextDatacenterPublicKeys:self datacenterId:datacenterId];
                     if (signal != nil) {
                         __weak MTContext *weakSelf = self;
                         MTMetaDisposable *disposable = [[MTMetaDisposable alloc] init];
                         _fetchPublicKeysActions[@(datacenterId)] = disposable;
-                        [disposable setDisposable:[signal startWithNext:^(NSArray<NSDictionary *> *next) {
+                        [disposable setDisposable:[signal startWithNextStrict:^(NSArray<NSDictionary *> *next) {
                             [[MTContext contextQueue] dispatchOnQueue:^{
                                 __strong MTContext *strongSelf = weakSelf;
                                 if (strongSelf != nil) {
+                                    id<MTDisposable> disposable = strongSelf->_fetchPublicKeysActions[@(datacenterId)];
                                     [strongSelf->_fetchPublicKeysActions removeObjectForKey:@(datacenterId)];
+                                    [disposable dispose];
                                     [strongSelf updatePublicKeysForDatacenterWithId:datacenterId publicKeys:next];
                                 }
                             } synchronous:false];
-                        }]];
+                        } file:__FILE_NAME__ line:__LINE__]];
                         break;
                     }
                 }
@@ -1127,7 +1191,11 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
             MTDatacenterAddressSet *addressSet = [[MTDatacenterAddressSet alloc] initWithAddressList:addressList];
             MTSignal *discoverSignal = [MTDiscoverConnectionSignals discoverSchemeWithContext:self datacenterId:datacenterId addressList:addressSet.addressList media:media isProxy:isProxy];
             MTSignal *conditionSignal = [MTSignal single:@(true)];
-            for (id<MTContextChangeListener> listener in _changeListeners) {
+            for (MTWeakContextChangeListener *value in _changeListeners) {
+                id<MTContextChangeListener> listener = value.target;
+                if (!listener) {
+                    continue;
+                }
                 if ([listener respondsToSelector:@selector(isContextNetworkAccessAllowed:)]) {
                     MTSignal *signal = [listener isContextNetworkAccessAllowed:self];
                     if (signal != nil) {
@@ -1150,10 +1218,12 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
                 {
                     [[MTContext contextQueue] dispatchOnQueue:^
                     {
+                        id<MTDisposable> disposable = strongSelf->_transportSchemeDisposableByDatacenterId[@(datacenterId)];
                         [strongSelf->_transportSchemeDisposableByDatacenterId removeObjectForKey:@(datacenterId)];
+                        [disposable dispose];
                     }];
                 }
-            }] startWithNext:^(MTTransportScheme *next)
+            }] startWithNextStrict:^(MTTransportScheme *next)
             {
                 if (MTLogEnabled()) {
                     MTLog(@"scheme: %@", next);
@@ -1169,7 +1239,7 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
             } completed:^
             {
                 
-            }];
+            } file:__FILE_NAME__ line:__LINE__];
         }
     }];
 }
@@ -1286,7 +1356,7 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
                 [strongSelf->_backupAddressListDisposable dispose];
                 strongSelf->_backupAddressListDisposable = nil;
             }
-        }] startWithNext:nil];
+        }] startWithNextStrict:nil file:__FILE_NAME__ line:__LINE__];
     }
 }
 
@@ -1327,10 +1397,12 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
             [_authTokenById removeObjectForKey:@(datacenterId)];
         [_keychain setObject:_authTokenById forKey:@"authTokenById" group:@"persistent"];
         
-        NSArray *currentListeners = [[NSArray alloc] initWithArray:_changeListeners];
-        
-        for (id<MTContextChangeListener> listener in currentListeners)
-        {
+        NSArray *changeListeners = [[NSArray alloc] initWithArray:_changeListeners];
+        for (MTWeakContextChangeListener *value in changeListeners) {
+            id<MTContextChangeListener> listener = value.target;
+            if (!listener) {
+                continue;
+            }
             if ([listener respondsToSelector:@selector(contextDatacenterAuthTokenUpdated:datacenterId:authToken:)])
                 [listener contextDatacenterAuthTokenUpdated:self datacenterId:datacenterId authToken:authToken];
         }
@@ -1456,9 +1528,12 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
         if (apiEnvironment != nil) {
             _apiEnvironment = apiEnvironment;
             
-            NSArray *currentListeners = [[NSArray alloc] initWithArray:_changeListeners];
-            for (id<MTContextChangeListener> listener in currentListeners)
-            {
+            NSArray *changeListeners = [[NSArray alloc] initWithArray:_changeListeners];
+            for (MTWeakContextChangeListener *value in changeListeners) {
+                id<MTContextChangeListener> listener = value.target;
+                if (!listener) {
+                    continue;
+                }
                 if ([listener respondsToSelector:@selector(contextApiEnvironmentUpdated:apiEnvironment:)]) {
                     [listener contextApiEnvironmentUpdated:self apiEnvironment:apiEnvironment];
                 }
@@ -1484,7 +1559,7 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
             _datacenterCheckKeyRemovedActionTimestamps[@(datacenterId)] = currentTimestamp;
             [_datacenterCheckKeyRemovedActions[@(datacenterId)] dispose];
             __weak MTContext *weakSelf = self;
-            _datacenterCheckKeyRemovedActions[@(datacenterId)] = [[MTDiscoverConnectionSignals checkIfAuthKeyRemovedWithContext:self datacenterId:datacenterId authKey:[[MTDatacenterAuthKey alloc] initWithAuthKey:authInfo.authKey authKeyId:authInfo.authKeyId validUntilTimestamp:authInfo.validUntilTimestamp notBound:false]] startWithNext:^(NSNumber* isRemoved) {
+            _datacenterCheckKeyRemovedActions[@(datacenterId)] = [[MTDiscoverConnectionSignals checkIfAuthKeyRemovedWithContext:self datacenterId:datacenterId authKey:[[MTDatacenterAuthKey alloc] initWithAuthKey:authInfo.authKey authKeyId:authInfo.authKeyId validUntilTimestamp:authInfo.validUntilTimestamp notBound:false]] startWithNextStrict:^(NSNumber* isRemoved) {
                 [[MTContext contextQueue] dispatchOnQueue:^{
                     __strong MTContext *strongSelf = weakSelf;
                     if (strongSelf == nil) {
@@ -1492,14 +1567,18 @@ static void copyKeychainKey(NSString * _Nonnull group, NSString * _Nonnull key, 
                     }
                     
                     if ([isRemoved boolValue]) {
-                        NSArray *currentListeners = [[NSArray alloc] initWithArray:strongSelf->_changeListeners];
-                        for (id<MTContextChangeListener> listener in currentListeners) {
+                        NSArray *changeListeners = [[NSArray alloc] initWithArray:strongSelf->_changeListeners];
+                        for (MTWeakContextChangeListener *value in changeListeners) {
+                            id<MTContextChangeListener> listener = value.target;
+                            if (!listener) {
+                                continue;
+                            }
                             if ([listener respondsToSelector:@selector(contextLoggedOut:)])
                                 [listener contextLoggedOut:strongSelf];
                         }
                     }
                 }];
-            }];
+            } file:__FILE_NAME__ line:__LINE__];
         }
     }];
 }

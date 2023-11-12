@@ -516,7 +516,7 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
                     if let navigationController = strongSelf.baseNavigationController() {
                         strongSelf.beginCustomDismiss(true)
                         
-                        context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), subject: .message(id: .id(message.id), highlight: true, timecode: nil)))
+                        context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), subject: .message(id: .id(message.id), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil)))
                         
                         Queue.mainQueue().after(0.3) {
                             strongSelf.completeCustomDismiss()
@@ -563,7 +563,7 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
             return
         }
 
-        let contextController = ContextController(account: self.context.account, presentationData: self.presentationData.withUpdated(theme: defaultDarkColorPresentationTheme), source: .reference(HeaderContextReferenceContentSource(controller: controller, sourceNode: self.moreBarButton.referenceNode)), items: items |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
+        let contextController = ContextController(presentationData: self.presentationData.withUpdated(theme: defaultDarkColorPresentationTheme), source: .reference(HeaderContextReferenceContentSource(controller: controller, sourceNode: self.moreBarButton.referenceNode)), items: items |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
         controller.presentInGlobalOverlay(contextController)
     }
     
@@ -1236,7 +1236,7 @@ extension UIBezierPath {
 }
 
 private func generateMaskImage(size: CGSize, recognitions: [RecognizedContent]) -> UIImage? {
-    return generateImage(size, opaque: false, rotatedContext: { size, c in
+    return generateImage(size, opaque: false, scale: 1.0, rotatedContext: { size, c in
         let bounds = CGRect(origin: CGPoint(), size: size)
         c.clear(bounds)
         

@@ -13,6 +13,7 @@ import AlertUI
 import PresentationDataUtils
 import ContactListUI
 import CounterContollerTitleView
+import EditableTokenListNode
 
 private func peerTokenTitle(accountPeerId: PeerId, peer: Peer, strings: PresentationStrings, nameDisplayOrder: PresentationPersonNameOrder) -> String {
     if peer.id == accountPeerId {
@@ -108,7 +109,7 @@ class ContactMultiselectionControllerImpl: ViewController, ContactMultiselection
         }
         
         self.presentationDataDisposable = ((params.updatedPresentationData?.signal ?? params.context.sharedContext.presentationData)
-        |> deliverOnMainQueue).start(next: { [weak self] presentationData in
+        |> deliverOnMainQueue).startStrict(next: { [weak self] presentationData in
             if let strongSelf = self {
                 let previousTheme = strongSelf.presentationData.theme
                 let previousStrings = strongSelf.presentationData.strings
@@ -122,7 +123,7 @@ class ContactMultiselectionControllerImpl: ViewController, ContactMultiselection
         })
         
         self.limitsConfigurationDisposable = (context.engine.data.get(TelegramEngine.EngineData.Item.Configuration.Limits())
-        |> deliverOnMainQueue).start(next: { [weak self] value in
+        |> deliverOnMainQueue).startStrict(next: { [weak self] value in
             if let strongSelf = self {
                 strongSelf.limitsConfiguration = value._asLimits()
                 strongSelf.updateTitle()
@@ -139,7 +140,7 @@ class ContactMultiselectionControllerImpl: ViewController, ContactMultiselection
                     selectedChats.map(TelegramEngine.EngineData.Item.Peer.Peer.init)
                 )
             )
-            |> deliverOnMainQueue).start(next: { [weak self] peerList in
+            |> deliverOnMainQueue).startStandalone(next: { [weak self] peerList in
                 guard let strongSelf = self else {
                     return
                 }
@@ -458,23 +459,12 @@ class ContactMultiselectionControllerImpl: ViewController, ContactMultiselection
                 }
                 chatsNode.updateState { state in
                     var state = state
-                    if "".isEmpty {
-                        if !state.selectedAdditionalCategoryIds.contains(id) {
-                            for id in state.selectedAdditionalCategoryIds {
-                                removedTokenIds.append(id)
-                                state.selectedAdditionalCategoryIds.remove(id)
-                            }
-                            state.selectedAdditionalCategoryIds.insert(id)
-                            addedToken = categoryToken
-                        }
+                    if state.selectedAdditionalCategoryIds.contains(id) {
+                        state.selectedAdditionalCategoryIds.remove(id)
+                        removedTokenIds.append(id)
                     } else {
-                        if state.selectedAdditionalCategoryIds.contains(id) {
-                            state.selectedAdditionalCategoryIds.remove(id)
-                            removedTokenIds.append(id)
-                        } else {
-                            state.selectedAdditionalCategoryIds.insert(id)
-                            addedToken = categoryToken
-                        }
+                        state.selectedAdditionalCategoryIds.insert(id)
+                        addedToken = categoryToken
                     }
                     
                     return state

@@ -95,7 +95,7 @@ final class CameraDeviceContext {
             return 30.0
         }
         switch DeviceModel.current {
-        case .iPhone14ProMax, .iPhone13ProMax:
+        case .iPhone15ProMax, .iPhone14ProMax, .iPhone13ProMax:
             return 60.0
         default:
             return 30.0
@@ -118,12 +118,6 @@ private final class CameraContext {
     
     private let detectedCodesPipe = ValuePipe<[CameraCode]>()
     fileprivate let modeChangePromise = ValuePromise<Camera.ModeChange>(.none)
-    
-    var previewNode: CameraPreviewNode? {
-        didSet {
-            self.previewNode?.prepare()
-        }
-    }
     
     var previewView: CameraPreviewView?
     
@@ -154,6 +148,8 @@ private final class CameraContext {
     }
         
     init(queue: Queue, session: CameraSession, configuration: Camera.Configuration, metrics: Camera.Metrics, previewView: CameraSimplePreviewView?, secondaryPreviewView: CameraSimplePreviewView?) {
+        Logger.shared.log("CameraContext", "Init")
+        
         self.queue = queue
         self.session = session
         self.initialConfiguration = configuration
@@ -172,17 +168,23 @@ private final class CameraContext {
             object: self.session.session
         )
     }
+    
+    deinit {
+        Logger.shared.log("CameraContext", "deinit")
+    }
         
     private var isSessionRunning = false
     func startCapture() {
         guard !self.session.session.isRunning else {
             return
         }
+        Logger.shared.log("CameraContext", "startCapture")
         self.session.session.startRunning()
         self.isSessionRunning = self.session.session.isRunning
     }
     
     func stopCapture(invalidate: Bool = false) {
+        Logger.shared.log("CameraContext", "startCapture(invalidate: \(invalidate))")
         if invalidate {
             self.mainDeviceContext?.device.resetZoom()
             
@@ -302,9 +304,7 @@ private final class CameraContext {
             self.mainDeviceContext?.output.processSampleBuffer = { [weak self] sampleBuffer, pixelBuffer, connection in
                 guard let self, let mainDeviceContext = self.mainDeviceContext else {
                     return
-                }
-                self.previewNode?.enqueue(sampleBuffer)
-                
+                } 
                 let timestamp = CACurrentMediaTime()
                 if timestamp > self.lastSnapshotTimestamp + 2.5, !mainDeviceContext.output.isRecording {
                     var front = false
@@ -342,8 +342,6 @@ private final class CameraContext {
                 guard let self, let mainDeviceContext = self.mainDeviceContext else {
                     return
                 }
-                self.previewNode?.enqueue(sampleBuffer)
-                
                 let timestamp = CACurrentMediaTime()
                 if timestamp > self.lastSnapshotTimestamp + 2.5, !mainDeviceContext.output.isRecording {
                     var front = false
@@ -363,20 +361,20 @@ private final class CameraContext {
             if #available(iOS 13.0, *), let previewView = self.simplePreviewView {
                 if enabled, let secondaryPreviewView = self.secondaryPreviewView {
                     let _ = (combineLatest(previewView.isPreviewing, secondaryPreviewView.isPreviewing)
-                             |> map { first, second in
+                    |> map { first, second in
                         return first && second
                     }
                     |> filter { $0 }
                     |> take(1)
                     |> delay(0.1, queue: self.queue)
-                    |> deliverOn(self.queue)).start(next: { [weak self] _ in
+                    |> deliverOn(self.queue)).startStandalone(next: { [weak self] _ in
                         self?.modeChange = .none
                     })
                 } else {
                     let _ = (previewView.isPreviewing
                     |> filter { $0 }
                     |> take(1)
-                    |> deliverOn(self.queue)).start(next: { [weak self] _ in
+                    |> deliverOn(self.queue)).startStandalone(next: { [weak self] _ in
                         self?.modeChange = .none
                     })
                 }
@@ -570,6 +568,8 @@ public final class Camera {
     public let metrics: Camera.Metrics
     
     public init(configuration: Camera.Configuration = Configuration(preset: .hd1920x1080, position: .back, audio: true, photo: false, metadata: false, preferredFps: 60.0), previewView: CameraSimplePreviewView? = nil, secondaryPreviewView: CameraSimplePreviewView? = nil) {
+        Logger.shared.log("Camera", "Init")
+        
         self.metrics = Camera.Metrics(model: DeviceModel.current)
         
         let session = CameraSession()
@@ -590,6 +590,8 @@ public final class Camera {
     }
     
     deinit {
+        Logger.shared.log("Camera", "Deinit")
+        
         let contextRef = self.contextRef
         self.queue.async {
             contextRef?.release()
@@ -800,20 +802,6 @@ public final class Camera {
                 }
             }
             return disposable
-        }
-    }
-
-    public func attachPreviewNode(_ node: CameraPreviewNode) {
-        let nodeRef: Unmanaged<CameraPreviewNode> = Unmanaged.passRetained(node)
-        self.queue.async {
-            if let context = self.contextRef?.takeUnretainedValue() {
-                context.previewNode = nodeRef.takeUnretainedValue()
-                nodeRef.release()
-            } else {
-                Queue.mainQueue().async {
-                    nodeRef.release()
-                }
-            }
         }
     }
     

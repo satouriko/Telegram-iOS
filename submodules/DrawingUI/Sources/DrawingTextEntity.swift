@@ -27,6 +27,7 @@ public final class DrawingTextEntityView: DrawingEntityView, UITextViewDelegate 
         return self.entity as! DrawingTextEntity
     }
     
+    let blurredBackgroundView: BlurredBackgroundView
     let textView: DrawingTextView
     var customEmojiContainerView: CustomEmojiContainerView?
     var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?
@@ -35,6 +36,10 @@ public final class DrawingTextEntityView: DrawingEntityView, UITextViewDelegate 
     var replaceWithImage: (UIImage, Bool) -> Void = { _, _ in }
     
     init(context: AccountContext, entity: DrawingTextEntity) {
+        self.blurredBackgroundView = BlurredBackgroundView(color: UIColor(white: 0.0, alpha: 0.25), enableBlur: true)
+        self.blurredBackgroundView.clipsToBounds = true
+        self.blurredBackgroundView.isHidden = true
+        
         self.textView = DrawingTextView(frame: .zero)
         self.textView.clipsToBounds = false
         
@@ -56,6 +61,7 @@ public final class DrawingTextEntityView: DrawingEntityView, UITextViewDelegate 
         super.init(context: context, entity: entity)
         
         self.textView.delegate = self
+        self.addSubview(self.blurredBackgroundView)
         self.addSubview(self.textView)
         
         self.emojiViewProvider = { emoji in
@@ -141,11 +147,12 @@ public final class DrawingTextEntityView: DrawingEntityView, UITextViewDelegate 
         return true
     }
     
-    private var emojiRects: [(CGRect, ChatTextInputTextCustomEmojiAttribute)] = []
+    private var emojiRects: [(CGRect, ChatTextInputTextCustomEmojiAttribute, CGFloat)] = []
     func updateEntities() {
         self.textView.drawingLayoutManager.ensureLayout(for: self.textView.textContainer)
         
-        var customEmojiRects: [(CGRect, ChatTextInputTextCustomEmojiAttribute)] = []
+        var customEmojiRects: [(CGRect, ChatTextInputTextCustomEmojiAttribute, CGFloat)] = []
+        let fontSize = self.displayFontSize * 0.78
         
         var shouldRepeat = false
         if let attributedText = self.textView.attributedText {
@@ -154,7 +161,11 @@ public final class DrawingTextEntityView: DrawingEntityView, UITextViewDelegate 
                 if let value = attributes[ChatTextInputAttributes.customEmoji] as? ChatTextInputTextCustomEmojiAttribute {
                     if let start = self.textView.position(from: beginning, offset: range.location), let end = self.textView.position(from: start, offset: range.length), let textRange = self.textView.textRange(from: start, to: end) {
                         let rect = self.textView.firstRect(for: textRange)
-                        customEmojiRects.append((rect, value))
+                        var emojiFontSize = fontSize
+                        if let font = attributes[.font] as? UIFont {
+                            emojiFontSize = font.pointSize
+                        }
+                        customEmojiRects.append((rect, value, emojiFontSize))
                         if rect.origin.x.isInfinite {
                             shouldRepeat = true
                         }
@@ -174,6 +185,8 @@ public final class DrawingTextEntityView: DrawingEntityView, UITextViewDelegate 
             textColor = color
         case .stroke:
             textColor = color.lightness > 0.99 ? UIColor.black : UIColor.white
+        case .blur:
+            textColor = color
         }
         
         self.emojiRects = customEmojiRects
@@ -194,7 +207,7 @@ public final class DrawingTextEntityView: DrawingEntityView, UITextViewDelegate 
                 self.customEmojiContainerView = customEmojiContainerView
             }
             
-            customEmojiContainerView.update(fontSize: self.displayFontSize * 0.78, textColor: textColor, emojiRects: customEmojiRects)
+            customEmojiContainerView.update(fontSize: fontSize, textColor: textColor, emojiRects: customEmojiRects)
         } else if let customEmojiContainerView = self.customEmojiContainerView {
             customEmojiContainerView.removeFromSuperview()
             self.customEmojiContainerView = nil
@@ -210,7 +223,7 @@ public final class DrawingTextEntityView: DrawingEntityView, UITextViewDelegate 
     func beginEditing(accessoryView: UIView?) {
         self._isEditing = true
         if !self.textEntity.text.string.isEmpty {
-            let previousEntity = self.textEntity.duplicate() as? DrawingTextEntity
+            let previousEntity = self.textEntity.duplicate(copy: false) as? DrawingTextEntity
             previousEntity?.uuid = self.textEntity.uuid
             self.previousEntity = previousEntity
         }
@@ -466,6 +479,8 @@ public final class DrawingTextEntityView: DrawingEntityView, UITextViewDelegate 
             textColor = color
         case .stroke:
             textColor = color.lightness > 0.99 ? UIColor.black : UIColor.white
+        case .blur:
+            textColor = color
         }
         
         guard let visualText = text.mutableCopy() as? NSMutableAttributedString else {
@@ -629,6 +644,8 @@ public final class DrawingTextEntityView: DrawingEntityView, UITextViewDelegate 
             self.textView.textColor = color.lightness > 0.99 ? UIColor.black : UIColor.white
             self.textView.strokeColor = color
             self.textView.frameColor = nil
+        case .blur:
+            break
         }
         self.textView.tintColor = self.textView.text.isEmpty ? .white : cursorColor
         
@@ -727,16 +744,15 @@ public final class DrawingTextEntityView: DrawingEntityView, UITextViewDelegate 
         let scale = self.textEntity.scale
         let rotation = self.textEntity.rotation
         
-        let itemSize: CGFloat = floor(24.0 * self.displayFontSize * 0.78 / 17.0)
-        
         var entities: [DrawingEntity] = []
-        for (emojiRect, emojiAttribute) in self.emojiRects {
+        for (emojiRect, emojiAttribute, fontSize) in self.emojiRects {
             guard let file = emojiAttribute.file else {
                 continue
             }
+            let itemSize: CGFloat = floor(24.0 * fontSize * 0.78 / 17.0)
             let emojiTextPosition = emojiRect.center.offsetBy(dx: -textSize.width / 2.0, dy: -textSize.height / 2.0)
                         
-            let entity = DrawingStickerEntity(content: .file(file))
+            let entity = DrawingStickerEntity(content: .file(file, .sticker))
             entity.referenceDrawingSize = CGSize(width: itemSize * 4.0, height: itemSize * 4.0)
             entity.scale = scale
             entity.position = textPosition.offsetBy(
@@ -773,7 +789,7 @@ final class DrawingTextEntititySelectionView: DrawingEntitySelectionView {
         
         self.border.lineCap = .round
         self.border.fillColor = UIColor.clear.cgColor
-        self.border.strokeColor = UIColor(rgb: 0xffffff, alpha: 0.5).cgColor
+        self.border.strokeColor = UIColor(rgb: 0xffffff, alpha: 0.75).cgColor
         self.layer.addSublayer(self.border)
         
         for handle in handles {

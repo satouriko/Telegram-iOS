@@ -4,21 +4,28 @@ import Display
 import ComponentFlow
 import AnimatedTextComponent
 import ActivityIndicator
+import BundleIconComponent
 
 public final class ButtonBadgeComponent: Component {
     let fillColor: UIColor
+    let style: ButtonTextContentComponent.BadgeStyle
     let content: AnyComponent<Empty>
     
     public init(
         fillColor: UIColor,
+        style: ButtonTextContentComponent.BadgeStyle,
         content: AnyComponent<Empty>
     ) {
         self.fillColor = fillColor
+        self.style = style
         self.content = content
     }
     
     public static func ==(lhs: ButtonBadgeComponent, rhs: ButtonBadgeComponent) -> Bool {
         if lhs.fillColor != rhs.fillColor {
+            return false
+        }
+        if lhs.style != rhs.style {
             return false
         }
         if lhs.content != rhs.content {
@@ -46,7 +53,13 @@ public final class ButtonBadgeComponent: Component {
         }
         
         public func update(component: ButtonBadgeComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
-            let height: CGFloat = 20.0
+            let height: CGFloat
+            switch component.style {
+            case .round:
+                height = 20.0
+            case .roundedRectangle:
+                height = 18.0
+            }
             let contentInset: CGFloat = 10.0
             
             let themeUpdated = self.component?.fillColor != component.fillColor
@@ -71,7 +84,12 @@ public final class ButtonBadgeComponent: Component {
             }
             
             if themeUpdated || backgroundFrame.height != self.backgroundView.image?.size.height {
-                self.backgroundView.image = generateStretchableFilledCircleImage(diameter: backgroundFrame.height, color: component.fillColor)
+                switch component.style {
+                case .round:
+                    self.backgroundView.image = generateStretchableFilledCircleImage(diameter: backgroundFrame.height, color: component.fillColor)
+                case .roundedRectangle:
+                    self.backgroundView.image = generateFilledRoundedRectImage(size: CGSize(width: height, height: height), cornerRadius: 4.0, color: component.fillColor)?.stretchableImage(withLeftCapWidth: Int(height / 2.0), topCapHeight: Int(height / 2.0))
+                }
             }
             
             return backgroundFrame.size
@@ -88,24 +106,38 @@ public final class ButtonBadgeComponent: Component {
 }
 
 public final class ButtonTextContentComponent: Component {
+    public enum BadgeStyle {
+        case round
+        case roundedRectangle
+    }
+    
     public let text: String
     public let badge: Int
     public let textColor: UIColor
     public let badgeBackground: UIColor
     public let badgeForeground: UIColor
+    public let badgeStyle: BadgeStyle
+    public let badgeIconName: String?
+    public let combinedAlignment: Bool
     
     public init(
         text: String,
         badge: Int,
         textColor: UIColor,
         badgeBackground: UIColor,
-        badgeForeground: UIColor
+        badgeForeground: UIColor,
+        badgeStyle: BadgeStyle = .round,
+        badgeIconName: String? = nil,
+        combinedAlignment: Bool = false
     ) {
         self.text = text
         self.badge = badge
         self.textColor = textColor
         self.badgeBackground = badgeBackground
         self.badgeForeground = badgeForeground
+        self.badgeStyle = badgeStyle
+        self.badgeIconName = badgeIconName
+        self.combinedAlignment = combinedAlignment
     }
     
     public static func ==(lhs: ButtonTextContentComponent, rhs: ButtonTextContentComponent) -> Bool {
@@ -122,6 +154,15 @@ public final class ButtonTextContentComponent: Component {
             return false
         }
         if lhs.badgeForeground != rhs.badgeForeground {
+            return false
+        }
+        if lhs.badgeStyle != rhs.badgeStyle {
+            return false
+        }
+        if lhs.badgeIconName != rhs.badgeIconName {
+            return false
+        }
+        if lhs.combinedAlignment != rhs.combinedAlignment {
             return false
         }
         return true
@@ -152,7 +193,10 @@ public final class ButtonTextContentComponent: Component {
             self.component = component
             self.componentState = state
             
-            let badgeSpacing: CGFloat = 6.0
+            var badgeSpacing: CGFloat = 6.0
+            if component.badgeIconName != nil {
+                badgeSpacing += 4.0
+            }
             
             let contentSize = self.content.update(
                 transition: .immediate,
@@ -176,17 +220,34 @@ public final class ButtonTextContentComponent: Component {
                     badge = ComponentView()
                     self.badge = badge
                 }
+                
+                var badgeContent: [AnyComponentWithIdentity<Empty>] = []
+                if let badgeIconName = component.badgeIconName {
+                    badgeContent.append(AnyComponentWithIdentity(
+                        id: "icon",
+                        component: AnyComponent(BundleIconComponent(
+                            name: badgeIconName,
+                            tintColor: component.badgeForeground
+                        )))
+                    )
+                }
+                badgeContent.append(AnyComponentWithIdentity(
+                    id: "text", 
+                    component: AnyComponent(AnimatedTextComponent(
+                        font: Font.with(size: 15.0, design: .round, weight: .semibold, traits: .monospacedNumbers),
+                        color: component.badgeForeground,
+                        items: [
+                            AnimatedTextComponent.Item(id: AnyHashable(0), content: .number(component.badge, minDigits: 0))
+                        ]
+                    )))
+                )
+                
                 badgeSize = badge.update(
                     transition: badgeTransition,
                     component: AnyComponent(ButtonBadgeComponent(
                         fillColor: component.badgeBackground,
-                        content: AnyComponent(AnimatedTextComponent(
-                            font: Font.semibold(15.0),
-                            color: component.badgeForeground,
-                            items: [
-                                AnimatedTextComponent.Item(id: AnyHashable(0), content: .number(component.badge, minDigits: 0))
-                            ]
-                        ))
+                        style: component.badgeStyle,
+                        content: AnyComponent(HStack(badgeContent, spacing: 2.0))
                     )),
                     environment: {},
                     containerSize: CGSize(width: 100.0, height: 100.0)
@@ -194,23 +255,26 @@ public final class ButtonTextContentComponent: Component {
             }
             
             var size = contentSize
+            var measurementSize = size
             if let badgeSize {
-                //size.width += badgeSpacing
-                //size.width += badgeSize.width
+                if component.combinedAlignment {
+                    measurementSize.width += badgeSpacing
+                    measurementSize.width += badgeSize.width
+                }
                 size.height = max(size.height, badgeSize.height)
             }
             
-            let contentFrame = CGRect(origin: CGPoint(x: floor((size.width - contentSize.width) * 0.5), y: floor((size.height - contentSize.height) * 0.5)), size: contentSize)
+            let contentFrame = CGRect(origin: CGPoint(x: floor((size.width - measurementSize.width) * 0.5), y: floor((size.height - measurementSize.height) * 0.5)), size: measurementSize)
             
             if let contentView = self.content.view {
                 if contentView.superview == nil {
                     self.addSubview(contentView)
                 }
-                transition.setFrame(view: contentView, frame: contentFrame)
+                transition.setFrame(view: contentView, frame: CGRect(origin: contentFrame.origin, size: contentSize))
             }
             
             if let badgeSize, let badge = self.badge {
-                let badgeFrame = CGRect(origin: CGPoint(x: contentFrame.maxX + badgeSpacing, y: floor((size.height - badgeSize.height) * 0.5) + 1.0), size: badgeSize)
+                let badgeFrame = CGRect(origin: CGPoint(x: contentFrame.minX + contentSize.width + badgeSpacing, y: floor((size.height - badgeSize.height) * 0.5) + 1.0), size: badgeSize)
                 
                 if let badgeView = badge.view {
                     var animateIn = false

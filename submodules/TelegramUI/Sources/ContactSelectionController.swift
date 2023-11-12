@@ -37,6 +37,7 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
     private let displayDeviceContacts: Bool
     private let displayCallIcons: Bool
     private let multipleSelection: Bool
+    private let requirePhoneNumbers: Bool
     
     private var _ready = Promise<Bool>()
     override var ready: Promise<Bool> {
@@ -91,6 +92,7 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
         self.displayCallIcons = params.displayCallIcons
         self.confirmation = params.confirmation
         self.multipleSelection = params.multipleSelection
+        self.requirePhoneNumbers = params.requirePhoneNumbers
         
         self.presentationData = params.updatedPresentationData?.initial ?? params.context.sharedContext.currentPresentationData.with { $0 }
         
@@ -116,7 +118,7 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
         }
         
         self.presentationDataDisposable = ((params.updatedPresentationData?.signal ?? params.context.sharedContext.presentationData)
-        |> deliverOnMainQueue).start(next: { [weak self] presentationData in
+        |> deliverOnMainQueue).startStrict(next: { [weak self] presentationData in
             if let strongSelf = self {
                 let previousTheme = strongSelf.presentationData.theme
                 let previousStrings = strongSelf.presentationData.strings
@@ -148,6 +150,7 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
     deinit {
         self.createActionDisposable.dispose()
         self.presentationDataDisposable?.dispose()
+        self.confirmationDisposable.dispose()
     }
     
     @objc private func beginSearch() {
@@ -177,7 +180,7 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
     }
     
     override func loadDisplayNode() {
-        self.displayNode = ContactSelectionControllerNode(context: self.context, presentationData: self.presentationData, options: self.options, displayDeviceContacts: self.displayDeviceContacts, displayCallIcons: self.displayCallIcons, multipleSelection: self.multipleSelection)
+        self.displayNode = ContactSelectionControllerNode(context: self.context, presentationData: self.presentationData, options: self.options, displayDeviceContacts: self.displayDeviceContacts, displayCallIcons: self.displayCallIcons, multipleSelection: self.multipleSelection, requirePhoneNumbers: self.requirePhoneNumbers)
         self._ready.set(self.contactsNode.contactListNode.ready)
         
         self.contactsNode.navigationBar = self.navigationBar
@@ -327,7 +330,7 @@ class ContactSelectionControllerImpl: ViewController, ContactSelectionController
     
     private func openPeer(peer: ContactListPeer, action: ContactListAction) {
         self.contactsNode.contactListNode.listNode.clearHighlightAnimated(true)
-        self.confirmationDisposable.set((self.confirmation(peer) |> deliverOnMainQueue).start(next: { [weak self] value in
+        self.confirmationDisposable.set((self.confirmation(peer) |> deliverOnMainQueue).startStrict(next: { [weak self] value in
             if let strongSelf = self {
                 if value {
                     strongSelf._result.set(.single(([peer], action, false, nil, nil)))
