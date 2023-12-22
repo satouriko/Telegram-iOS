@@ -87,7 +87,7 @@ final class ShareControllerNode: ViewControllerTracingNode, UIScrollViewDelegate
     
     private let showNames = ValuePromise<Bool>(true)
     
-    init(environment: ShareControllerEnvironment, presentationData: PresentationData, presetText: String?, defaultAction: ShareControllerAction?, requestLayout: @escaping (ContainedViewLayoutTransition) -> Void, presentError: @escaping (String?, String) -> Void, externalShare: Bool, immediateExternalShare: Bool, immediatePeerId: PeerId?, fromForeignApp: Bool, forceTheme: PresentationTheme?, fromPublicChannel: Bool, segmentedValues: [ShareControllerSegmentedValue]?) {
+    init(environment: ShareControllerEnvironment, presentationData: PresentationData, presetText: String?, defaultAction: ShareControllerAction?, requestLayout: @escaping (ContainedViewLayoutTransition) -> Void, presentError: @escaping (String?, String) -> Void, externalShare: Bool, immediateExternalShare: Bool, immediatePeerId: PeerId?, fromForeignApp: Bool, forceTheme: PresentationTheme?, fromPublicChannel: Bool, segmentedValues: [ShareControllerSegmentedValue]?, shareStory: (() -> Void)?) {
         self.environment = environment
         self.presentationData = presentationData
         self.forceTheme = forceTheme
@@ -317,6 +317,13 @@ final class ShareControllerNode: ViewControllerTracingNode, UIScrollViewDelegate
                 Queue.mainQueue().after(0.01, {
                     strongSelf.closePeerTopics(peer.peerId, selected: true)
                 })
+            }
+        }, shareStory: shareStory.flatMap { shareStory in
+            return { [weak self] in
+                self?.animateOut(shared: false, completion: { [weak self] in
+                    self?.dismiss?(false)
+                })
+                shareStory()
             }
         })
         
@@ -1067,7 +1074,7 @@ final class ShareControllerNode: ViewControllerTracingNode, UIScrollViewDelegate
             self?.switchToAnotherAccount?()
         }, debugAction: { [weak self] in
             self?.debugAction?()
-        }, extendedInitialReveal: self.presetText != nil, segmentedValues: self.segmentedValues)
+        }, extendedInitialReveal: self.presetText != nil, segmentedValues: self.segmentedValues, fromPublicChannel: self.fromPublicChannel)
         self.peersContentNode = peersContentNode
         peersContentNode.openSearch = { [weak self] in
             let _ = (_internal_recentlySearchedPeers(postbox: context.stateManager.postbox)

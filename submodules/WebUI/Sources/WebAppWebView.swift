@@ -3,6 +3,7 @@ import UIKit
 import Display
 import WebKit
 import SwiftSignalKit
+import TelegramCore
 
 private let findActiveElementY = """
 function getOffset(el) {
@@ -35,39 +36,99 @@ private class WebViewTouchGestureRecognizer: UITapGestureRecognizer {
     }
 }
 
+private let eventProxySource = "var TelegramWebviewProxyProto = function() {}; " +
+    "TelegramWebviewProxyProto.prototype.postEvent = function(eventName, eventData) { " +
+    "window.webkit.messageHandlers.performAction.postMessage({'eventName': eventName, 'eventData': eventData}); " +
+    "}; " +
+"var TelegramWebviewProxy = new TelegramWebviewProxyProto();"
+
+private let selectionSource = "var css = '*{-webkit-touch-callout:none;} :not(input):not(textarea):not([\"contenteditable\"=\"true\"]){-webkit-user-select:none;}';"
+        + " var head = document.head || document.getElementsByTagName('head')[0];"
+        + " var style = document.createElement('style'); style.type = 'text/css';" +
+        " style.appendChild(document.createTextNode(css)); head.appendChild(style);"
+
+private let videoSource = """
+function disableWebkitEnterFullscreen(videoElement) {
+  if (videoElement && videoElement.webkitEnterFullscreen) {
+    Object.defineProperty(videoElement, 'webkitEnterFullscreen', {
+      value: undefined
+    });
+  }
+}
+
+function disableFullscreenOnExistingVideos() {
+  document.querySelectorAll('video').forEach(disableWebkitEnterFullscreen);
+}
+
+function handleMutations(mutations) {
+  mutations.forEach((mutation) => {
+    if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+      mutation.addedNodes.forEach((newNode) => {
+        if (newNode.tagName === 'VIDEO') {
+          disableWebkitEnterFullscreen(newNode);
+        }
+        if (newNode.querySelectorAll) {
+          newNode.querySelectorAll('video').forEach(disableWebkitEnterFullscreen);
+        }
+      });
+    }
+  });
+}
+
+disableFullscreenOnExistingVideos();
+
+const observer = new MutationObserver(handleMutations);
+
+observer.observe(document.body, {
+  childList: true,
+  subtree: true
+});
+
+function disconnectObserver() {
+  observer.disconnect();
+}
+"""
+
 final class WebAppWebView: WKWebView {
     var handleScriptMessage: (WKScriptMessage) -> Void = { _ in }
     
-    init() {
+    init(account: Account) {
         let configuration = WKWebViewConfiguration()
-        let userController = WKUserContentController()
         
-        let js = "var TelegramWebviewProxyProto = function() {}; " +
-            "TelegramWebviewProxyProto.prototype.postEvent = function(eventName, eventData) { " +
-            "window.webkit.messageHandlers.performAction.postMessage({'eventName': eventName, 'eventData': eventData}); " +
-            "}; " +
-        "var TelegramWebviewProxy = new TelegramWebviewProxyProto();"
-                   
+        let uuid: UUID
+        
+        if let current = UserDefaults.standard.object(forKey: "TelegramWebStoreUUID_\(account.id.int64)") as? String {
+            uuid = UUID(uuidString: current)!
+        } else {
+            uuid = UUID()
+            UserDefaults.standard.set(uuid.uuidString, forKey: "TelegramWebStoreUUID_\(account.id.int64)")
+        }
+                
+        if #available(iOS 17.0, *) {
+            configuration.websiteDataStore = WKWebsiteDataStore(forIdentifier: uuid)
+        }
+        
+        let contentController = WKUserContentController()
+                           
         var handleScriptMessageImpl: ((WKScriptMessage) -> Void)?
-        let userScript = WKUserScript(source: js, injectionTime: .atDocumentStart, forMainFrameOnly: false)
-        userController.addUserScript(userScript)
-        userController.add(WeakGameScriptMessageHandler { message in
+        let eventProxyScript = WKUserScript(source: eventProxySource, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        contentController.addUserScript(eventProxyScript)
+        contentController.add(WeakGameScriptMessageHandler { message in
             handleScriptMessageImpl?(message)
         }, name: "performAction")
         
-        let selectionString = "var css = '*{-webkit-touch-callout:none;} :not(input):not(textarea):not([\"contenteditable\"=\"true\"]){-webkit-user-select:none;}';"
-                + " var head = document.head || document.getElementsByTagName('head')[0];"
-                + " var style = document.createElement('style'); style.type = 'text/css';" +
-                " style.appendChild(document.createTextNode(css)); head.appendChild(style);"
-        let selectionScript: WKUserScript = WKUserScript(source: selectionString, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-        userController.addUserScript(selectionScript)
+        let selectionScript = WKUserScript(source: selectionSource, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+        contentController.addUserScript(selectionScript)
         
-        configuration.userContentController = userController
+        let videoScript = WKUserScript(source: videoSource, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        contentController.addUserScript(videoScript)
+        
+        configuration.userContentController = contentController
         
         configuration.allowsInlineMediaPlayback = true
         configuration.allowsPictureInPictureMediaPlayback = false
         if #available(iOS 10.0, *) {
-            configuration.mediaTypesRequiringUserActionForPlayback = .all
+            configuration.mediaTypesRequiringUserActionForPlayback = .audio
         } else {
             configuration.mediaPlaybackRequiresUserAction = true
         }

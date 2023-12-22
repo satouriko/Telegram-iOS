@@ -23,6 +23,7 @@ import UndoUI
 import WebsiteType
 import GalleryData
 import StoryContainerScreen
+import WallpaperGalleryScreen
 
 func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
     var story: TelegramMediaStory?
@@ -173,7 +174,7 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
                 }, stopLiveLocation: { messageId in
                     params.context.liveLocationManager?.cancelLiveLocation(peerId: messageId?.peerId ?? params.message.id.peerId)
                 }, openUrl: params.openUrl, openPeer: { peer in
-                    params.openPeer(peer._asPeer(), .info)
+                    params.openPeer(peer._asPeer(), .info(nil))
                 }, showAll: params.modal)
                 let controller = LocationViewController(context: params.context, updatedPresentationData: params.updatedPresentationData, subject: EngineMessage(params.message), params: controllerParams)
                 controller.navigationPresentation = .modal

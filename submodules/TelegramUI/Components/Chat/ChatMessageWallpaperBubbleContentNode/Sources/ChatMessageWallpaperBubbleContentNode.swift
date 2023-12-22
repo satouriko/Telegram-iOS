@@ -22,6 +22,7 @@ import ChatMessageBubbleContentNode
 import ChatMessageItemCommon
 import WallpaperPreviewMedia
 import ChatControllerInteraction
+import PresentationDataUtils
 
 public class ChatMessageWallpaperBubbleContentNode: ChatMessageBubbleContentNode {
     private var mediaBackgroundContent: WallpaperBubbleBackgroundNode?
@@ -182,7 +183,29 @@ public class ChatMessageWallpaperBubbleContentNode: ChatMessageBubbleContentNode
         guard let item = self.item else {
             return
         }
-        let _ = item.controllerInteraction.openMessage(item.message, OpenMessageParams(mode: .default))
+        
+        var canRemove = false
+        if item.message.effectivelyIncoming(item.context.account.peerId) {
+            if let media = item.message.media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction, case let .setChatWallpaper(wallpaper, forBoth) = media.action {
+                if forBoth, item.presentationData.theme.wallpaper.isBasicallyEqual(to: wallpaper) {
+                    canRemove = true
+                }
+            }
+        }
+        
+        if canRemove {
+            let controller = textAlertController(context: item.context, title: item.presentationData.strings.Chat_RemoveWallpaper_Title, text: item.presentationData.strings.Chat_RemoveWallpaper_Text, actions: [
+                TextAlertAction(type: .genericAction, title: item.presentationData.strings.Common_Cancel, action: {}),
+                TextAlertAction(type: .destructiveAction, title: item.presentationData.strings.Chat_RemoveWallpaper_Remove, action: { [weak item] in
+                    if let item {
+                        let _ = item.context.engine.themes.revertChatWallpaper(peerId: item.message.id.peerId).startStandalone()
+                    }
+                })
+            ])
+            item.controllerInteraction.presentController(controller, nil)
+        } else {
+            let _ = item.controllerInteraction.openMessage(item.message, OpenMessageParams(mode: .default))
+        }
     }
     
     private func updateProgress(_ progress: Float?) {
@@ -225,12 +248,14 @@ public class ChatMessageWallpaperBubbleContentNode: ChatMessageBubbleContentNode
                 let primaryTextColor = serviceMessageColorComponents(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper).primaryText
                                 
                 var wallpaper: TelegramWallpaper?
-                if let media = item.message.media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction, case let .setChatWallpaper(wallpaperValue) = media.action {
+                var forBoth = false
+                if let media = item.message.media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction, case let .setChatWallpaper(wallpaperValue, forBothValue) = media.action {
                     wallpaper = wallpaperValue
+                    forBoth = forBothValue
                 }
                 
                 var mediaUpdated = true
-                if let wallpaper = wallpaper, let media = currentItem?.message.media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction, case let .setChatWallpaper(currentWallpaper) = media.action {
+                if let wallpaper = wallpaper, let media = currentItem?.message.media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction, case let .setChatWallpaper(currentWallpaper, _) = media.action {
                     mediaUpdated = wallpaper != currentWallpaper
                 }
                 
@@ -240,6 +265,7 @@ public class ChatMessageWallpaperBubbleContentNode: ChatMessageBubbleContentNode
                 }
                 
                 let fromYou = item.message.author?.id == item.context.account.peerId
+                let isChannel = item.message.id.peerId.isGroupOrChannel
                 
                 let peerName = item.message.peers[item.message.id.peerId].flatMap { EnginePeer($0).compactDisplayTitle } ?? ""
                 let text: String
@@ -249,10 +275,21 @@ public class ChatMessageWallpaperBubbleContentNode: ChatMessageBubbleContentNode
                         text = item.presentationData.strings.Notification_YouChangingWallpaper
                         displayTrailingAnimatedDots = true
                     } else {
-                        text = item.presentationData.strings.Notification_YouChangedWallpaper
+                        if forBoth {
+                            text = item.presentationData.strings.Notification_YouChangedWallpaperBoth(peerName).string
+                        } else {
+                            text = item.presentationData.strings.Notification_YouChangedWallpaper
+                        }
                     }
                 } else {
-                    text = item.presentationData.strings.Notification_ChangedWallpaper(peerName).string
+                    if item.associatedData.isRecentActions {
+                        let authorName = item.message.author.flatMap { EnginePeer($0).compactDisplayTitle } ?? ""
+                        text = item.presentationData.strings.Channel_AdminLog_ChannelChangedWallpaper(authorName).string
+                    } else if item.message.id.peerId.isGroupOrChannel {
+                        text = item.presentationData.strings.Notification_ChannelChangedWallpaper
+                    } else {
+                        text = item.presentationData.strings.Notification_ChangedWallpaper(peerName).string
+                    }
                 }
                 
                 let body = MarkdownAttributeSet(font: Font.regular(13.0), textColor: primaryTextColor)
@@ -269,21 +306,28 @@ public class ChatMessageWallpaperBubbleContentNode: ChatMessageBubbleContentNode
                 
                 let (subtitleLayout, subtitleApply) = makeSubtitleLayout(TextNodeLayoutArguments(attributedString: subtitle, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: width - 32.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
                 
-                let (buttonTitleLayout, buttonTitleApply) = makeButtonTitleLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: item.presentationData.strings.Notification_Wallpaper_View, font: Font.semibold(15.0), textColor: primaryTextColor, paragraphAlignment: .center), backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: width - 32.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
+                let buttonText: String
+                if let wallpaper, forBoth && item.presentationData.theme.wallpaper.isBasicallyEqual(to: wallpaper) {
+                    buttonText = item.presentationData.strings.Notification_Wallpaper_Remove
+                } else {
+                    buttonText = item.presentationData.strings.Notification_Wallpaper_View
+                }
+                
+                let (buttonTitleLayout, buttonTitleApply) = makeButtonTitleLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: buttonText, font: Font.semibold(15.0), textColor: primaryTextColor, paragraphAlignment: .center), backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: width - 32.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
             
                 var textHeight = subtitleLayout.size.height
                 if displayTrailingAnimatedDots {
                     textHeight += subtitleLayout.size.height
                 }
-                let backgroundSize = CGSize(width: width, height: textHeight + 140.0 + (fromYou ? 0.0 : 42.0))
+                let backgroundSize = CGSize(width: width, height: textHeight + 140.0 + (fromYou || isChannel ? 0.0 : 42.0))
                 
                 return (backgroundSize.width, { boundingWidth in
                     return (backgroundSize, { [weak self] animation, synchronousLoads, _ in
                         if let strongSelf = self {
                             strongSelf.item = item
                             
-                            strongSelf.buttonNode.isHidden = fromYou
-                            strongSelf.buttonTitleNode.isHidden = fromYou
+                            strongSelf.buttonNode.isHidden = fromYou || isChannel
+                            strongSelf.buttonTitleNode.isHidden = fromYou || isChannel
                             
                             let imageFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((backgroundSize.width - imageSize.width) / 2.0), y: 13.0), size: imageSize)
                             if let media, mediaUpdated {     
@@ -291,7 +335,22 @@ public class ChatMessageWallpaperBubbleContentNode: ChatMessageBubbleContentNode
                                 var imageSize = boundingSize
                                 let updateImageSignal: Signal<(TransformImageArguments) -> DrawingContext?, NoError>
                                 var patternArguments: PatternWallpaperArguments?
-                                switch media.content {
+                                
+                                var mediaContent = media.content
+                                if case let .emoticon(emoticon) = mediaContent, let theme = item.associatedData.chatThemes.first(where: { $0.emoticon?.strippedEmoji == emoticon.strippedEmoji }) {
+                                    let themeSettings: TelegramThemeSettings?
+                                    if let matching = theme.settings?.first(where: { $0.baseTheme == item.presentationData.theme.theme.referenceTheme.baseTheme }) {
+                                        themeSettings = matching
+                                    } else {
+                                        themeSettings = theme.settings?.first
+                                    }
+                                    
+                                    if let themeWallpaper = themeSettings?.wallpaper, let themeWallpaperContent = WallpaperPreviewMedia(wallpaper: themeWallpaper)?.content {
+                                        mediaContent = themeWallpaperContent
+                                    }
+                                }
+                                
+                                switch mediaContent {
                                 case let .file(file, patternColors, rotation, intensity, _, _):
                                     var representations: [ImageRepresentationWithReference] = file.previewRepresentations.map({ ImageRepresentationWithReference(representation: $0, reference: AnyMediaReference.message(message: MessageReference(item.message), media: file).resourceReference($0.resource)) })
                                     if file.mimeType == "image/svg+xml" || file.mimeType == "application/x-tgwallpattern" {
@@ -344,6 +403,8 @@ public class ChatMessageWallpaperBubbleContentNode: ChatMessageBubbleContentNode
                                 case let .gradient(colors, rotation):
                                     updateImageSignal = gradientImage(colors.map(UIColor.init(rgb:)), rotation: rotation ?? 0)
                                 case .themeSettings:
+                                    updateImageSignal = .complete()
+                                case .emoticon:
                                     updateImageSignal = .complete()
                                 }
                                 
@@ -463,6 +524,8 @@ public class ChatMessageWallpaperBubbleContentNode: ChatMessageBubbleContentNode
     override public func tapActionAtPoint(_ point: CGPoint, gesture: TapLongTapOrDoubleTapGesture, isEstimating: Bool) -> ChatMessageBubbleContentTapAction {
         if self.statusOverlayNode.alpha > 0.0 {
             return ChatMessageBubbleContentTapAction(content: .none)
+        } else if self.buttonNode.frame.contains(point) {
+            return ChatMessageBubbleContentTapAction(content: .ignore)
         } else if self.mediaBackgroundNode.frame.contains(point) {
             return ChatMessageBubbleContentTapAction(content: .openMessage)
         } else {

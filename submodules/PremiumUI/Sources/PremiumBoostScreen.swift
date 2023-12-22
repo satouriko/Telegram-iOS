@@ -30,7 +30,17 @@ private struct BoostState {
         }
         
         return (
-            .storiesChannelBoost(peer: peer, boostSubject: .stories, isCurrent: isCurrent, level: currentLevel, currentLevelBoosts: currentLevelBoosts, nextLevelBoosts: nextLevelBoosts, link: nil, myBoostCount: myBoostCount, canBoostAgain: canBoostAgain),
+            .storiesChannelBoost(
+                peer: peer,
+                boostSubject: .stories,
+                isCurrent: isCurrent,
+                level: currentLevel,
+                currentLevelBoosts: currentLevelBoosts,
+                nextLevelBoosts: nextLevelBoosts,
+                link: nil,
+                myBoostCount: myBoostCount,
+                canBoostAgain: canBoostAgain
+            ),
             boosts
         )
     }
@@ -160,9 +170,10 @@ public func PremiumBoostScreen(
                             }
                             
                             let _ = context.engine.peers.applyChannelBoost(peerId: peerId, slots: slots).startStandalone(completed: {
-                                let _ = combineLatest(queue: Queue.mainQueue(),
-                                                      context.engine.peers.getChannelBoostStatus(peerId: peerId),
-                                                      context.engine.peers.getMyBoostStatus()
+                                let _ = combineLatest(
+                                    queue: Queue.mainQueue(),
+                                    context.engine.peers.getChannelBoostStatus(peerId: peerId),
+                                    context.engine.peers.getMyBoostStatus()
                                 ).startStandalone(next: { boostStatus, myBoostStatus in
                                     dismissReplaceImpl?()
                                     PremiumBoostScreen(context: context, contentContext: contentContext, peerId: peerId, isCurrent: isCurrent, status: boostStatus, myBoostStatus: myBoostStatus, replacedBoosts: (Int32(slots.count), Int32(channelIds.count)), forceDark: forceDark, openPeer: openPeer, presentController: presentController, pushController: pushController, dismissed: dismissed)
@@ -223,8 +234,14 @@ public func PremiumBoostScreen(
                                 title: presentationData.strings.ChannelBoost_MoreBoosts_Title,
                                 text: presentationData.strings.ChannelBoost_MoreBoosts_Text(peer.compactDisplayTitle, "\(premiumConfiguration.boostsPerGiftCount)").string,
                                 actions: [
-                                    TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+                                    TextAlertAction(type: .defaultAction, title: presentationData.strings.ChannelBoost_MoreBoosts_Gift, action: {
+                                        dismissImpl?()
+                                        let controller = context.sharedContext.makePremiumGiftController(context: context)
+                                        pushController(controller)
+                                    }),
+                                    TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Close, action: {})
                                 ],
+                                actionLayout: .vertical,
                                 parseMarkdown: true
                             )
                             presentController(controller)

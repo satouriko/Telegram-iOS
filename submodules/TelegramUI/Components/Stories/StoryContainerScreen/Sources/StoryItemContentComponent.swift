@@ -83,6 +83,7 @@ final class StoryItemContentComponent: Component {
         private let overlaysView: StoryItemOverlaysView
         private var videoNode: UniversalVideoNode?
         private var loadingEffectView: StoryItemLoadingEffectView?
+        private var loadingEffectAppearanceTimer: SwiftSignalKit.Timer?
         
         private var mediaAreasEffectView: StoryItemLoadingEffectView?
         
@@ -573,16 +574,34 @@ final class StoryItemContentComponent: Component {
             
             let peerReference = PeerReference(component.peer._asPeer())
             
+            let selectedMedia: EngineMedia
             var messageMedia: EngineMedia?
-            switch component.item.media {
-            case let .image(image):
-                messageMedia = .image(image)
-            case let .file(file):
-                messageMedia = .file(file)
-            case .unsupported:
-                self.contentLoaded = true
-            default:
-                break
+            if component.context.sharedContext.immediateExperimentalUISettings.alternativeStoryMedia, let alternativeMedia = component.item.alternativeMedia {
+                selectedMedia = alternativeMedia
+                
+                switch alternativeMedia {
+                case let .image(image):
+                    messageMedia = .image(image)
+                case let .file(file):
+                    messageMedia = .file(file)
+                case .unsupported:
+                    self.contentLoaded = true
+                default:
+                    break
+                }
+            } else {
+                selectedMedia = component.item.media
+                
+                switch component.item.media {
+                case let .image(image):
+                    messageMedia = .image(image)
+                case let .file(file):
+                    messageMedia = .file(file)
+                case .unsupported:
+                    self.contentLoaded = true
+                default:
+                    break
+                }
             }
             
             var reloadMedia = false
@@ -677,7 +696,7 @@ final class StoryItemContentComponent: Component {
                     strings: component.strings,
                     peer: component.peer,
                     storyId: component.item.id,
-                    media: component.item.media,
+                    media: messageMedia,
                     size: availableSize,
                     isCaptureProtected: component.item.isForwardingDisabled,
                     attemptSynchronous: synchronousLoad,
@@ -719,7 +738,7 @@ final class StoryItemContentComponent: Component {
                 }
             }
             
-            switch component.item.media {
+            switch selectedMedia {
             case .image, .file:
                 if let unsupportedText = self.unsupportedText {
                     self.unsupportedText = nil
@@ -826,11 +845,29 @@ final class StoryItemContentComponent: Component {
                     loadingEffectView = current
                 } else {
                     loadingEffectView = StoryItemLoadingEffectView(effectAlpha: 0.1, borderAlpha: 0.2, duration: 1.0, hasCustomBorder: false, playOnce: false)
+                    loadingEffectView.alpha = 0.0
                     self.loadingEffectView = loadingEffectView
                     self.addSubview(loadingEffectView)
+                    
+                    if self.loadingEffectAppearanceTimer == nil {
+                        let timer = SwiftSignalKit.Timer(timeout: 0.2, repeat: false, completion: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            if let loadingEffectView = self.loadingEffectView {
+                                loadingEffectView.alpha = 1.0
+                                loadingEffectView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.18)
+                            }
+                            self.loadingEffectAppearanceTimer = nil
+                        }, queue: Queue.mainQueue())
+                        timer.start()
+                        self.loadingEffectAppearanceTimer = timer
+                    }
                 }
                 loadingEffectView.update(size: availableSize, transition: transition)
             } else if let loadingEffectView = self.loadingEffectView {
+                self.loadingEffectAppearanceTimer?.invalidate()
+                self.loadingEffectAppearanceTimer = nil
                 self.loadingEffectView = nil
                 loadingEffectView.layer.animateAlpha(from: loadingEffectView.alpha, to: 0.0, duration: 0.18, removeOnCompletion: false, completion: { [weak loadingEffectView] _ in
                     loadingEffectView?.removeFromSuperview()

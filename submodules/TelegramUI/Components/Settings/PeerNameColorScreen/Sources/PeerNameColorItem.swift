@@ -10,6 +10,7 @@ import MergeLists
 import ItemListUI
 import PresentationDataUtils
 import AccountContext
+import ListItemComponentAdaptor
 
 private enum PeerNameColorEntryId: Hashable {
     case color(Int32)
@@ -127,7 +128,7 @@ private func generateRingImage(nameColor: PeerNameColors.Colors) -> UIImage? {
     })
 }
 
-func generatePeerNameColorImage(nameColor: PeerNameColors.Colors, isDark: Bool, bounds: CGSize = CGSize(width: 40.0, height: 40.0), size: CGSize = CGSize(width: 40.0, height: 40.0)) -> UIImage? {
+public func generatePeerNameColorImage(nameColor: PeerNameColors.Colors, isDark: Bool, bounds: CGSize = CGSize(width: 40.0, height: 40.0), size: CGSize = CGSize(width: 40.0, height: 40.0)) -> UIImage? {
     return generateImage(bounds, rotatedContext: { contextSize, context in
         let bounds = CGRect(origin: CGPoint(), size: contextSize)
         context.clear(bounds)
@@ -177,6 +178,37 @@ func generatePeerNameColorImage(nameColor: PeerNameColors.Colors, isDark: Bool, 
             context.fill(circleBounds)
         }
     })
+}
+
+public func generateSettingsMenuPeerColorsLabelIcon(colors: [PeerNameColors.Colors]) -> UIImage {
+    let iconWidth: CGFloat = 24.0
+    let iconSpacing: CGFloat = 18.0
+    let borderWidth: CGFloat = 2.0
+    
+    if colors.isEmpty {
+        return generateSingleColorImage(size: CGSize(width: iconWidth, height: iconWidth), color: .clear)!
+    }
+
+    return generateImage(CGSize(width: CGFloat(max(0, colors.count - 1)) * iconSpacing + CGFloat(colors.count == 0 ? 0 : 1) * iconWidth, height: 24.0), rotatedContext: { size, context in
+        context.clear(CGRect(origin: CGPoint(), size: size))
+        
+        for i in 0 ..< colors.count {
+            let iconFrame = CGRect(origin: CGPoint(x: CGFloat(i) * iconSpacing, y: 0.0), size: CGSize(width: iconWidth, height: iconWidth))
+            context.setBlendMode(.copy)
+            context.setFillColor(UIColor.clear.cgColor)
+            context.fillEllipse(in: iconFrame.insetBy(dx: -borderWidth, dy: -borderWidth))
+            context.setBlendMode(.normal)
+            
+            if let image = generatePeerNameColorImage(nameColor: colors[i], isDark: false, bounds: iconFrame.size, size: iconFrame.size)?.cgImage {
+                context.saveGState()
+                context.translateBy(x: iconFrame.midX, y: iconFrame.midY)
+                context.scaleBy(x: 1.0, y: -1.0)
+                context.translateBy(x: -iconFrame.midX, y: -iconFrame.midY)
+                context.draw(image, in: iconFrame)
+                context.restoreGState()
+            }
+        }
+    })!
 }
 
 private final class PeerNameColorIconItemNode : ListViewItemNode {
@@ -282,18 +314,20 @@ private final class PeerNameColorIconItemNode : ListViewItemNode {
     }
 }
 
-final class PeerNameColorItem: ListViewItem, ItemListItem {
+final class PeerNameColorItem: ListViewItem, ItemListItem, ListItemComponentAdaptor.ItemGenerator {
     var sectionId: ItemListSectionId
     
     let theme: PresentationTheme
     let colors: PeerNameColors
-    let currentColor: PeerNameColor
+    let isProfile: Bool
+    let currentColor: PeerNameColor?
     let updated: (PeerNameColor) -> Void
     let tag: ItemListItemTag?
     
-    init(theme: PresentationTheme, colors: PeerNameColors, currentColor: PeerNameColor, updated: @escaping (PeerNameColor) -> Void, tag: ItemListItemTag? = nil, sectionId: ItemListSectionId) {
+    init(theme: PresentationTheme, colors: PeerNameColors, isProfile: Bool, currentColor: PeerNameColor?, updated: @escaping (PeerNameColor) -> Void, tag: ItemListItemTag? = nil, sectionId: ItemListSectionId) {
         self.theme = theme
         self.colors = colors
+        self.isProfile = isProfile
         self.currentColor = currentColor
         self.updated = updated
         self.tag = tag
@@ -332,6 +366,27 @@ final class PeerNameColorItem: ListViewItem, ItemListItem {
             }
         }
     }
+    
+    public func item() -> ListViewItem {
+        return self
+    }
+    
+    public static func ==(lhs: PeerNameColorItem, rhs: PeerNameColorItem) -> Bool {
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.colors != rhs.colors {
+            return false
+        }
+        if lhs.isProfile != rhs.isProfile {
+            return false
+        }
+        if lhs.currentColor != rhs.currentColor {
+            return false
+        }
+        
+        return true
+    }
 }
 
 private struct PeerNameColorItemNodeTransition {
@@ -361,7 +416,7 @@ private func ensureColorVisible(listNode: ListView, color: PeerNameColor, animat
         }
     }
     if let resultNode = resultNode {
-        listNode.ensureItemNodeVisible(resultNode, animated: animated, overflow: 24.0)
+        listNode.ensureItemNodeVisible(resultNode, animated: animated, overflow: 76.0)
         return true
     } else {
         return false
@@ -436,7 +491,13 @@ final class PeerNameColorItemNode: ListViewItemNode, ItemListItemNode {
         let options = ListViewDeleteAndInsertOptions()
         var scrollToItem: ListViewScrollToItem?
         if !self.initialized || transition.updatePosition || !self.tapping {
-            if let index = item.colors.displayOrder.firstIndex(where: { $0 == item.currentColor.rawValue }) {
+            let displayOrder: [Int32]
+            if item.isProfile {
+                displayOrder = item.colors.profileDisplayOrder
+            } else {
+                displayOrder = item.colors.displayOrder
+            }
+            if let index = displayOrder.firstIndex(where: { $0 == item.currentColor?.rawValue }) {
                 scrollToItem = ListViewScrollToItem(index: index, position: .bottom(-70.0), animated: false, curve: .Default(duration: 0.0), directionHint: .Down)
                 self.initialized = true
             }
@@ -489,19 +550,30 @@ final class PeerNameColorItemNode: ListViewItemNode, ItemListItemNode {
                         strongSelf.containerNode.insertSubnode(strongSelf.maskNode, at: 3)
                     }
                     
-                    let hasCorners = itemListHasRoundedBlockLayout(params)
-                    var hasTopCorners = false
-                    var hasBottomCorners = false
-                    switch neighbors.top {
-                        case .sameSection(false):
+                    if params.isStandalone {
+                        strongSelf.backgroundNode.isHidden = true
+                        strongSelf.topStripeNode.isHidden = true
+                        strongSelf.bottomStripeNode.isHidden = true
+                        strongSelf.maskNode.isHidden = true
+                    } else {
+                        let hasCorners = itemListHasRoundedBlockLayout(params)
+                        var hasTopCorners = false
+                        var hasBottomCorners = false
+                        if item.currentColor != nil {
+                            switch neighbors.top {
+                            case .sameSection(false):
+                                strongSelf.topStripeNode.isHidden = true
+                            default:
+                                hasTopCorners = true
+                                strongSelf.topStripeNode.isHidden = hasCorners
+                            }
+                        } else {
                             strongSelf.topStripeNode.isHidden = true
-                        default:
                             hasTopCorners = true
-                            strongSelf.topStripeNode.isHidden = hasCorners
-                    }
-                    let bottomStripeInset: CGFloat
-                    let bottomStripeOffset: CGFloat
-                    switch neighbors.bottom {
+                        }
+                        let bottomStripeInset: CGFloat
+                        let bottomStripeOffset: CGFloat
+                        switch neighbors.bottom {
                         case .sameSection(false):
                             bottomStripeInset = params.leftInset + 16.0
                             bottomStripeOffset = -separatorHeight
@@ -511,15 +583,17 @@ final class PeerNameColorItemNode: ListViewItemNode, ItemListItemNode {
                             bottomStripeOffset = 0.0
                             hasBottomCorners = true
                             strongSelf.bottomStripeNode.isHidden = hasCorners
+                        }
+                        strongSelf.maskNode.image = hasCorners ? PresentationResourcesItemList.cornersImage(item.theme, top: hasTopCorners, bottom: hasBottomCorners) : nil
+                        
+                        strongSelf.bottomStripeNode.frame = CGRect(origin: CGPoint(x: bottomStripeInset, y: contentSize.height + bottomStripeOffset), size: CGSize(width: layoutSize.width - bottomStripeInset, height: separatorHeight))
                     }
                     
                     strongSelf.containerNode.frame = CGRect(x: 0.0, y: 0.0, width: contentSize.width, height: contentSize.height)
-                    strongSelf.maskNode.image = hasCorners ? PresentationResourcesItemList.cornersImage(item.theme, top: hasTopCorners, bottom: hasBottomCorners) : nil
                     
                     strongSelf.backgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: -min(insets.top, separatorHeight)), size: CGSize(width: params.width, height: contentSize.height + min(insets.top, separatorHeight) + min(insets.bottom, separatorHeight)))
                     strongSelf.maskNode.frame = strongSelf.backgroundNode.frame.insetBy(dx: params.leftInset, dy: 0.0)
                     strongSelf.topStripeNode.frame = CGRect(origin: CGPoint(x: 0.0, y: -min(insets.top, separatorHeight)), size: CGSize(width: layoutSize.width, height: separatorHeight))
-                    strongSelf.bottomStripeNode.frame = CGRect(origin: CGPoint(x: bottomStripeInset, y: contentSize.height + bottomStripeOffset), size: CGSize(width: layoutSize.width - bottomStripeInset, height: separatorHeight))
                     
                     var listInsets = UIEdgeInsets()
                     listInsets.top += params.leftInset + 8.0
@@ -531,10 +605,21 @@ final class PeerNameColorItemNode: ListViewItemNode, ItemListItemNode {
                     
                     var entries: [PeerNameColorEntry] = []
                     
+                    let displayOrder: [Int32]
+                    if item.isProfile {
+                        displayOrder = item.colors.profileDisplayOrder
+                    } else {
+                        displayOrder = item.colors.displayOrder
+                    }
                     var i: Int = 0
-                    for index in item.colors.displayOrder {
+                    for index in displayOrder {
                         let color = PeerNameColor(rawValue: index)
-                        let colors = item.colors.get(color, dark: item.theme.overallDarkAppearance)
+                        let colors: PeerNameColors.Colors
+                        if item.isProfile {
+                            colors = item.colors.getProfile(color, dark: item.theme.overallDarkAppearance, subject: .palette)
+                        } else {
+                            colors = item.colors.get(color, dark: item.theme.overallDarkAppearance)
+                        }
                         entries.append(.color(i, color, colors, item.theme.overallDarkAppearance, color == item.currentColor))
                         
                         i += 1

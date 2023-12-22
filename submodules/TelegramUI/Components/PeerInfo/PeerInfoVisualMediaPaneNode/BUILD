@@ -37,6 +37,8 @@ swift_library(
         "//submodules/MediaPickerUI",
         "//submodules/TelegramUI/Components/Stories/StoryContainerScreen",
         "//submodules/TelegramUI/Components/EmptyStateIndicatorComponent",
+        "//submodules/UIKitRuntimeUtils",
+        "//submodules/TelegramUI/Components/PeerInfo/PeerInfoPaneNode",
     ],
     visibility = [
         "//visibility:public",

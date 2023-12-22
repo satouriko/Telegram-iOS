@@ -19,32 +19,9 @@ import ContextUI
 import UndoUI
 import PremiumUI
 import PeerNameColorScreen
-
-func themeDisplayName(strings: PresentationStrings, reference: PresentationThemeReference) -> String {
-    let name: String
-    switch reference {
-        case let .builtin(theme):
-            switch theme {
-                case .dayClassic:
-                    name = strings.Appearance_ThemeCarouselClassic
-                case .day:
-                    name = strings.Appearance_ThemeCarouselDay
-                case .night:
-                    name = strings.Appearance_ThemeCarouselNewNight
-                case .nightAccent:
-                    name = strings.Appearance_ThemeCarouselTintedNight
-            }
-        case let .local(theme):
-            name = theme.title
-        case let .cloud(theme):
-            if let emoticon = theme.theme.emoticon {
-                name = emoticon
-            } else {
-                name = theme.theme.title
-            }
-    }
-    return name
-}
+import ThemeCarouselItem
+import ThemeAccentColorScreen
+import WallpaperGridScreen
 
 private final class ThemeSettingsControllerArguments {
     let context: AccountContext
@@ -122,7 +99,7 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
     case themes(PresentationTheme, PresentationStrings, [PresentationThemeReference], PresentationThemeReference, Bool, [String: [StickerPackItem]], [Int64: PresentationThemeAccentColor], [Int64: TelegramWallpaper])
     case chatTheme(PresentationTheme, String)
     case wallpaper(PresentationTheme, String)
-    case nameColor(PresentationTheme, String, String, UIColor)
+    case nameColor(PresentationTheme, String, String, PeerNameColors.Colors?, PeerNameColors.Colors?)
     case autoNight(PresentationTheme, String, Bool, Bool)
     case autoNightTheme(PresentationTheme, String, String)
     case textSize(PresentationTheme, String, String)
@@ -217,8 +194,8 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
                 } else {
                     return false
                 }
-            case let .nameColor(lhsTheme, lhsText, lhsName, lhsColor):
-                if case let .nameColor(rhsTheme, rhsText, rhsName, rhsColor) = rhs, lhsTheme === rhsTheme, lhsText == rhsText, lhsName == rhsName, lhsColor == rhsColor {
+            case let .nameColor(lhsTheme, lhsText, lhsName, lhsNameColor, lhsProfileColor):
+                if case let .nameColor(rhsTheme, rhsText, rhsName, rhsNameColor, rhsProfileColor) = rhs, lhsTheme === rhsTheme, lhsText == rhsText, lhsName == rhsName, lhsNameColor == rhsNameColor, lhsProfileColor == rhsProfileColor {
                     return true
                 } else {
                     return false
@@ -308,8 +285,10 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
             case let .chatPreview(theme, wallpaper, fontSize, chatBubbleCorners, strings, dateTimeFormat, nameDisplayOrder, items):
                 return ThemeSettingsChatPreviewItem(context: arguments.context, theme: theme, componentTheme: theme, strings: strings, sectionId: self.section, fontSize: fontSize, chatBubbleCorners: chatBubbleCorners, wallpaper: wallpaper, dateTimeFormat: dateTimeFormat, nameDisplayOrder: nameDisplayOrder, messageItems: items)
             case let .themes(theme, strings, chatThemes, currentTheme, nightMode, animatedEmojiStickers, themeSpecificAccentColors, themeSpecificChatWallpapers):
-                return ThemeCarouselThemeItem(context: arguments.context, theme: theme, strings: strings, sectionId: self.section, themes: chatThemes, animatedEmojiStickers: animatedEmojiStickers, themeSpecificAccentColors: themeSpecificAccentColors, themeSpecificChatWallpapers: themeSpecificChatWallpapers, nightMode: nightMode, currentTheme: currentTheme, updatedTheme: { theme in
-                    arguments.selectTheme(theme)
+                return ThemeCarouselThemeItem(context: arguments.context, theme: theme, strings: strings, sectionId: self.section, themes: chatThemes, hasNoTheme: false, animatedEmojiStickers: animatedEmojiStickers, themeSpecificAccentColors: themeSpecificAccentColors, themeSpecificChatWallpapers: themeSpecificChatWallpapers, nightMode: nightMode, currentTheme: currentTheme, updatedTheme: { theme in
+                    if let theme {
+                        arguments.selectTheme(theme)
+                    }
                 }, contextAction: { theme, node, gesture in
                     arguments.themeContextAction(false, theme, node, gesture)
                 }, tag: ThemeSettingsEntryTag.theme)
@@ -321,8 +300,18 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, title: text, label: "", sectionId: self.section, style: .blocks, action: {
                     arguments.openWallpaperSettings()
                 })
-            case let .nameColor(_, text, name, color):
-                return ItemListDisclosureItem(presentationData: presentationData, title: text, label: name, labelStyle: .semitransparentBadge(color), sectionId: self.section, style: .blocks, action: {
+            case let .nameColor(_, text, _, nameColor, profileColor):
+                var colors: [PeerNameColors.Colors] = []
+                if let nameColor {
+                    colors.append(nameColor)
+                }
+                if let profileColor {
+                    colors.append(profileColor)
+                }
+            
+                let colorImage = generateSettingsMenuPeerColorsLabelIcon(colors: colors)
+            
+                return ItemListDisclosureItem(presentationData: presentationData, title: text, label: "", labelStyle: .image(image: colorImage, size: colorImage.size), sectionId: self.section, style: .blocks, action: {
                     arguments.openNameColorSettings()
                 })
             case let .autoNight(_, title, value, enabled):
@@ -377,14 +366,17 @@ private func themeSettingsControllerEntries(presentationData: PresentationData, 
     entries.append(.themeListHeader(presentationData.theme, title))
     
     let nameColor: PeerNameColor
+    let profileColor: PeerNameColor?
     var authorName = presentationData.strings.Appearance_PreviewReplyAuthor
     if let accountPeer {
         nameColor = accountPeer.nameColor ?? .blue
         if accountPeer._asPeer().hasCustomNameColor {
             authorName = accountPeer.displayTitle(strings: strings, displayOrder: presentationData.nameDisplayOrder)
         }
+        profileColor = accountPeer.profileColor
     } else {
         nameColor = .blue
+        profileColor = nil
     }
     
     entries.append(.chatPreview(presentationData.theme, presentationData.chatWallpaper, presentationData.chatFontSize, presentationData.chatBubbleCorners, presentationData.strings, presentationData.dateTimeFormat, presentationData.nameDisplayOrder, [ChatPreviewMessageItem(outgoing: false, reply: (authorName, presentationData.strings.Appearance_PreviewReplyText), text: presentationData.strings.Appearance_PreviewIncomingText, nameColor: nameColor, backgroundEmojiId: accountPeer?.backgroundEmojiId), ChatPreviewMessageItem(outgoing: true, reply: nil, text: presentationData.strings.Appearance_PreviewOutgoingText, nameColor: .blue, backgroundEmojiId: nil)]))
@@ -393,8 +385,9 @@ private func themeSettingsControllerEntries(presentationData: PresentationData, 
     entries.append(.chatTheme(presentationData.theme, strings.Settings_ChatThemes))
     entries.append(.wallpaper(presentationData.theme, strings.Settings_ChatBackground))
     
-    let colors = nameColors.get(nameColor)
-    entries.append(.nameColor(presentationData.theme, strings.Appearance_NameColor, accountPeer?.compactDisplayTitle ?? "", colors.main))
+    let colors = nameColors.get(nameColor, dark: presentationData.theme.overallDarkAppearance)
+    let profileColors = profileColor.flatMap { nameColors.getProfile($0, dark: presentationData.theme.overallDarkAppearance, subject: .palette) }
+    entries.append(.nameColor(presentationData.theme, presentationData.strings.Settings_YourColor, accountPeer?.compactDisplayTitle ?? "", colors, profileColors))
     
     entries.append(.autoNight(presentationData.theme, strings.Appearance_NightTheme, presentationThemeSettings.automaticThemeSwitchSetting.force, !presentationData.autoNightModeTriggered || presentationThemeSettings.automaticThemeSwitchSetting.force))
     let autoNightMode: String

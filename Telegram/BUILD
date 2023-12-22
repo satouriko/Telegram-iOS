@@ -380,6 +380,7 @@ swift_library(
         "//submodules/DrawingUI:DrawingUIResources",
         "//submodules/TelegramUI:TelegramUIResources",
         "//submodules/TelegramUI:TelegramUIAssets",
+        "//submodules/TelegramUI/Components/Calls/CallScreen:Assets",
         ":GeneratedPresentationStrings/Resources/PresentationStrings.data",
     ],
     deps = [
@@ -449,6 +450,7 @@ official_apple_pay_merchants = [
     "merchant.org.telegram.billinenet.test",
     "merchant.org.telegram.billinenet.prod",
     "merchant.org.telegram.portmone.test",
+    "merchant.org.telegram.portmone.prod",
     "merchant.org.telegram.ecommpay.test",
 ]
 
@@ -2035,12 +2037,11 @@ xcodeproj(
         "Debug": {
             "//command_line_option:compilation_mode": "dbg",
         },
-        #"Release": {
-        #    "//command_line_option:compilation_mode": "opt",
-        #},
+        "Release": {
+            "//command_line_option:compilation_mode": "opt",
+        },
     },
     default_xcode_configuration = "Debug"
-
 )
 
 # Temporary targets used to simplify webrtc build tests

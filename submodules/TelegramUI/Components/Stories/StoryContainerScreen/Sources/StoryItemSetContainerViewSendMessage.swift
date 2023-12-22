@@ -1041,7 +1041,14 @@ final class StoryItemSetContainerSendMessage {
                 immediateExternalShare: false,
                 forceTheme: defaultDarkColorPresentationTheme
             )
-            
+            if !component.slice.peer.isService {
+                shareController.shareStory = { [weak view] in
+                    guard let view else {
+                        return
+                    }
+                    view.openStoryEditing(repost: true)
+                }
+            }
             shareController.completed = { [weak view] peerIds in
                 guard let view, let component = view.component else {
                     return
@@ -1052,7 +1059,7 @@ final class StoryItemSetContainerSendMessage {
                         peerIds.map(TelegramEngine.EngineData.Item.Peer.Peer.init)
                     )
                 )
-                         |> deliverOnMainQueue).start(next: { [weak view] peerList in
+                |> deliverOnMainQueue).start(next: { [weak view] peerList in
                     guard let view, let component = view.component else {
                         return
                     }
@@ -2616,7 +2623,7 @@ final class StoryItemSetContainerSendMessage {
         |> deliverOnMainQueue).start()
     }
     
-    func openResolved(view: StoryItemSetContainerComponent.View, result: ResolvedUrl, forceExternal: Bool = false, concealed: Bool = false) {
+    func openResolved(view: StoryItemSetContainerComponent.View, result: ResolvedUrl, forceExternal: Bool = false, concealed: Bool = false, completion: (() -> Void)? = nil) {
         guard let component = view.component, let navigationController = component.controller()?.navigationController as? NavigationController else {
             return
         }
@@ -2635,7 +2642,7 @@ final class StoryItemSetContainerSendMessage {
         component.context.sharedContext.openResolvedUrl(
             result,
             context: component.context,
-            urlContext: .chat(peerId: peerId, updatedPresentationData: updatedPresentationData),
+            urlContext: .chat(peerId: peerId, message: nil, updatedPresentationData: updatedPresentationData),
             navigationController: navigationController,
             forceExternal: forceExternal,
             openPeer: { [weak self, weak view] peerId, navigation in
@@ -2710,7 +2717,8 @@ final class StoryItemSetContainerSendMessage {
                 view.endEditing(true)
             },
             contentContext: self.progressPauseContext,
-            progress: nil
+            progress: nil,
+            completion: completion
         )
     }
     
@@ -2790,7 +2798,7 @@ final class StoryItemSetContainerSendMessage {
             if let peer = peer {
                 var navigation: ChatControllerInteractionNavigateToPeer
                 if let peer = peer as? TelegramUser, peer.botInfo == nil {
-                    navigation = .info
+                    navigation = .info(nil)
                 } else {
                     navigation = .chat(textInputState: nil, subject: nil, peekData: nil)
                 }
@@ -3256,8 +3264,9 @@ final class StoryItemSetContainerSendMessage {
             controller.push(sheet)
         })
     }
-    
-    func activateMediaArea(view: StoryItemSetContainerComponent.View, mediaArea: MediaArea) {
+        
+    private var selectedMediaArea: MediaArea?
+    func activateMediaArea(view: StoryItemSetContainerComponent.View, mediaArea: MediaArea, immediate: Bool = false) {
         guard let component = view.component, let controller = component.controller() else {
             return
         }
@@ -3265,13 +3274,13 @@ final class StoryItemSetContainerSendMessage {
         let theme = defaultDarkColorPresentationTheme
         let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>) = (component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: theme), component.context.sharedContext.presentationData |> map { $0.withUpdated(theme: theme) })
         
+        let context = component.context
+        
         var actions: [ContextMenuAction] = []
         switch mediaArea {
         case let .venue(_, venue):
-            let subject = EngineMessage(stableId: 0, stableVersion: 0, id: EngineMessage.Id(peerId: PeerId(0), namespace: 0, id: 0), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0, flags: [], tags: [], globalTags: [], localTags: [], forwardInfo: nil, author: nil, text: "", attributes: [], media: [.geo(TelegramMediaMap(latitude: venue.latitude, longitude: venue.longitude, heading: nil, accuracyRadius: nil, geoPlace: nil, venue: venue.venue, liveBroadcastingTimeout: nil, liveProximityNotificationRadius: nil))], peers: [:], associatedMessages: [:], associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
-            
-            let context = component.context
-            actions.append(ContextMenuAction(content: .textWithIcon(title: updatedPresentationData.initial.strings.Story_ViewLocation, icon: generateTintedImage(image: UIImage(bundleImageName: "Settings/TextArrowRight"), color: .white)), action: { [weak controller, weak view] in
+            let action = { [weak controller, weak view] in
+                let subject = EngineMessage(stableId: 0, stableVersion: 0, id: EngineMessage.Id(peerId: PeerId(0), namespace: 0, id: 0), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0, flags: [], tags: [], globalTags: [], localTags: [], forwardInfo: nil, author: nil, text: "", attributes: [], media: [.geo(TelegramMediaMap(latitude: venue.latitude, longitude: venue.longitude, heading: nil, accuracyRadius: nil, geoPlace: nil, venue: venue.venue, liveBroadcastingTimeout: nil, liveProximityNotificationRadius: nil))], peers: [:], associatedMessages: [:], associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
                 let locationController = LocationViewController(
                     context: context,
                     updatedPresentationData: updatedPresentationData,
@@ -3294,10 +3303,68 @@ final class StoryItemSetContainerSendMessage {
                     })
                 }
                 controller?.push(locationController)
+            }
+            if immediate {
+                action()
+                return
+            }
+            actions.append(ContextMenuAction(content: .textWithIcon(title: updatedPresentationData.initial.strings.Story_ViewLocation, icon: generateTintedImage(image: UIImage(bundleImageName: "Settings/TextArrowRight"), color: .white)), action: {
+                action()
+            }))
+        case let .channelMessage(_, messageId):
+            let action = { [weak self, weak view, weak controller] in
+                let _ = ((context.engine.messages.getMessagesLoadIfNecessary([messageId], strategy: .cloud(skipLocal: true))
+                |> mapToSignal { result -> Signal<Message?, GetMessagesError> in
+                    if case let .result(messages) = result {
+                        return .single(messages.first)
+                    } else {
+                        return .complete()
+                    }
+                })
+                |> deliverOnMainQueue).startStandalone(next: { [weak self, weak view, weak controller] message in
+                    guard let self, let view else {
+                        return
+                    }
+                    if let message, let peer = message.peers[message.id.peerId] {
+                        self.openResolved(view: view, result: .channelMessage(peer: peer, messageId: message.id, timecode: nil))
+                    } else {
+                        controller?.present(UndoOverlayController(presentationData: updatedPresentationData.initial, content: .info(title: nil, text: updatedPresentationData.initial.strings.Conversation_MessageDoesntExist, timeout: nil, customUndoText: nil), elevatedLayout: false, position: .top, action: { _ in return true }), in: .current)
+                    }
+                }, error: { [weak self, weak view] error in
+                    guard let self, let view else {
+                        return
+                    }
+                    switch error {
+                    case .privateChannel:
+                        let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: messageId.peerId))
+                        |> deliverOnMainQueue).startStandalone(next: { [weak self, weak view] peer in
+                            guard let self, let view else {
+                                return
+                            }
+                            if let peer {
+                                self.openResolved(view: view, result: .peer(peer._asPeer(), .default))
+                            }
+                        })
+                    }
+                })
+            }
+            if immediate {
+                action()
+                return
+            } else {
+                if self.selectedMediaArea == mediaArea {
+                    action()
+                    return
+                }
+            }
+            actions.append(ContextMenuAction(content: .textWithIcon(title: updatedPresentationData.initial.strings.Story_ViewMessage, icon: generateTintedImage(image: UIImage(bundleImageName: "Settings/TextArrowRight"), color: .white)), action: {
+                action()
             }))
         case .reaction:
             return
         }
+        
+        self.selectedMediaArea =  mediaArea
         
         let referenceSize = view.controlsContainerView.frame.size
         let size = CGSize(width: 16.0, height: mediaArea.coordinates.height / 100.0 * referenceSize.height * 1.1)
@@ -3309,6 +3376,7 @@ final class StoryItemSetContainerSendMessage {
         menuController.centerHorizontally = true
         menuController.dismissed = { [weak self, weak view] in
             if let self, let view {
+                self.selectedMediaArea = nil
                 Queue.mainQueue().after(0.1) {
                     self.menuController = nil
                     view.updateIsProgressPaused()

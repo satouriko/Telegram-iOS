@@ -11,10 +11,11 @@ import ItemListUI
 import PresentationDataUtils
 import AccountContext
 import WallpaperBackgroundNode
+import ListItemComponentAdaptor
 
-final class PeerNameColorChatPreviewItem: ListViewItem, ItemListItem {
+final class PeerNameColorChatPreviewItem: ListViewItem, ItemListItem, ListItemComponentAdaptor.ItemGenerator {
     struct MessageItem: Equatable {
-        static func == (lhs: MessageItem, rhs: MessageItem) -> Bool {
+        static func ==(lhs: MessageItem, rhs: MessageItem) -> Bool {
             if lhs.outgoing != rhs.outgoing {
                 return false
             }
@@ -118,6 +119,44 @@ final class PeerNameColorChatPreviewItem: ListViewItem, ItemListItem {
             }
         }
     }
+    
+    public func item() -> ListViewItem {
+        return self
+    }
+    
+    public static func ==(lhs: PeerNameColorChatPreviewItem, rhs: PeerNameColorChatPreviewItem) -> Bool {
+        if lhs.context !== rhs.context {
+            return false
+        }
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.componentTheme !== rhs.componentTheme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
+            return false
+        }
+        if lhs.fontSize != rhs.fontSize {
+            return false
+        }
+        if lhs.chatBubbleCorners != rhs.chatBubbleCorners {
+            return false
+        }
+        if lhs.wallpaper != rhs.wallpaper {
+            return false
+        }
+        if lhs.dateTimeFormat != rhs.dateTimeFormat {
+            return false
+        }
+        if lhs.nameDisplayOrder != rhs.nameDisplayOrder {
+            return false
+        }
+        if lhs.messageItems != rhs.messageItems {
+            return false
+        }
+        return true
+    }
 }
 
 final class PeerNameColorChatPreviewItemNode: ListViewItemNode {
@@ -168,7 +207,7 @@ final class PeerNameColorChatPreviewItemNode: ListViewItemNode {
         return { item, params, neighbors in
             if currentBackgroundNode == nil {
                 currentBackgroundNode = createWallpaperBackgroundNode(context: item.context, forChatDisplay: false)
-                currentBackgroundNode?.update(wallpaper: item.wallpaper)
+                currentBackgroundNode?.update(wallpaper: item.wallpaper, animated: false)
                 currentBackgroundNode?.updateBubbleTheme(bubbleTheme: item.componentTheme, bubbleCorners: item.chatBubbleCorners)
             }
 
@@ -184,7 +223,7 @@ final class PeerNameColorChatPreviewItemNode: ListViewItemNode {
                 var peers = SimpleDictionary<PeerId, Peer>()
                 var messages = SimpleDictionary<MessageId, Message>()
                 
-                peers[authorPeerId] = TelegramUser(id: authorPeerId, accessHash: nil, firstName: messageItem.author, lastName: "", username: nil, phone: nil, photo: messageItem.photo, botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: messageItem.nameColor, backgroundEmojiId: messageItem.backgroundEmojiId)
+                peers[authorPeerId] = TelegramUser(id: authorPeerId, accessHash: nil, firstName: messageItem.author, lastName: "", username: nil, phone: nil, photo: messageItem.photo, botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: messageItem.nameColor, backgroundEmojiId: messageItem.backgroundEmojiId, profileColor: nil, profileBackgroundEmojiId: nil)
                 
                 let replyMessageId = MessageId(peerId: peerId, namespace: 0, id: 3)
                 if let (_, text) = messageItem.reply {
@@ -197,7 +236,7 @@ final class PeerNameColorChatPreviewItemNode: ListViewItemNode {
                 }
                 
                 let message = Message(stableId: 1, stableVersion: 0, id: MessageId(peerId: peerId, namespace: 0, id: 1), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 66000, flags: messageItem.outgoing ? [] : [.Incoming], tags: [], globalTags: [], localTags: [], forwardInfo: nil, author: peers[authorPeerId], text: messageItem.text, attributes: messageItem.reply != nil ? [ReplyMessageAttribute(messageId: replyMessageId, threadMessageId: nil, quote: nil, isQuote: false)] : [], media: media, peers: peers, associatedMessages: messages, associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
-                items.append(item.context.sharedContext.makeChatMessagePreviewItem(context: item.context, messages: [message], theme: item.componentTheme, strings: item.strings, wallpaper: item.wallpaper, fontSize: item.fontSize, chatBubbleCorners: item.chatBubbleCorners, dateTimeFormat: item.dateTimeFormat, nameOrder: item.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: currentBackgroundNode, availableReactions: nil, isCentered: false))
+                items.append(item.context.sharedContext.makeChatMessagePreviewItem(context: item.context, messages: [message], theme: item.componentTheme, strings: item.strings, wallpaper: item.wallpaper, fontSize: item.fontSize, chatBubbleCorners: item.chatBubbleCorners, dateTimeFormat: item.dateTimeFormat, nameOrder: item.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: currentBackgroundNode, availableReactions: nil, accountPeer: nil, isCentered: false))
             }
             
             var nodes: [ListViewItemNode] = []
@@ -254,13 +293,13 @@ final class PeerNameColorChatPreviewItemNode: ListViewItemNode {
                     strongSelf.item = item
                     
                     if let currentBackgroundNode {
-                        currentBackgroundNode.update(wallpaper: item.wallpaper)
+                        currentBackgroundNode.update(wallpaper: item.wallpaper, animated: false)
                         currentBackgroundNode.updateBubbleTheme(bubbleTheme: item.theme, bubbleCorners: item.chatBubbleCorners)
                     }
                     
                     strongSelf.containerNode.frame = CGRect(origin: CGPoint(), size: contentSize)
                     
-                    if let currentItem, currentItem.messageItems.first?.nameColor != item.messageItems.first?.nameColor || currentItem.messageItems.first?.backgroundEmojiId != item.messageItems.first?.backgroundEmojiId {
+                    if let currentItem, currentItem.messageItems.first?.nameColor != item.messageItems.first?.nameColor || currentItem.messageItems.first?.backgroundEmojiId != item.messageItems.first?.backgroundEmojiId || currentItem.theme !== item.theme || currentItem.wallpaper != item.wallpaper {
                         if let snapshot = strongSelf.view.snapshotView(afterScreenUpdates: false) {
                             snapshot.frame = CGRect(origin: CGPoint(x: 0.0, y: -insets.top), size: snapshot.frame.size)
                             strongSelf.view.addSubview(snapshot)
@@ -296,7 +335,7 @@ final class PeerNameColorChatPreviewItemNode: ListViewItemNode {
                                 headerNode.updateLayoutInternal(size: headerFrame.size, leftInset: leftInset, rightInset: rightInset)
                                 headerNode.updateStickDistanceFactor(stickLocationDistanceFactor, transition: .immediate)
                             } else {
-                                headerNode = header.node(synchronousLoad: false)
+                                headerNode = header.node(synchronousLoad: true)
                                 if headerNode.item !== header {
                                     header.updateNode(headerNode, previous: nil, next: nil)
                                     headerNode.item = header
@@ -329,31 +368,42 @@ final class PeerNameColorChatPreviewItemNode: ListViewItemNode {
                         strongSelf.insertSubnode(strongSelf.maskNode, at: 3)
                     }
                     
-                    let hasCorners = itemListHasRoundedBlockLayout(params)
-                    var hasTopCorners = false
-                    var hasBottomCorners = false
-                    switch neighbors.top {
+                    if params.isStandalone {
+                        strongSelf.topStripeNode.isHidden = true
+                        strongSelf.bottomStripeNode.isHidden = true
+                        strongSelf.maskNode.isHidden = true
+                    } else {
+                        let hasCorners = itemListHasRoundedBlockLayout(params)
+                        
+                        var hasTopCorners = false
+                        var hasBottomCorners = false
+                        
+                        switch neighbors.top {
                         case .sameSection(false):
                             strongSelf.topStripeNode.isHidden = true
                         default:
                             hasTopCorners = true
                             strongSelf.topStripeNode.isHidden = hasCorners
+                        }
+                        let bottomStripeInset: CGFloat
+                        let bottomStripeOffset: CGFloat
+                        switch neighbors.bottom {
+                            case .sameSection(false):
+                                bottomStripeInset = 0.0
+                                bottomStripeOffset = -separatorHeight
+                                strongSelf.bottomStripeNode.isHidden = false
+                            default:
+                                bottomStripeInset = 0.0
+                                bottomStripeOffset = 0.0
+                                hasBottomCorners = true
+                                strongSelf.bottomStripeNode.isHidden = hasCorners
+                        }
+                        
+                        strongSelf.maskNode.image = hasCorners ? PresentationResourcesItemList.cornersImage(item.componentTheme, top: hasTopCorners, bottom: hasBottomCorners) : nil
+                        
+                        strongSelf.topStripeNode.frame = CGRect(origin: CGPoint(x: 0.0, y: -min(insets.top, separatorHeight)), size: CGSize(width: layoutSize.width, height: separatorHeight))
+                        strongSelf.bottomStripeNode.frame = CGRect(origin: CGPoint(x: bottomStripeInset, y: contentSize.height + bottomStripeOffset), size: CGSize(width: layoutSize.width - bottomStripeInset, height: separatorHeight))
                     }
-                    let bottomStripeInset: CGFloat
-                    let bottomStripeOffset: CGFloat
-                    switch neighbors.bottom {
-                        case .sameSection(false):
-                            bottomStripeInset = 0.0
-                            bottomStripeOffset = -separatorHeight
-                            strongSelf.bottomStripeNode.isHidden = false
-                        default:
-                            bottomStripeInset = 0.0
-                            bottomStripeOffset = 0.0
-                            hasBottomCorners = true
-                            strongSelf.bottomStripeNode.isHidden = hasCorners
-                    }
-                    
-                    strongSelf.maskNode.image = hasCorners ? PresentationResourcesItemList.cornersImage(item.componentTheme, top: hasTopCorners, bottom: hasBottomCorners) : nil
                     
                     let backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: params.width, height: contentSize.height + min(insets.top, separatorHeight) + min(insets.bottom, separatorHeight)))
                     
@@ -377,8 +427,6 @@ final class PeerNameColorChatPreviewItemNode: ListViewItemNode {
                         backgroundNode.updateLayout(size: backgroundNode.bounds.size, displayMode: displayMode, transition: .immediate)
                     }
                     strongSelf.maskNode.frame = backgroundFrame.insetBy(dx: params.leftInset, dy: 0.0)
-                    strongSelf.topStripeNode.frame = CGRect(origin: CGPoint(x: 0.0, y: -min(insets.top, separatorHeight)), size: CGSize(width: layoutSize.width, height: separatorHeight))
-                    strongSelf.bottomStripeNode.frame = CGRect(origin: CGPoint(x: bottomStripeInset, y: contentSize.height + bottomStripeOffset), size: CGSize(width: layoutSize.width - bottomStripeInset, height: separatorHeight))
                 }
             })
         }

@@ -1180,6 +1180,7 @@ private final class LimitSheetContent: CombinedComponent {
                     if let remaining {
                         let storiesString = strings.ChannelBoost_StoriesPerDay(level + 1)
                         let valueString = strings.ChannelBoost_MoreBoosts(remaining)
+                        
                         switch boostSubject {
                         case .stories:
                             if level == 0 {
@@ -1189,9 +1190,15 @@ private final class LimitSheetContent: CombinedComponent {
                                 titleText = strings.ChannelBoost_IncreaseLimit
                                 string = strings.ChannelBoost_IncreaseLimitText(valueString, storiesString).string
                             }
-                        case .nameColors:
+                        case let .nameColors(colors):
                             titleText = strings.ChannelBoost_EnableColors
-                            string = strings.ChannelBoost_EnableColorsText(valueString).string
+                            
+                            let colorLevel = requiredBoostSubjectLevel(subject: .nameColors(colors: colors), context: component.context, configuration: premiumConfiguration)
+                            
+                            string = strings.ChannelBoost_EnableColorsLevelText("\(colorLevel)").string
+                        case let .channelReactions(reactionCount):
+                            titleText = strings.ChannelBoost_CustomReactions
+                            string = strings.ChannelBoost_CustomReactionsText("\(reactionCount)", "\(reactionCount)").string
                         }
                     } else {
                         let storiesString = strings.ChannelBoost_StoriesPerDay(level)
@@ -1773,11 +1780,12 @@ public class PremiumLimitScreen: ViewControllerComponentContainer {
         case storiesWeekly
         case storiesMonthly
         
-        
-        public enum BoostSubject {
+        public enum BoostSubject: Equatable {
             case stories
-            case nameColors
+            case nameColors(colors: PeerNameColor)
+            case channelReactions(reactionCount: Int)
         }
+        
         case storiesChannelBoost(peer: EnginePeer, boostSubject: BoostSubject, isCurrent: Bool, level: Int32, currentLevelBoosts: Int32, nextLevelBoosts: Int32?, link: String?, myBoostCount: Int32, canBoostAgain: Bool)
     }
     

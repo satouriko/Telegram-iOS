@@ -69,8 +69,10 @@ final class StoryItemSetViewListComponent: Component {
     let deleteAction: () -> Void
     let moreAction: (UIView, ContextGesture?) -> Void
     let openPeer: (EnginePeer) -> Void
+    let openMessage: (EnginePeer, EngineMessage.Id) -> Void
     let peerContextAction: (EnginePeer, ContextExtractedContentContainingView, ContextGesture) -> Void
     let openPeerStories: (EnginePeer, AvatarNode) -> Void
+    let openReposts: (EnginePeer, Int32, UIView) -> Void
     let openPremiumIntro: () -> Void
     let setIsSearchActive: (Bool) -> Void
     let controller: () -> ViewController?
@@ -93,8 +95,10 @@ final class StoryItemSetViewListComponent: Component {
         deleteAction: @escaping () -> Void,
         moreAction: @escaping (UIView, ContextGesture?) -> Void,
         openPeer: @escaping (EnginePeer) -> Void,
+        openMessage: @escaping (EnginePeer, EngineMessage.Id) -> Void,
         peerContextAction: @escaping (EnginePeer, ContextExtractedContentContainingView, ContextGesture) -> Void,
         openPeerStories: @escaping (EnginePeer, AvatarNode) -> Void,
+        openReposts: @escaping (EnginePeer, Int32, UIView) -> Void,
         openPremiumIntro: @escaping () -> Void,
         setIsSearchActive: @escaping (Bool) -> Void,
         controller: @escaping () -> ViewController?
@@ -116,8 +120,10 @@ final class StoryItemSetViewListComponent: Component {
         self.deleteAction = deleteAction
         self.moreAction = moreAction
         self.openPeer = openPeer
+        self.openMessage = openMessage
         self.peerContextAction = peerContextAction
         self.openPeerStories = openPeerStories
+        self.openReposts = openReposts
         self.openPremiumIntro = openPremiumIntro
         self.setIsSearchActive = setIsSearchActive
         self.controller = controller
@@ -231,8 +237,20 @@ final class StoryItemSetViewListComponent: Component {
     }
     
     private enum SortMode: Int {
-        case reactionsFirst = 0
-        case recentFirst = 1
+        case repostsFirst = 0
+        case reactionsFirst = 1
+        case recentFirst = 2
+        
+        var sortMode: EngineStoryViewListContext.SortMode {
+            switch self {
+            case .repostsFirst:
+                return .repostsFirst
+            case .reactionsFirst:
+                return .reactionsFirst
+            case .recentFirst:
+                return .recentFirst
+            }
+        }
     }
     
     private struct ContentConfigurationKey: Equatable {
@@ -256,7 +274,7 @@ final class StoryItemSetViewListComponent: Component {
         let measureItem = ComponentView<Empty>()
         var placeholderImage: UIImage?
         
-        var visibleItems: [EnginePeer.Id: ComponentView<Empty>] = [:]
+        var visibleItems: [EngineStoryViewListContext.Item.ItemHash: ComponentView<Empty>] = [:]
         var visiblePlaceholderViews: [Int: UIImageView] = [:]
         
         var emptyIcon: ComponentView<Empty>?
@@ -274,6 +292,9 @@ final class StoryItemSetViewListComponent: Component {
         var viewList: EngineStoryViewListContext?
         var viewListState: EngineStoryViewListContext.State?
         var requestedLoadMoreToken: EngineStoryViewListContext.LoadMoreToken?
+        
+        private var previewedItemDisposable: Disposable?
+        private var previewedItemId: StoryId?
         
         var eventCycleState: EventCycleState?
         
@@ -321,6 +342,42 @@ final class StoryItemSetViewListComponent: Component {
         
         deinit {
             self.viewListDisposable?.dispose()
+            self.previewedItemDisposable?.dispose()
+        }
+        
+        func setPreviewedItem(signal: Signal<StoryId?, NoError>) {
+            self.previewedItemDisposable?.dispose()
+            self.previewedItemDisposable = (signal |> distinctUntilChanged |> deliverOnMainQueue).start(next: { [weak self] previewedItemId in
+                guard let self else {
+                    return
+                }
+                self.previewedItemId = previewedItemId
+                
+                for (itemId, visibleItem) in self.visibleItems {
+                    if let itemView = visibleItem.view as? PeerListItemComponent.View {
+                        let isPreviewing = itemId.peerId == previewedItemId?.peerId && itemId.storyId == previewedItemId?.id
+                        itemView.updateIsPreviewing(isPreviewing: isPreviewing)
+                        
+                        if isPreviewing {
+                            let itemFrame = itemView.frame.offsetBy(dx: 0.0, dy: self.scrollView.bounds.minY)
+                            if !self.scrollView.bounds.intersects(itemFrame.insetBy(dx: 0.0, dy: 20.0)) {
+                                self.scrollView.scrollRectToVisible(itemFrame.insetBy(dx: 0.0, dy: -40.0), animated: false)
+                            }
+                        }
+                    }
+                }
+            })
+        }
+        
+        func sourceView(storyId: StoryId) -> UIView? {
+            for (itemId, visibleItem) in self.visibleItems {
+                if let itemView = visibleItem.view as? PeerListItemComponent.View {
+                    if itemId.peerId == storyId.peerId && itemId.storyId == storyId.id {
+                        return itemView.imageNode?.view
+                    }
+                }
+            }
+            return nil
         }
         
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -387,7 +444,7 @@ final class StoryItemSetViewListComponent: Component {
                 synchronousLoad = hint.synchronousLoad
             }
             
-            var validIds: [EnginePeer.Id] = []
+            var validIds: [EngineStoryViewListContext.Item.ItemHash] = []
             var validPlaceholderIds: [Int] = []
             if let range = itemLayout.visibleItems(for: visibleBounds) {
                 for index in range.lowerBound ..< range.upperBound {
@@ -431,21 +488,21 @@ final class StoryItemSetViewListComponent: Component {
                     
                     var itemTransition = transition.withUserData(PeerListItemComponent.TransitionHint(synchronousLoad: true))
                     let item = viewListState.items[index]
-                    validIds.append(item.peer.id)
+                    validIds.append(item.uniqueId)
                     
                     let visibleItem: ComponentView<Empty>
-                    if let current = self.visibleItems[item.peer.id] {
+                    if let current = self.visibleItems[item.uniqueId] {
                         visibleItem = current
                     } else {
                         if !transition.animation.isImmediate {
                             itemTransition = .immediate
                         }
                         visibleItem = ComponentView()
-                        self.visibleItems[item.peer.id] = visibleItem
+                        self.visibleItems[item.uniqueId] = visibleItem
                     }
                     
                     let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-                    let dateText = humanReadableStringForTimestamp(strings: component.strings, dateTimeFormat: presentationData.dateTimeFormat, timestamp: item.timestamp, alwaysShowTime: true, allowYesterday: true, format: HumanReadableStringFormat(
+                    var dateText = humanReadableStringForTimestamp(strings: component.strings, dateTimeFormat: presentationData.dateTimeFormat, timestamp: item.timestamp, alwaysShowTime: true, allowYesterday: true, format: HumanReadableStringFormat(
                         dateFormatString: { value in
                             return PresentationStrings.FormattedString(string: component.strings.Chat_MessageSeenTimestamp_Date(value).string, ranges: [])
                         },
@@ -460,6 +517,26 @@ final class StoryItemSetViewListComponent: Component {
                         }
                     )).string
                     
+                    if let story = item.story, !story.text.isEmpty {
+                        dateText += component.strings.Story_Views_Commented
+                    }
+                    
+                    let subtitleAccessory: PeerListItemComponent.SubtitleAccessory
+                    if let _ = item.story {
+                        subtitleAccessory = .repost
+                    } else if let _ = item.message {
+                        subtitleAccessory = .forward
+                    } else {
+                        subtitleAccessory = .checks
+                    }
+                    
+                    var storyItem: EngineStoryItem?
+                    if let story = item.story {
+                        storyItem = story
+                    } else if let _ = item.message {
+                        storyItem = component.storyItem
+                    }
+                    
                     let _ = visibleItem.update(
                         transition: itemTransition,
                         component: AnyComponent(PeerListItemComponent(
@@ -472,7 +549,7 @@ final class StoryItemSetViewListComponent: Component {
                             peer: item.peer,
                             storyStats: item.storyStats,
                             subtitle: dateText,
-                            subtitleAccessory: .checks,
+                            subtitleAccessory: subtitleAccessory,
                             presence: nil,
                             reaction: item.reaction.flatMap { reaction -> PeerListItemComponent.Reaction in
                                 var animationFileId: Int64?
@@ -489,7 +566,9 @@ final class StoryItemSetViewListComponent: Component {
                                     }
                                 case let .custom(fileId):
                                     animationFileId = fileId
-                                    animationFile = item.reactionFile
+                                    if case let .view(view) = item {
+                                        animationFile = view.reactionFile
+                                    }
                                 }
                                 return PeerListItemComponent.Reaction(
                                     reaction: reaction,
@@ -497,13 +576,21 @@ final class StoryItemSetViewListComponent: Component {
                                     animationFileId: animationFileId
                                 )
                             },
+                            story: storyItem,
+                            message: item.message,
                             selectionState: .none,
                             hasNext: index != viewListState.totalCount - 1 || itemLayout.premiumFooterSize != nil,
-                            action: { [weak self] peer in
+                            action: { [weak self] peer, messageId, sourceView in
                                 guard let self, let component = self.component else {
                                     return
                                 }
-                                component.openPeer(peer)
+                                if let messageId {
+                                    component.openMessage(peer, messageId)
+                                } else if let storyItem, let sourceView {
+                                    component.openReposts(peer, storyItem.id, sourceView)
+                                } else {
+                                    component.openPeer(peer)
+                                }
                             },
                             contextAction: { peer, view, gesture in
                                 component.peerContextAction(peer, view, gesture)
@@ -518,13 +605,15 @@ final class StoryItemSetViewListComponent: Component {
                         environment: {},
                         containerSize: itemFrame.size
                     )
-                    if let itemView = visibleItem.view {
+                    if let itemView = visibleItem.view as? PeerListItemComponent.View {
                         var animateIn = false
                         if itemView.superview == nil {
                             animateIn = true
                             self.scrollView.addSubview(itemView)
                         }
                         itemTransition.setFrame(view: itemView, frame: itemFrame)
+                        
+                        itemView.updateIsPreviewing(isPreviewing: self.previewedItemId?.peerId == item.peer.id && self.previewedItemId?.id == item.story?.id)
                         
                         if animateIn, synchronousLoad {
                             itemView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
@@ -533,7 +622,7 @@ final class StoryItemSetViewListComponent: Component {
                 }
             }
             
-            var removeIds: [EnginePeer.Id] = []
+            var removeIds: [EngineStoryViewListContext.Item.ItemHash] = []
             for (id, visibleItem) in self.visibleItems {
                 if !validIds.contains(id) {
                     removeIds.append(id)
@@ -686,13 +775,6 @@ final class StoryItemSetViewListComponent: Component {
                             case .contacts:
                                 mappedListMode = .contacts
                             }
-                            let mappedSortMode: EngineStoryViewListContext.SortMode
-                            switch self.configuration.sortMode {
-                            case .reactionsFirst:
-                                mappedSortMode = .reactionsFirst
-                            case .recentFirst:
-                                mappedSortMode = .recentFirst
-                            }
                             
                             var parentSource: EngineStoryViewListContext?
                             if let baseContentView, baseContentView.configuration == self.configuration, baseContentView.query == nil {
@@ -702,16 +784,22 @@ final class StoryItemSetViewListComponent: Component {
                                 parentSource = nil
                             }
                             
-                            self.viewList = component.context.engine.messages.storyViewList(peerId: component.peerId, id: component.storyItem.id, views: views, listMode: mappedListMode, sortMode: mappedSortMode, searchQuery: query, parentSource: parentSource)
+                            self.viewList = component.context.engine.messages.storyViewList(peerId: component.peerId, id: component.storyItem.id, views: views, listMode: mappedListMode, sortMode: self.configuration.sortMode.sortMode, searchQuery: query, parentSource: parentSource)
                         }
                     }
                 } else {
-                    if self.configuration == ContentConfigurationKey(listMode: .everyone, sortMode: .reactionsFirst) {
+                    let defaultSortMode: SortMode
+                    if component.peerId.isGroupOrChannel {
+                        defaultSortMode = .repostsFirst
+                    } else {
+                        defaultSortMode = .reactionsFirst
+                    }
+                    if self.configuration == ContentConfigurationKey(listMode: .everyone, sortMode: defaultSortMode) {
                         let viewList: EngineStoryViewListContext
                         if let current = component.sharedListsContext.viewLists[StoryId(peerId: component.peerId, id: component.storyItem.id)] {
                             viewList = current
                         } else {
-                            viewList = component.context.engine.messages.storyViewList(peerId: component.peerId, id: component.storyItem.id, views: views, listMode: .everyone, sortMode: .reactionsFirst)
+                            viewList = component.context.engine.messages.storyViewList(peerId: component.peerId, id: component.storyItem.id, views: views, listMode: .everyone, sortMode: defaultSortMode.sortMode)
                             component.sharedListsContext.viewLists[StoryId(peerId: component.peerId, id: component.storyItem.id)] = viewList
                         }
                         self.viewList = viewList
@@ -723,14 +811,7 @@ final class StoryItemSetViewListComponent: Component {
                         case .contacts:
                             mappedListMode = .contacts
                         }
-                        let mappedSortMode: EngineStoryViewListContext.SortMode
-                        switch self.configuration.sortMode {
-                        case .reactionsFirst:
-                            mappedSortMode = .reactionsFirst
-                        case .recentFirst:
-                            mappedSortMode = .recentFirst
-                        }
-                        self.viewList = component.context.engine.messages.storyViewList(peerId: component.peerId, id: component.storyItem.id, views: views, listMode: mappedListMode, sortMode: mappedSortMode, parentSource: component.sharedListsContext.viewLists[StoryId(peerId: component.peerId, id: component.storyItem.id)])
+                        self.viewList = component.context.engine.messages.storyViewList(peerId: component.peerId, id: component.storyItem.id, views: views, listMode: mappedListMode, sortMode: self.configuration.sortMode.sortMode, parentSource: component.sharedListsContext.viewLists[StoryId(peerId: component.peerId, id: component.storyItem.id)])
                     }
                 }
             }
@@ -841,7 +922,7 @@ final class StoryItemSetViewListComponent: Component {
                     presence: nil,
                     selectionState: .none,
                     hasNext: true,
-                    action: { _ in
+                    action: { _, _, _ in
                     }
                 )),
                 environment: {},
@@ -985,7 +1066,7 @@ final class StoryItemSetViewListComponent: Component {
                 
                 var emptyButtonTransition = transition
                 let emptyButton: ComponentView<Empty>?
-                if self.query == nil, !component.hasPremium, let views = component.storyItem.views, views.seenCount != 0 {
+                if self.query == nil, !component.hasPremium && !component.peerId.isGroupOrChannel, let views = component.storyItem.views, views.seenCount != 0 {
                     if let current = self.emptyButton {
                         emptyButton = current
                     } else {
@@ -1033,7 +1114,7 @@ final class StoryItemSetViewListComponent: Component {
                             text = component.strings.Story_ViewList_PremiumUpgradeText
                         }
                     } else {
-                        text = component.strings.Story_Views_NoViews
+                        text = component.peerId.isGroupOrChannel ? component.strings.Story_Views_NoReactions : component.strings.Story_Views_NoViews
                     }
                 } else {
                     if let query = self.query, !query.isEmpty {
@@ -1052,7 +1133,7 @@ final class StoryItemSetViewListComponent: Component {
                                 text = component.strings.Story_ViewList_PremiumUpgradeText
                             }
                         } else {
-                            text = component.strings.Story_Views_NoViews
+                            text = component.peerId.isGroupOrChannel ? component.strings.Story_Views_NoReactions : component.strings.Story_Views_NoViews
                         }
                     }
                 }
@@ -1221,6 +1302,10 @@ final class StoryItemSetViewListComponent: Component {
         private var sortMode: SortMode = .reactionsFirst
         private var currentSearchQuery: String = ""
         
+        public var currentViewList: EngineStoryViewListContext? {
+            return self.currentContentView?.viewList
+        }
+        
         override init(frame: CGRect) {
             self.navigationContainerView = UIView()
             self.navigationContainerView.clipsToBounds = true
@@ -1255,6 +1340,14 @@ final class StoryItemSetViewListComponent: Component {
             return super.hitTest(point, with: event)
         }
         
+        public func setPreviewedItem(signal: Signal<StoryId?, NoError>) {
+            self.currentContentView?.setPreviewedItem(signal: signal)
+        }
+        
+        public func sourceView(storyId: StoryId) -> UIView? {
+            self.currentContentView?.sourceView(storyId: storyId)
+        }
+        
         func animateIn(transition: Transition) {
             let offset = self.bounds.height - self.navigationBarBackground.frame.minY
             Transition.immediate.setBoundsOrigin(view: self, origin: CGPoint(x: 0.0, y: -offset))
@@ -1287,25 +1380,45 @@ final class StoryItemSetViewListComponent: Component {
             var items: [ContextMenuItem] = []
             
             let sortMode = self.sortMode
-            
-            items.append(.action(ContextMenuActionItem(text: component.strings.Story_ViewList_ContextSortReactions, icon: { theme in
-                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Reactions"), color: theme.contextMenu.primaryColor)
-            }, additionalLeftIcon: { theme in
-                if sortMode != .reactionsFirst {
-                    return nil
-                }
-                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
-            }, action: { [weak self] _, a in
-                a(.default)
-                
-                guard let self else {
-                    return
-                }
-                if self.sortMode != .reactionsFirst {
-                    self.sortMode = .reactionsFirst
-                    self.state?.updated(transition: .immediate)
-                }
-            })))
+            if component.peerId.isGroupOrChannel {
+                items.append(.action(ContextMenuActionItem(text: component.strings.Story_ViewList_ContextSortReposts, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Stories/Context Menu/Repost"), color: theme.contextMenu.primaryColor)
+                }, additionalLeftIcon: { theme in
+                    if sortMode != .repostsFirst {
+                        return nil
+                    }
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak self] _, a in
+                    a(.default)
+                    
+                    guard let self else {
+                        return
+                    }
+                    if self.sortMode != .repostsFirst {
+                        self.sortMode = .repostsFirst
+                        self.state?.updated(transition: .immediate)
+                    }
+                })))
+            } else {
+                items.append(.action(ContextMenuActionItem(text: component.strings.Story_ViewList_ContextSortReactions, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Reactions"), color: theme.contextMenu.primaryColor)
+                }, additionalLeftIcon: { theme in
+                    if sortMode != .reactionsFirst {
+                        return nil
+                    }
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak self] _, a in
+                    a(.default)
+                    
+                    guard let self else {
+                        return
+                    }
+                    if self.sortMode != .reactionsFirst {
+                        self.sortMode = .reactionsFirst
+                        self.state?.updated(transition: .immediate)
+                    }
+                })))
+            }
             items.append(.action(ContextMenuActionItem(text: component.strings.Story_ViewList_ContextSortRecent, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Time"), color: theme.contextMenu.primaryColor)
             }, additionalLeftIcon: { theme in
@@ -1328,7 +1441,8 @@ final class StoryItemSetViewListComponent: Component {
             items.append(.separator)
                                         
             let emptyAction: ((ContextMenuActionItem.Action) -> Void)? = nil
-            items.append(.action(ContextMenuActionItem(text: component.strings.Story_ViewList_ContextSortInfo, textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: emptyAction)))
+            
+            items.append(.action(ContextMenuActionItem(text: component.peerId.isGroupOrChannel ? component.strings.Story_ViewList_ContextSortChannelInfo : component.strings.Story_ViewList_ContextSortInfo, textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: emptyAction)))
             
             let contextItems = ContextController.Items(content: .list(items))
             
@@ -1368,6 +1482,12 @@ final class StoryItemSetViewListComponent: Component {
             var updateSubState = false
             
             if self.mainViewList == nil {
+                if component.peerId.isGroupOrChannel {
+                    self.sortMode = .repostsFirst
+                } else {
+                    self.sortMode = .reactionsFirst
+                }
+                
                 self.mainViewListDisposable?.dispose()
                 self.mainViewListDisposable = nil
                 
@@ -1508,7 +1628,9 @@ final class StoryItemSetViewListComponent: Component {
             }
             
             let titleText: String
-            if let totalCount = currentTotalCount, let currentTotalReactionCount {
+            if component.peerId.isGroupOrChannel {
+                titleText = component.strings.Story_ViewList_TitleReactions
+            } else if let totalCount = currentTotalCount, let currentTotalReactionCount {
                 if totalCount > 0 && totalCount > currentTotalReactionCount {
                     titleText = component.strings.Story_ViewList_ViewerCount(Int32(totalCount))
                 } else {
@@ -1525,6 +1647,15 @@ final class StoryItemSetViewListComponent: Component {
                 containerSize: CGSize(width: 260.0, height: 100.0)
             )
             
+            let orderSelectorIconName: String
+            switch self.sortMode {
+            case .repostsFirst:
+                orderSelectorIconName = "Stories/Context Menu/Repost"
+            case .reactionsFirst:
+                orderSelectorIconName = "Chat/Context Menu/Reactions"
+            case .recentFirst:
+                orderSelectorIconName = "Chat/Context Menu/Time"
+            }
             let orderSelectorSize = self.orderSelector.update(
                 transition: transition,
                 component: AnyComponent(OptionButtonComponent(
@@ -1532,7 +1663,7 @@ final class StoryItemSetViewListComponent: Component {
                         background: UIColor(rgb: 0xffffff, alpha: 0.09),
                         foreground: .white
                     ),
-                    icon: self.sortMode == .recentFirst ? "Chat/Context Menu/Time" : "Chat/Context Menu/Reactions",
+                    icon: orderSelectorIconName,
                     action: { [weak self] in
                         guard let self else {
                             return
@@ -1551,15 +1682,15 @@ final class StoryItemSetViewListComponent: Component {
             var displaySearchBar = false
             var displaySortSelector = false
             
-            if !component.hasPremium, component.storyItem.expirationTimestamp <= Int32(Date().timeIntervalSince1970) {
+            if component.peerId == component.context.account.peerId && !component.hasPremium, component.storyItem.expirationTimestamp <= Int32(Date().timeIntervalSince1970) {
             } else {
-                if let views = component.storyItem.views, views.hasList {
+                if let views = component.storyItem.views, views.hasList || component.peerId.isGroupOrChannel {
                     if let totalCount = currentTotalCount {
-                        if totalCount >= 20 || component.context.sharedContext.immediateExperimentalUISettings.storiesExperiment {
+                        if !component.peerId.isGroupOrChannel, totalCount >= 20 || component.context.sharedContext.immediateExperimentalUISettings.storiesExperiment {
                             displayModeSelector = true
                             displaySearchBar = true
                         }
-                        if (views.reactedCount >= 10 && totalCount >= 20) || component.context.sharedContext.immediateExperimentalUISettings.storiesExperiment {
+                        if (((component.peerId.isGroupOrChannel && views.forwardCount >= 10 ) || (!component.peerId.isGroupOrChannel && views.reactedCount >= 10)) && totalCount >= 20) || component.context.sharedContext.immediateExperimentalUISettings.storiesExperiment {
                             displaySortSelector = true
                         }
                     } else {

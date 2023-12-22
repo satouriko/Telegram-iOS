@@ -7,7 +7,7 @@ func _internal_resetAccountState(postbox: Postbox, network: Network, accountPeer
     return network.request(Api.functions.updates.getState())
     |> retryRequest
     |> mapToSignal { state -> Signal<Never, NoError> in
-        let chatList = fetchChatList(postbox: postbox, network: network, location: .general, upperBound: .absoluteUpperBound(), hash: 0, limit: 100)
+        let chatList = fetchChatList(accountPeerId: accountPeerId, postbox: postbox, network: network, location: .general, upperBound: .absoluteUpperBound(), hash: 0, limit: 100)
         
         return chatList
         |> mapToSignal { fetchedChats -> Signal<Never, NoError> in
@@ -70,6 +70,18 @@ func _internal_resetAccountState(postbox: Postbox, network: Network, accountPeer
                             return current
                         }
                     })
+                }
+                for (peerId, value) in fetchedChats.viewForumAsMessages {
+                    if value {
+                        transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, current in
+                            if peerId.namespace == Namespaces.Peer.CloudChannel {
+                                let current = (current as? CachedChannelData) ?? CachedChannelData()
+                                return current.withUpdatedViewForumAsMessages(.known(value))
+                            } else {
+                                return current
+                            }
+                        })
+                    }
                 }
                 
                 for hole in transaction.allChatListHoles(groupId: .root) {

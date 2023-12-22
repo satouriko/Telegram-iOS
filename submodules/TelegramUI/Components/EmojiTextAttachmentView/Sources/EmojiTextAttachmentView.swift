@@ -17,6 +17,8 @@ import ShimmerEffect
 import TextFormat
 import TelegramUIPreferences
 import GenerateStickerPlaceholderImage
+import UIKitRuntimeUtils
+import ComponentFlow
 
 public func generateTopicIcon(title: String, backgroundColors: [UIColor], strokeColors: [UIColor], size: CGSize) -> UIImage? {
     let realSize = size
@@ -142,6 +144,58 @@ public func animationCacheFetchFile(postbox: Postbox, userLocation: MediaResourc
     }
 }
 
+private func generatePeerNameColorImage(nameColor: PeerNameColors.Colors, isDark: Bool, bounds: CGSize = CGSize(width: 40.0, height: 40.0), size: CGSize = CGSize(width: 40.0, height: 40.0)) -> UIImage? {
+    return generateImage(bounds, rotatedContext: { contextSize, context in
+        let bounds = CGRect(origin: CGPoint(), size: contextSize)
+        context.clear(bounds)
+        
+        let circleBounds = CGRect(origin: CGPoint(x: floorToScreenPixels((bounds.width - size.width) / 2.0), y: floorToScreenPixels((bounds.height - size.height) / 2.0)), size: size)
+        context.addEllipse(in: circleBounds)
+        context.clip()
+        
+        if let secondColor = nameColor.secondary {
+            var firstColor = nameColor.main
+            var secondColor = secondColor
+            if isDark, nameColor.tertiary == nil {
+                firstColor = secondColor
+                secondColor = nameColor.main
+            }
+            
+            context.setFillColor(secondColor.cgColor)
+            context.fill(circleBounds)
+            
+            if let thirdColor = nameColor.tertiary {
+                context.move(to: CGPoint(x: contextSize.width, y: 0.0))
+                context.addLine(to: CGPoint(x: contextSize.width, y: contextSize.height))
+                context.addLine(to: CGPoint(x: 0.0, y: contextSize.height))
+                context.closePath()
+                context.setFillColor(firstColor.cgColor)
+                context.fillPath()
+                
+                context.setFillColor(thirdColor.cgColor)
+                context.translateBy(x: contextSize.width / 2.0, y: contextSize.height / 2.0)
+                context.rotate(by: .pi / 4.0)
+                
+                let rectSide = size.width / 40.0 * 18.0
+                let rectCornerRadius = round(size.width / 40.0 * 4.0)
+                let path = UIBezierPath(roundedRect: CGRect(origin: CGPoint(x: -rectSide / 2.0, y: -rectSide / 2.0), size: CGSize(width: rectSide, height: rectSide)), cornerRadius: rectCornerRadius)
+                context.addPath(path.cgPath)
+                context.fillPath()
+            } else {
+                context.move(to: .zero)
+                context.addLine(to: CGPoint(x: contextSize.width, y: 0.0))
+                context.addLine(to: CGPoint(x: 0.0, y: contextSize.height))
+                context.closePath()
+                context.setFillColor(firstColor.cgColor)
+                context.fillPath()
+            }
+        } else {
+            context.setFillColor(nameColor.main.cgColor)
+            context.fill(circleBounds)
+        }
+    })
+}
+
 public final class InlineStickerItemLayer: MultiAnimationRenderTarget {
     public enum Context: Equatable {
         public final class Custom: Equatable {
@@ -244,17 +298,27 @@ public final class InlineStickerItemLayer: MultiAnimationRenderTarget {
     private var fetchDisposable: Disposable?
     private var loadDisposable: Disposable?
     
+    private var _contentTintColor: UIColor?
     public var contentTintColor: UIColor? {
-        didSet {
-            if self.contentTintColor != oldValue {
+        get {
+            return self._contentTintColor
+        }
+        set(value) {
+            if self._contentTintColor != value {
+                self._contentTintColor = value
                 self.updateTintColor()
             }
         }
     }
     
+    private var _dynamicColor: UIColor?
     public var dynamicColor: UIColor? {
-        didSet {
-            if self.dynamicColor != oldValue {
+        get {
+            return self._dynamicColor
+        }
+        set(value) {
+            if self._dynamicColor != value {
+                self._dynamicColor = value
                 self.updateTintColor()
             }
         }
@@ -296,7 +360,7 @@ public final class InlineStickerItemLayer: MultiAnimationRenderTarget {
         self.renderer = renderer
         self.unique = unique
         self.placeholderColor = placeholderColor
-        self.dynamicColor = dynamicColor
+        self._dynamicColor = dynamicColor
         self.loopCount = loopCount
         
         let scale = min(2.0, UIScreenScale)
@@ -305,8 +369,13 @@ public final class InlineStickerItemLayer: MultiAnimationRenderTarget {
         
         super.init()
         
-        if let topicInfo = emoji.topicInfo {
-            self.updateTopicInfo(topicInfo: topicInfo)
+        if let custom = emoji.custom {
+            switch custom {
+            case let .topic(id, info):
+                self.updateTopicInfo(topicInfo: (id, info))
+            case let .nameColors(colors):
+                self.updateNameColors(colors: colors)
+            }
         } else if let file = file {
             self.updateFile(file: file, attemptSynchronousLoad: attemptSynchronousLoad)
         } else {
@@ -348,6 +417,40 @@ public final class InlineStickerItemLayer: MultiAnimationRenderTarget {
         return nullAction
     }
     
+    public func updateTintColor(contentTintColor: UIColor?, dynamicColor: UIColor?, transition: Transition) {
+        self._contentTintColor = contentTintColor
+        self._dynamicColor = dynamicColor
+        
+        if !self.isDisplayingPlaceholder {
+            var customColor = self.contentTintColor
+            if let file = self.file {
+                if file.isCustomTemplateEmoji {
+                    customColor = self.dynamicColor
+                }
+            }
+            
+            if customColor != nil {
+                if self.layerTintColor == nil {
+                    setLayerContentsMaskMode(self, true)
+                }
+            } else {
+                if self.layerTintColor != nil {
+                    setLayerContentsMaskMode(self, false)
+                }
+            }
+            if let customColor {
+                transition.setTintColor(layer: self, color: customColor)
+            } else {
+                self.layerTintColor = nil
+            }
+        } else {
+            if self.layerTintColor != nil {
+                setLayerContentsMaskMode(self, false)
+            }
+            self.layerTintColor = nil
+        }
+    }
+    
     private func updateTintColor() {
         if !self.isDisplayingPlaceholder {
             var customColor = self.contentTintColor
@@ -357,8 +460,20 @@ public final class InlineStickerItemLayer: MultiAnimationRenderTarget {
                 }
             }
             
+            if customColor != nil {
+                if self.layerTintColor == nil {
+                    setLayerContentsMaskMode(self, true)
+                }
+            } else {
+                if self.layerTintColor != nil {
+                    setLayerContentsMaskMode(self, false)
+                }
+            }
             self.layerTintColor = customColor?.cgColor
         } else {
+            if self.layerTintColor != nil {
+                setLayerContentsMaskMode(self, false)
+            }
             self.layerTintColor = nil
         }
     }
@@ -407,6 +522,30 @@ public final class InlineStickerItemLayer: MultiAnimationRenderTarget {
                 self.contents = image.cgImage
             }
         }
+    }
+    
+    private func updateNameColors(colors: [UInt32]) {
+        if colors.isEmpty {
+            return
+        }
+        let main = UIColor(rgb: colors[0])
+        var secondary: UIColor?
+        if colors.count >= 2 {
+            secondary = UIColor(rgb: colors[1])
+        }
+        var tertiary: UIColor?
+        if colors.count >= 3 {
+            tertiary = UIColor(rgb: colors[2])
+        }
+        let mappedColor = PeerNameColors.Colors(main: main, secondary: secondary, tertiary: tertiary)
+        
+        let image = generateImage(CGSize(width: 18.0, height: 18.0), contextGenerator: { size, context in
+            context.clear(CGRect(origin: .zero, size: size))
+            if let cgImage = generatePeerNameColorImage(nameColor: mappedColor, isDark: false, bounds: CGSize(width: 18.0, height: 18.0), size: CGSize(width: 16.0, height: 16.0))?.cgImage {
+                context.draw(cgImage, in: CGRect(origin: .zero, size: size))
+            }
+        })
+        self.contents = image?.cgImage
     }
     
     private func updateFile(file: TelegramMediaFile, attemptSynchronousLoad: Bool) {

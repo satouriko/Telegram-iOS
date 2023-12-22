@@ -51,10 +51,16 @@ public final class EngineStoryItem: Equatable {
         }
     }
     
+    public enum ForwardInfo: Equatable {
+        case known(peer: EnginePeer, storyId: Int32, isModified: Bool)
+        case unknown(name: String, isModified: Bool)
+    }
+    
     public let id: Int32
     public let timestamp: Int32
     public let expirationTimestamp: Int32
     public let media: EngineMedia
+    public let alternativeMedia: EngineMedia?
     public let mediaAreas: [MediaArea]
     public let text: String
     public let entities: [MessageTextEntity]
@@ -71,12 +77,14 @@ public final class EngineStoryItem: Equatable {
     public let isEdited: Bool
     public let isMy: Bool
     public let myReaction: MessageReaction.Reaction?
+    public let forwardInfo: ForwardInfo?
     
-    public init(id: Int32, timestamp: Int32, expirationTimestamp: Int32, media: EngineMedia, mediaAreas: [MediaArea], text: String, entities: [MessageTextEntity], views: Views?, privacy: EngineStoryPrivacy?, isPinned: Bool, isExpired: Bool, isPublic: Bool, isPending: Bool, isCloseFriends: Bool, isContacts: Bool, isSelectedContacts: Bool, isForwardingDisabled: Bool, isEdited: Bool, isMy: Bool, myReaction: MessageReaction.Reaction?) {
+    public init(id: Int32, timestamp: Int32, expirationTimestamp: Int32, media: EngineMedia, alternativeMedia: EngineMedia?, mediaAreas: [MediaArea], text: String, entities: [MessageTextEntity], views: Views?, privacy: EngineStoryPrivacy?, isPinned: Bool, isExpired: Bool, isPublic: Bool, isPending: Bool, isCloseFriends: Bool, isContacts: Bool, isSelectedContacts: Bool, isForwardingDisabled: Bool, isEdited: Bool, isMy: Bool, myReaction: MessageReaction.Reaction?, forwardInfo: ForwardInfo?) {
         self.id = id
         self.timestamp = timestamp
         self.expirationTimestamp = expirationTimestamp
         self.media = media
+        self.alternativeMedia = alternativeMedia
         self.mediaAreas = mediaAreas
         self.text = text
         self.entities = entities
@@ -93,6 +101,7 @@ public final class EngineStoryItem: Equatable {
         self.isEdited = isEdited
         self.isMy = isMy
         self.myReaction = myReaction
+        self.forwardInfo = forwardInfo
     }
     
     public static func ==(lhs: EngineStoryItem, rhs: EngineStoryItem) -> Bool {
@@ -106,6 +115,9 @@ public final class EngineStoryItem: Equatable {
             return false
         }
         if lhs.media != rhs.media {
+            return false
+        }
+        if lhs.alternativeMedia != rhs.alternativeMedia {
             return false
         }
         if lhs.mediaAreas != rhs.mediaAreas {
@@ -156,17 +168,32 @@ public final class EngineStoryItem: Equatable {
         if lhs.myReaction != rhs.myReaction {
             return false
         }
+        if lhs.forwardInfo != rhs.forwardInfo {
+            return false
+        }
         return true
     }
 }
 
-extension EngineStoryItem {
+extension EngineStoryItem.ForwardInfo {
+    var storedForwardInfo: Stories.Item.ForwardInfo {
+        switch self {
+        case let .known(peer, storyId, isModified):
+            return .known(peerId: peer.id, storyId: storyId, isModified: isModified)
+        case let .unknown(name, isModified):
+            return .unknown(name: name, isModified: isModified)
+        }
+    }
+}
+
+public extension EngineStoryItem {
     func asStoryItem() -> Stories.Item {
         return Stories.Item(
             id: self.id,
             timestamp: self.timestamp,
             expirationTimestamp: self.expirationTimestamp,
             media: self.media._asMedia(),
+            alternativeMedia: self.alternativeMedia?._asMedia(),
             mediaAreas: self.mediaAreas,
             text: self.text,
             entities: self.entities,
@@ -195,7 +222,8 @@ extension EngineStoryItem {
             isForwardingDisabled: self.isForwardingDisabled,
             isEdited: self.isEdited,
             isMy: self.isMy,
-            myReaction: self.myReaction
+            myReaction: self.myReaction,
+            forwardInfo: self.forwardInfo?.storedForwardInfo
         )
     }
 }
@@ -544,6 +572,7 @@ public final class PeerStoryListContext {
                             timestamp: item.timestamp,
                             expirationTimestamp: item.expirationTimestamp,
                             media: EngineMedia(media),
+                            alternativeMedia: item.alternativeMedia.flatMap(EngineMedia.init),
                             mediaAreas: item.mediaAreas,
                             text: item.text,
                             entities: item.entities,
@@ -570,7 +599,8 @@ public final class PeerStoryListContext {
                             isForwardingDisabled: item.isForwardingDisabled,
                             isEdited: item.isEdited,
                             isMy: item.isMy,
-                            myReaction: item.myReaction
+                            myReaction: item.myReaction,
+                            forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, transaction: transaction) }
                         )
                         items.append(mappedItem)
                         
@@ -687,6 +717,7 @@ public final class PeerStoryListContext {
                                             timestamp: item.timestamp,
                                             expirationTimestamp: item.expirationTimestamp,
                                             media: EngineMedia(media),
+                                            alternativeMedia: item.alternativeMedia.flatMap(EngineMedia.init),
                                             mediaAreas: item.mediaAreas,
                                             text: item.text,
                                             entities: item.entities,
@@ -713,7 +744,8 @@ public final class PeerStoryListContext {
                                             isForwardingDisabled: item.isForwardingDisabled,
                                             isEdited: item.isEdited,
                                             isMy: item.isMy,
-                                            myReaction: item.myReaction
+                                            myReaction: item.myReaction,
+                                            forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, transaction: transaction) }
                                         )
                                         storyItems.append(mappedItem)
                                     }
@@ -802,6 +834,11 @@ public final class PeerStoryListContext {
                                                     }
                                                 }
                                             }
+                                            if let forwardInfo = item.forwardInfo, case let .known(peerId, _, _) = forwardInfo {
+                                                if let peer = transaction.getPeer(peerId) {
+                                                    peers[peer.id] = peer
+                                                }
+                                            }
                                         }
                                     }
                                 default:
@@ -842,6 +879,7 @@ public final class PeerStoryListContext {
                                                                 timestamp: item.timestamp,
                                                                 expirationTimestamp: item.expirationTimestamp,
                                                                 media: EngineMedia(media),
+                                                                alternativeMedia: item.alternativeMedia.flatMap(EngineMedia.init),
                                                                 mediaAreas: item.mediaAreas,
                                                                 text: item.text,
                                                                 entities: item.entities,
@@ -868,7 +906,8 @@ public final class PeerStoryListContext {
                                                                 isForwardingDisabled: item.isForwardingDisabled,
                                                                 isEdited: item.isEdited,
                                                                 isMy: item.isMy,
-                                                                myReaction: item.myReaction
+                                                                myReaction: item.myReaction,
+                                                                forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, peers: peers) }
                                                             )
                                                             finalUpdatedState = updatedState
                                                         }
@@ -888,6 +927,7 @@ public final class PeerStoryListContext {
                                                             timestamp: item.timestamp,
                                                             expirationTimestamp: item.expirationTimestamp,
                                                             media: EngineMedia(media),
+                                                            alternativeMedia: item.alternativeMedia.flatMap(EngineMedia.init),
                                                             mediaAreas: item.mediaAreas,
                                                             text: item.text,
                                                             entities: item.entities,
@@ -914,7 +954,8 @@ public final class PeerStoryListContext {
                                                             isForwardingDisabled: item.isForwardingDisabled,
                                                             isEdited: item.isEdited,
                                                             isMy: item.isMy,
-                                                            myReaction: item.myReaction
+                                                            myReaction: item.myReaction,
+                                                            forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, peers: peers) }
                                                         )
                                                         finalUpdatedState = updatedState
                                                     } else {
@@ -936,6 +977,7 @@ public final class PeerStoryListContext {
                                                                 timestamp: item.timestamp,
                                                                 expirationTimestamp: item.expirationTimestamp,
                                                                 media: EngineMedia(media),
+                                                                alternativeMedia: item.alternativeMedia.flatMap(EngineMedia.init),
                                                                 mediaAreas: item.mediaAreas,
                                                                 text: item.text,
                                                                 entities: item.entities,
@@ -962,7 +1004,8 @@ public final class PeerStoryListContext {
                                                                 isForwardingDisabled: item.isForwardingDisabled,
                                                                 isEdited: item.isEdited,
                                                                 isMy: item.isMy,
-                                                                myReaction: item.myReaction
+                                                                myReaction: item.myReaction,
+                                                                forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, peers: peers) }
                                                             ))
                                                             updatedState.items.sort(by: { lhs, rhs in
                                                                 return lhs.timestamp > rhs.timestamp
@@ -980,6 +1023,7 @@ public final class PeerStoryListContext {
                                                             timestamp: item.timestamp,
                                                             expirationTimestamp: item.expirationTimestamp,
                                                             media: EngineMedia(media),
+                                                            alternativeMedia: item.alternativeMedia.flatMap(EngineMedia.init),
                                                             mediaAreas: item.mediaAreas,
                                                             text: item.text,
                                                             entities: item.entities,
@@ -1006,7 +1050,8 @@ public final class PeerStoryListContext {
                                                             isForwardingDisabled: item.isForwardingDisabled,
                                                             isEdited: item.isEdited,
                                                             isMy: item.isMy,
-                                                            myReaction: item.myReaction
+                                                            myReaction: item.myReaction,
+                                                            forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, peers: peers) }
                                                         ))
                                                         updatedState.items.sort(by: { lhs, rhs in
                                                             return lhs.timestamp > rhs.timestamp
@@ -1148,6 +1193,7 @@ public final class PeerExpiringStoryListContext {
                                         timestamp: item.timestamp,
                                         expirationTimestamp: item.expirationTimestamp,
                                         media: EngineMedia(media),
+                                        alternativeMedia: item.alternativeMedia.flatMap(EngineMedia.init),
                                         mediaAreas: item.mediaAreas,
                                         text: item.text,
                                         entities: item.entities,
@@ -1174,7 +1220,8 @@ public final class PeerExpiringStoryListContext {
                                         isForwardingDisabled: item.isForwardingDisabled,
                                         isEdited: item.isEdited,
                                         isMy: item.isMy,
-                                        myReaction: item.myReaction
+                                        myReaction: item.myReaction,
+                                        forwardInfo: item.forwardInfo.flatMap { EngineStoryItem.ForwardInfo($0, transaction: transaction) }
                                     )
                                     items.append(.item(mappedItem))
                                 }
@@ -1389,6 +1436,13 @@ public func _internal_pollPeerStories(postbox: Postbox, network: Network, accoun
         guard let inputPeer = inputPeer else {
             return .complete()
         }
+        
+        #if DEBUG
+        if "".isEmpty {
+            return .complete()
+        }
+        #endif
+        
         return network.request(Api.functions.stories.getPeerStories(peer: inputPeer))
         |> map(Optional.init)
         |> `catch` { _ -> Signal<Api.stories.PeerStories?, NoError> in

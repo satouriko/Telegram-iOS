@@ -28,6 +28,7 @@ import InstantVideoRadialStatusNode
 import ChatInstantVideoMessageDurationNode
 import ChatControllerInteraction
 import WallpaperBackgroundNode
+import TelegramStringFormatting
 
 public struct ChatMessageInstantVideoItemLayoutResult {
     public let contentSize: CGSize
@@ -266,6 +267,9 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                 case .bubble:
                     instantVideoBackgroundImage = nil
                     ignoreHeaders = true
+            }
+            if item.presentationData.isPreview {
+                ignoreHeaders = true
             }
             
             if item.presentationData.theme != currentItem?.presentationData.theme {
@@ -522,13 +526,23 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                 }
             }
             
-            let dateText = stringForMessageTimestampStatus(accountPeerId: item.context.account.peerId, message: item.message, dateTimeFormat: item.presentationData.dateTimeFormat, nameDisplayOrder: item.presentationData.nameDisplayOrder, strings: item.presentationData.strings, format: .regular, associatedData: item.associatedData)
+            let dateFormat: MessageTimestampStatusFormat
+            if item.presentationData.isPreview {
+                dateFormat = .full
+            } else {
+                dateFormat = .regular
+            }
+            let dateText = stringForMessageTimestampStatus(accountPeerId: item.context.account.peerId, message: item.message, dateTimeFormat: item.presentationData.dateTimeFormat, nameDisplayOrder: item.presentationData.nameDisplayOrder, strings: item.presentationData.strings, format: dateFormat, associatedData: item.associatedData, ignoreAuthor: item.presentationData.isPreview)
             
             let maxDateAndStatusWidth: CGFloat
             if case .bubble = statusDisplayType {
                 maxDateAndStatusWidth = width
             } else {
-                maxDateAndStatusWidth = width - videoFrame.midX - 85.0
+                if item.presentationData.isPreview {
+                    maxDateAndStatusWidth = width - videoFrame.midX - 65.0
+                } else {
+                    maxDateAndStatusWidth = width - videoFrame.midX - 85.0
+                }
             }
             
             var isReplyThread = false
@@ -539,8 +553,8 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
             let statusSuggestedWidthAndContinue = makeDateAndStatusLayout(ChatMessageDateAndStatusNode.Arguments(
                 context: item.context,
                 presentationData: item.presentationData,
-                edited: edited && !sentViaBot,
-                impressionCount: viewCount,
+                edited: edited && !sentViaBot && !item.presentationData.isPreview,
+                impressionCount: !item.presentationData.isPreview ? viewCount : nil,
                 dateText: dateText,
                 type: statusType,
                 layoutInput: .standalone(reactionSettings: shouldDisplayInlineDateReactions(message: item.message, isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions) ? ChatMessageDateAndStatusNode.StandaloneReactionSettings() : nil),
@@ -569,6 +583,8 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                 contentSize.height += dateAndStatusSize.height + 2.0
                 contentSize.width = max(contentSize.width, dateAndStatusSize.width)
                 dateAndStatusOverflow = true
+            } else if item.presentationData.isPreview {
+                contentSize.width += 44.0
             }
             
             let result = ChatMessageInstantVideoItemLayoutResult(contentSize: contentSize, overflowLeft: 0.0, overflowRight: dateAndStatusOverflow ? 0.0 : (max(0.0, floorToScreenPixels(videoFrame.midX) + 55.0 + dateAndStatusSize.width - videoFrame.width)))
@@ -588,6 +604,11 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
             var updatedTranscriptionText: TranscribedText?
             if audioTranscriptionText != transcribedText {
                 updatedTranscriptionText = transcribedText
+            }
+            
+            let currentTime = Int32(Date().timeIntervalSince1970)
+            if transcribedText == nil, let cooldownUntilTime = item.associatedData.audioTranscriptionTrial.cooldownUntilTime, cooldownUntilTime > currentTime {
+                updatedAudioTranscriptionState = .locked
             }
             
             let effectiveAudioTranscriptionState = updatedAudioTranscriptionState ?? audioTranscriptionState
@@ -611,8 +632,11 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                     }
                     
                     if let updatedAudioTranscriptionState = updatedAudioTranscriptionState {
+                        let previous = strongSelf.audioTranscriptionState
                         strongSelf.audioTranscriptionState = updatedAudioTranscriptionState
-                        strongSelf.updateTranscriptionExpanded?(strongSelf.audioTranscriptionState)
+                        if previous != updatedAudioTranscriptionState {
+                            strongSelf.updateTranscriptionExpanded?(strongSelf.audioTranscriptionState)
+                        }
                     }
                     if let updatedTranscriptionText = updatedTranscriptionText {
                         strongSelf.audioTranscriptionText = updatedTranscriptionText
@@ -658,7 +682,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                     let durationTextColor: UIColor
                     switch statusDisplayType {
                         case .free:
-                             let serviceColor = serviceMessageColorComponents(theme: theme.theme, wallpaper: theme.wallpaper)
+                            let serviceColor = serviceMessageColorComponents(theme: theme.theme, wallpaper: theme.wallpaper)
                             durationTextColor = serviceColor.primaryText
                             durationBlurColor = (selectDateFillStaticColor(theme: theme.theme, wallpaper: theme.wallpaper), item.controllerInteraction.enableFullTranslucency && dateFillNeedsBlur(theme: theme.theme, wallpaper: theme.wallpaper))
                         case .bubble:
@@ -677,9 +701,9 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                             previousVideoNode = strongSelf.videoNode
                             if let durationBlurColor = durationBlurColor {
                                 if let durationBackgroundNode = strongSelf.durationBackgroundNode {
-                                    durationBackgroundNode.updateColor(color: durationBlurColor.0, enableBlur: durationBlurColor.1, transition: .immediate)
+                                    durationBackgroundNode.updateColor(color: durationBlurColor.0, enableBlur: durationBlurColor.1 && !item.presentationData.isPreview, transition: .immediate)
                                 } else {
-                                    let durationBackgroundNode = NavigationBackgroundNode(color: durationBlurColor.0, enableBlur: durationBlurColor.1)
+                                    let durationBackgroundNode = NavigationBackgroundNode(color: durationBlurColor.0, enableBlur: durationBlurColor.1 && !item.presentationData.isPreview)
                                     strongSelf.durationBackgroundNode = durationBackgroundNode
                                     strongSelf.addSubnode(durationBackgroundNode)
                                 }
@@ -741,6 +765,13 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                                     strongSelf.insertSubnode(strongSelf.secretVideoPlaceholderBackground, belowSubnode: videoNode)
                                     strongSelf.insertSubnode(strongSelf.secretVideoPlaceholder, belowSubnode: videoNode)
                                 }
+                            } else if item.presentationData.isPreview {
+                                let updatedSecretPlaceholderSignal = chatMessageVideo(postbox: item.context.account.postbox, userLocation: .peer(item.message.id.peerId), videoReference: .message(message: MessageReference(item.message), media: telegramFile), synchronousLoad: true)
+                                strongSelf.secretVideoPlaceholder.displaysAsynchronously = false
+                                strongSelf.secretVideoPlaceholder.setSignal(updatedSecretPlaceholderSignal, attemptSynchronously: true)
+                                if strongSelf.secretVideoPlaceholder.supernode == nil {
+                                    strongSelf.insertSubnode(strongSelf.secretVideoPlaceholder, aboveSubnode: videoNode)
+                                }
                             }
                             
                             updatedPlayerStatusSignal = videoNode.status
@@ -775,21 +806,22 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                         }))
                     }
                                         
-                    var displayTranscribe: Bool
-                    if item.message.id.peerId.namespace != Namespaces.Peer.SecretChat && statusDisplayType == .free {
+                    var displayTranscribe = false
+                    if item.message.id.peerId.namespace != Namespaces.Peer.SecretChat && statusDisplayType == .free && !item.presentationData.isPreview {
+                        let premiumConfiguration = PremiumConfiguration.with(appConfiguration: item.context.currentAppConfiguration.with { $0 })
                         if item.associatedData.isPremium {
                             displayTranscribe = true
+                        } else if premiumConfiguration.audioTransciptionTrialCount > 0 {
+                            if incoming {
+                                displayTranscribe = true
+                            }
                         } else if item.associatedData.alwaysDisplayTranscribeButton.canBeDisplayed {
                             if incoming && notConsumed && item.associatedData.alwaysDisplayTranscribeButton.displayForNotConsumed {
                                 displayTranscribe = true
                             } else {
                                 displayTranscribe = false
                             }
-                        } else {
-                            displayTranscribe = false
                         }
-                    } else {
-                        displayTranscribe = false
                     }
                     
                     if displayTranscribe, let durationBlurColor = durationBlurColor {
@@ -851,8 +883,11 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                     
                     if let durationNode = strongSelf.durationNode {
                         var durationFrame = CGRect(origin: CGPoint(x: displayVideoFrame.midX - 56.0 - 25.0 * scaleProgress, y: displayVideoFrame.maxY - 18.0), size: CGSize(width: 1.0, height: 1.0))
+                        if item.presentationData.isPreview {
+                            durationFrame.origin.x -= 9.0
+                        }
                         
-                        durationNode.isSeen = !notConsumed
+                        durationNode.isSeen = !notConsumed || item.presentationData.isPreview
                         let size = durationNode.size
                         if let durationBackgroundNode = strongSelf.durationBackgroundNode, size.width > 1.0 {
                             durationBackgroundNode.update(size: size, cornerRadius: size.height / 2.0, transition: .immediate)
@@ -882,8 +917,12 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                         animation.animator.updateFrame(layer: strongSelf.dateAndStatusNode.layer, frame: CGRect(origin: dateAndStatusOrigin, size: dateAndStatusSize), completion: nil)
                     case let .constrained(_, right):
                         var dateAndStatusFrame = CGRect(origin: CGPoint(x: min(floorToScreenPixels(displayVideoFrame.midX) + 55.0 + 25.0 * scaleProgress, displayVideoFrame.maxX + right - dateAndStatusSize.width - 4.0), y: displayVideoFrame.maxY - dateAndStatusSize.height), size: dateAndStatusSize)
-                        if incoming, let audioTranscriptionButton = strongSelf.audioTranscriptionButton, displayTranscribe {
-                            dateAndStatusFrame.origin.x = audioTranscriptionButton.frame.maxX + 7.0
+                        if incoming {
+                            if let audioTranscriptionButton = strongSelf.audioTranscriptionButton, displayTranscribe {
+                                dateAndStatusFrame.origin.x = audioTranscriptionButton.frame.maxX + 7.0
+                            } else if item.presentationData.isPreview {
+                                dateAndStatusFrame.origin.x = displayVideoFrame.midX + 64.0
+                            }
                         }
                         animation.animator.updateFrame(layer: strongSelf.dateAndStatusNode.layer, frame: dateAndStatusFrame, completion: nil)
                     }
@@ -1130,7 +1169,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
             return
         }
         
-        let displayMute: Bool
+        var displayMute: Bool
         switch status.mediaStatus {
             case let .fetchStatus(fetchStatus):
                 switch fetchStatus {
@@ -1141,6 +1180,9 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                 }
             case .playbackStatus:
                 displayMute = false
+        }
+        if item.presentationData.isPreview {
+            displayMute = false
         }
         if displayMute != (!self.infoBackgroundNode.alpha.isZero) {
             if displayMute {
@@ -1177,10 +1219,14 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
         } else if isBuffering ?? false {
             progressRequired = true
         }
+        if item.presentationData.isPreview {
+            progressRequired = true
+        }
         
         if progressRequired {
             if self.statusNode == nil {
-                let statusNode = RadialStatusNode(backgroundNodeColor: item.presentationData.theme.theme.chat.message.mediaOverlayControlColors.fillColor)
+                let statusNode = RadialStatusNode(backgroundNodeColor: item.presentationData.theme.theme.chat.message.mediaOverlayControlColors.fillColor, isPreview: item.presentationData.isPreview)
+                statusNode.displaysAsynchronously = !item.presentationData.isPreview
                 self.isUserInteractionEnabled = false
                 self.statusNode = statusNode
                 self.addSubnode(statusNode)
@@ -1254,6 +1300,9 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                     state = .none
                 }
         }
+        if item.presentationData.isPreview {
+            state = .play(messageTheme.mediaOverlayControlColors.foregroundColor)
+        }
         if let statusNode = self.statusNode {
             if state == .none {
                 self.statusNode = nil
@@ -1307,7 +1356,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
             self.durationNode?.status = .single(nil)
             self.videoNode?.isHidden = isSecretMedia
             self.secretVideoPlaceholderBackground.isHidden = !isSecretMedia
-            self.secretVideoPlaceholder.isHidden = !isSecretMedia
+            self.secretVideoPlaceholder.isHidden = !isSecretMedia && !item.presentationData.isPreview
         }
     }
     
@@ -1345,7 +1394,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                                 if let item = self.item {
                                     for attribute in item.message.attributes {
                                         if let attribute = attribute as? ReplyMessageAttribute {
-                                            item.controllerInteraction.navigateToMessage(item.message.id, attribute.messageId, NavigateToMessageParams(timestamp: nil, quote: attribute.isQuote ? attribute.quote?.text : nil))
+                                            item.controllerInteraction.navigateToMessage(item.message.id, attribute.messageId, NavigateToMessageParams(timestamp: nil, quote: attribute.isQuote ? attribute.quote.flatMap { quote in NavigateToMessageParams.Quote(string: quote.text, offset: quote.offset) } : nil))
                                             return
                                         } else if let attribute = attribute as? ReplyStoryAttribute {
                                             item.controllerInteraction.navigateToStory(item.message, attribute.storyId)
@@ -1372,7 +1421,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                                         item.controllerInteraction.navigateToMessage(item.message.id, sourceMessageId, NavigateToMessageParams(timestamp: nil, quote: nil))
                                         return
                                     } else if let peer = forwardInfo.source ?? forwardInfo.author {
-                                        item.controllerInteraction.openPeer(EnginePeer(peer), peer is TelegramUser ? .info : .chat(textInputState: nil, subject: nil, peekData: nil), nil, .default)
+                                        item.controllerInteraction.openPeer(EnginePeer(peer), peer is TelegramUser ? .info(nil) : .chat(textInputState: nil, subject: nil, peekData: nil), nil, .default)
                                         return
                                     } else if let _ = forwardInfo.authorSignature {
                                         item.controllerInteraction.displayMessageTooltip(item.message.id, item.presentationData.strings.Conversation_ForwardAuthorHiddenTooltip, forwardInfoNode, nil)
@@ -1614,32 +1663,50 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
         guard let item = self.item, item.message.id.namespace == Namespaces.Message.Cloud else {
             return
         }
-                
-        guard item.associatedData.isPremium else {
-            if self.hapticFeedback == nil {
-                self.hapticFeedback = HapticFeedback()
-            }
-            self.hapticFeedback?.impact(.medium)
-            
-            let presentationData = item.context.sharedContext.currentPresentationData.with { $0 }
-            let tipController = UndoOverlayController(presentationData: presentationData, content: .universal(animation: "anim_voiceToText", scale: 0.065, colors: [:], title: nil, text: presentationData.strings.Message_AudioTranscription_SubscribeToPremium, customUndoText: presentationData.strings.Message_AudioTranscription_SubscribeToPremiumAction, timeout: nil), elevatedLayout: false, position: .top, animateInAsReplacement: false, action: { action in
-                if case .undo = action {
-                    let context = item.context
-                    var replaceImpl: ((ViewController) -> Void)?
-                    let controller = context.sharedContext.makePremiumDemoController(context: context, subject: .voiceToText, action: {
-                        let controller = context.sharedContext.makePremiumIntroController(context: context, source: .settings, forceDark: false, dismissed: nil)
-                        replaceImpl?(controller)
-                    })
-                    replaceImpl = { [weak controller] c in
-                        controller?.replace(with: c)
-                    }
-                    item.controllerInteraction.navigationController()?.pushViewController(controller, animated: true)
-                    
-                    let _ = ApplicationSpecificNotice.incrementAudioTranscriptionSuggestion(accountManager: item.context.sharedContext.accountManager).startStandalone()
-                }
-                return false })
-            item.controllerInteraction.presentControllerInCurrent(tipController, nil)
+        
+        if !item.context.isPremium, case .inProgress = self.audioTranscriptionState {
             return
+        }
+        
+        let presentationData = item.context.sharedContext.currentPresentationData.with { $0 }
+        let premiumConfiguration = PremiumConfiguration.with(appConfiguration: item.context.currentAppConfiguration.with { $0 })
+        
+        let transcriptionText = transcribedText(message: item.message)
+        if transcriptionText == nil {
+            if premiumConfiguration.audioTransciptionTrialCount > 0 {
+                if !item.associatedData.isPremium {
+                    if self.presentAudioTranscriptionTooltip(finished: false) {
+                        return
+                    }
+                }
+            } else {
+                guard item.associatedData.isPremium else {
+                    if self.hapticFeedback == nil {
+                        self.hapticFeedback = HapticFeedback()
+                    }
+                    self.hapticFeedback?.impact(.medium)
+                    
+                    
+                    let tipController = UndoOverlayController(presentationData: presentationData, content: .universal(animation: "anim_voiceToText", scale: 0.065, colors: [:], title: nil, text: presentationData.strings.Message_AudioTranscription_SubscribeToPremium, customUndoText: presentationData.strings.Message_AudioTranscription_SubscribeToPremiumAction, timeout: nil), elevatedLayout: false, position: .top, animateInAsReplacement: false, action: { action in
+                        if case .undo = action {
+                            let context = item.context
+                            var replaceImpl: ((ViewController) -> Void)?
+                            let controller = context.sharedContext.makePremiumDemoController(context: context, subject: .voiceToText, action: {
+                                let controller = context.sharedContext.makePremiumIntroController(context: context, source: .settings, forceDark: false, dismissed: nil)
+                                replaceImpl?(controller)
+                            })
+                            replaceImpl = { [weak controller] c in
+                                controller?.replace(with: c)
+                            }
+                            item.controllerInteraction.navigationController()?.pushViewController(controller, animated: true)
+                            
+                            let _ = ApplicationSpecificNotice.incrementAudioTranscriptionSuggestion(accountManager: item.context.sharedContext.accountManager).startStandalone()
+                        }
+                        return false })
+                    item.controllerInteraction.presentControllerInCurrent(tipController, nil)
+                    return
+                }
+            }
         }
         
         var shouldBeginTranscription = false
@@ -1673,6 +1740,12 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                     }
                     strongSelf.transcribeDisposable?.dispose()
                     strongSelf.transcribeDisposable = nil
+                    
+                    if let item = strongSelf.item, !item.associatedData.isPremium {
+                        Queue.mainQueue().after(0.1, {
+                            let _ = strongSelf.presentAudioTranscriptionTooltip(finished: true)
+                        })
+                    }
                 })
             }
         }
@@ -1692,6 +1765,58 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
         }
         
         self.updateTranscriptionExpanded?(self.audioTranscriptionState)
+    }
+    
+    private func presentAudioTranscriptionTooltip(finished: Bool) -> Bool {
+        guard let item = self.item, !item.associatedData.isPremium else {
+            return false
+        }
+        
+        let presentationData = item.context.sharedContext.currentPresentationData.with { $0 }
+        var text: String?
+        var timeout: Double = 5.0
+        
+        let currentTime = Int32(Date().timeIntervalSince1970)
+        if let cooldownUntilTime = item.associatedData.audioTranscriptionTrial.cooldownUntilTime, cooldownUntilTime > currentTime {
+            let premiumConfiguration = PremiumConfiguration.with(appConfiguration: item.context.currentAppConfiguration.with { $0 })
+            
+            let time = stringForMediumDate(timestamp: cooldownUntilTime, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat)
+            let usedString = presentationData.strings.Conversation_FreeTranscriptionCooldownTooltip(premiumConfiguration.audioTransciptionTrialCount)
+            let waitString = presentationData.strings.Conversation_FreeTranscriptionWaitOrSubscribe(time).string
+            let fullString = "\(usedString) \(waitString)"
+            text = fullString
+            
+            if self.hapticFeedback == nil {
+                self.hapticFeedback = HapticFeedback()
+            }
+            self.hapticFeedback?.impact(.medium)
+            timeout = 7.0
+        } else if finished {
+            let remainingCount = item.associatedData.audioTranscriptionTrial.remainingCount
+            text = presentationData.strings.Conversation_FreeTranscriptionLimitTooltip(remainingCount)
+        }
+        
+        guard let text else {
+            return false
+        }
+        let context = item.context
+        let tipController = UndoOverlayController(presentationData: presentationData, content: .universal(animation: "Transcribe", scale: 0.06, colors: [:], title: nil, text: text, customUndoText: nil, timeout: timeout), elevatedLayout: false, position: .top, animateInAsReplacement: false, action: { action in
+            if case .info = action {
+                var replaceImpl: ((ViewController) -> Void)?
+                let controller = context.sharedContext.makePremiumDemoController(context: context, subject: .voiceToText, action: {
+                    let controller = context.sharedContext.makePremiumIntroController(context: context, source: .settings, forceDark: false, dismissed: nil)
+                    replaceImpl?(controller)
+                })
+                replaceImpl = { [weak controller] c in
+                    controller?.replace(with: c)
+                }
+                item.controllerInteraction.navigationController()?.pushViewController(controller, animated: true)
+                return true
+            }
+            return false
+        })
+        item.controllerInteraction.presentControllerInCurrent(tipController, nil)
+        return true
     }
     
     public final class AnimateFileNodeDescription {

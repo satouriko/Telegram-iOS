@@ -183,7 +183,7 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
             self.controller.containerLayoutUpdated(
                 ContainerViewLayout(
                     size: size,
-                    metrics: LayoutMetrics(widthClass: .compact, heightClass: .compact),
+                    metrics: LayoutMetrics(widthClass: .compact, heightClass: .compact, orientation: nil),
                     deviceMetrics: parentLayout.deviceMetrics,
                     intrinsicInsets: UIEdgeInsets(),
                     safeInsets: UIEdgeInsets(),
@@ -639,6 +639,7 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
                     presentationData: presentationData,
                     items: reactionItems.reactionItems,
                     selectedItems: reactionItems.selectedReactionItems,
+                    alwaysAllowPremiumReactions: reactionItems.alwaysAllowPremiumReactions,
                     getEmojiContent: reactionItems.getEmojiContent,
                     isExpandedUpdated: { [weak self] transition in
                         guard let strongSelf = self else {
@@ -764,7 +765,7 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
                 defaultContentSize.height = min(defaultContentSize.height, 460.0)
                 
                 let contentSize: CGSize
-                if let preferredSize = contentNode.controller.preferredContentSizeForLayout(ContainerViewLayout(size: defaultContentSize, metrics: LayoutMetrics(widthClass: .compact, heightClass: .compact), deviceMetrics: layout.deviceMetrics, intrinsicInsets: UIEdgeInsets(), safeInsets: UIEdgeInsets(), additionalInsets: UIEdgeInsets(), statusBarHeight: nil, inputHeight: nil, inputHeightIsInteractivellyChanging: false, inVoiceOver: false)) {
+                if let preferredSize = contentNode.controller.preferredContentSizeForLayout(ContainerViewLayout(size: defaultContentSize, metrics: LayoutMetrics(widthClass: .compact, heightClass: .compact, orientation: nil), deviceMetrics: layout.deviceMetrics, intrinsicInsets: UIEdgeInsets(), safeInsets: UIEdgeInsets(), additionalInsets: UIEdgeInsets(), statusBarHeight: nil, inputHeight: nil, inputHeightIsInteractivellyChanging: false, inVoiceOver: false)) {
                     contentSize = preferredSize
                 } else if let storedContentHeight = contentNode.storedContentHeight {
                     contentSize = CGSize(width: defaultContentSize.width, height: storedContentHeight)
@@ -916,7 +917,11 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
                 
                 reactionContextNode.updateLayout(size: layout.size, insets: UIEdgeInsets(top: topInset, left: layout.safeInsets.left, bottom: 0.0, right: layout.safeInsets.right), anchorRect: reactionAnchorRect, isCoveredByInput: isCoveredByInput, isAnimatingOut: isAnimatingOut, transition: reactionContextNodeTransition)
                 
-                self.proposedReactionsPositionLock = contentRect.minY - 18.0 - reactionContextNode.contentHeight - (46.0 + 54.0 - 4.0)
+                if reactionContextNode.alwaysAllowPremiumReactions {
+                    self.proposedReactionsPositionLock = contentRect.minY - 18.0 - reactionContextNode.contentHeight
+                } else {
+                    self.proposedReactionsPositionLock = contentRect.minY - 18.0 - reactionContextNode.contentHeight - (46.0 + 54.0 - 4.0)
+                }
             } else {
                 self.proposedReactionsPositionLock = nil
             }

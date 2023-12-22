@@ -71,6 +71,8 @@ private final class AnimatableProperty<T: Interpolatable> {
         let timeFromStart = timestamp - animation.startTimestamp
         var t = max(0.0, timeFromStart / duration)
         switch curve {
+        case .linear:
+            break
         case .easeInOut:
             t = listViewAnimationCurveEaseInOut(t)
         case .spring:
@@ -279,7 +281,7 @@ final class ShutterBlobView: UIView {
         self.isOpaque = false
         self.backgroundColor = .clear
         
-        self.displayLink = SharedDisplayLinkDriver.shared.add { [weak self] in
+        self.displayLink = SharedDisplayLinkDriver.shared.add { [weak self] _ in
             self?.tick()
         }
         self.displayLink?.isPaused = true

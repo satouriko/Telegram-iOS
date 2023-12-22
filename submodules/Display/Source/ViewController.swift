@@ -101,7 +101,9 @@ public protocol CustomViewControllerNavigationDataSummary: AnyObject {
     public final var supportedOrientations: ViewControllerSupportedOrientations = ViewControllerSupportedOrientations(regularSize: .all, compactSize: .allButUpsideDown) {
         didSet {
             if self.supportedOrientations != oldValue {
-                self.window?.invalidateSupportedOrientations()
+                if self.isNodeLoaded {
+                    self.window?.invalidateSupportedOrientations()
+                }
             }
         }
     }
@@ -155,7 +157,7 @@ public protocol CustomViewControllerNavigationDataSummary: AnyObject {
         return self.prefersOnScreenNavigationHidden
     }
     
-    public internal(set) var previousItem: NavigationPreviousAction?
+    open var previousItem: NavigationPreviousAction?
     
     open var navigationPresentation: ViewControllerNavigationPresentation = .default
     open var _presentedInModal: Bool = false
