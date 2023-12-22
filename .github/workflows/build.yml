@@ -83,7 +83,7 @@ jobs:
             --configurationPath="$HOME/telegram-configuration/appstore-configuration.json" \
             --codesigningInformationPath="$HOME/codesigning" \
             --buildNumber=$BUILD_NUMBER \
-            --configuration=release_universal
+            --configuration=release_arm64
 
           # collect ipa
           OUTPUT_PATH="build/artifacts"
