@@ -458,6 +458,8 @@ public final class ChatMessageWebpageBubbleContentNode: ChatMessageBubbleContent
                             actionTitle = item.presentationData.strings.Chat_OpenStory
                         case "telegram_channel_boost":
                             actionTitle = item.presentationData.strings.Conversation_BoostChannel
+                        case "telegram_group_boost":
+                            actionTitle = item.presentationData.strings.Conversation_BoostChannel
                         default:
                             break
                     }
@@ -497,7 +499,7 @@ public final class ChatMessageWebpageBubbleContentNode: ChatMessageBubbleContent
                 for media in item.message.media {
                     switch media {
                     case _ as TelegramMediaImage, _ as TelegramMediaFile, _ as TelegramMediaStory:
-                        mediaAndFlags = (media, ChatMessageAttachedContentNodeMediaFlags())
+                        mediaAndFlags = (media, [.preferMediaInline])
                     default:
                         break
                     }

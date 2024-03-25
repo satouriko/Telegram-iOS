@@ -206,10 +206,10 @@ func openResolvedUrlImpl(
         case let .channelMessage(peer, messageId, timecode):
             openPeer(EnginePeer(peer), .chat(textInputState: nil, subject: .message(id: .id(messageId), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: timecode), peekData: nil))
         case let .replyThreadMessage(replyThreadMessage, messageId):
-            if let navigationController = navigationController {
+            if let navigationController = navigationController, let effectiveMessageId = replyThreadMessage.effectiveMessageId {
                 let _ = ChatControllerImpl.openMessageReplies(context: context, navigationController: navigationController, present: { c, a in
                     present(c, a)
-                }, messageId: replyThreadMessage.messageId, isChannelPost: replyThreadMessage.isChannelPost, atMessage: messageId, displayModalProgress: true).startStandalone()
+                }, messageId: effectiveMessageId, isChannelPost: replyThreadMessage.isChannelPost, atMessage: messageId, displayModalProgress: true).startStandalone()
             }
         case let .replyThread(messageId):
             if let navigationController = navigationController {
@@ -302,7 +302,7 @@ func openResolvedUrlImpl(
             })
             dismissInput()
         case let .share(url, text, to):
-            let continueWithPeer: (PeerId) -> Void = { peerId in
+            let continueWithPeer: (PeerId, Int64?) -> Void = { peerId, threadId in
                 let textInputState: ChatTextInputState?
                 if let text = text, !text.isEmpty {
                     if let url = url, !url.isEmpty {
@@ -320,15 +320,42 @@ func openResolvedUrlImpl(
                     textInputState = nil
                 }
                 
+                let updateControllers = { [weak navigationController] in
+                    guard let navigationController else {
+                        return
+                    }
+                    let chatController: Signal<ChatController, NoError>
+                    if let threadId {
+                        chatController = chatControllerForForumThreadImpl(context: context, peerId: peerId, threadId: threadId)
+                    } else {
+                        chatController = .single(ChatControllerImpl(context: context, chatLocation: .peer(id: peerId)))
+                    }
+                    
+                    let _ = (chatController
+                    |> deliverOnMainQueue).start(next: { [weak navigationController] chatController in
+                        guard let navigationController else {
+                            return
+                        }  
+                        var controllers = navigationController.viewControllers.filter { controller in
+                            if controller is PeerSelectionController {
+                                return false
+                            }
+                            return true
+                        }
+                        controllers.append(chatController)
+                        navigationController.setViewControllers(controllers, animated: true)
+                    })
+                }
+                
                 if let textInputState = textInputState {
-                    let _ = (ChatInterfaceState.update(engine: context.engine, peerId: peerId, threadId: nil, { currentState in
+                    let _ = (ChatInterfaceState.update(engine: context.engine, peerId: peerId, threadId: threadId, { currentState in
                         return currentState.withUpdatedComposeInputState(textInputState)
                     })
                     |> deliverOnMainQueue).startStandalone(completed: {
-                        navigationController?.pushViewController(ChatControllerImpl(context: context, chatLocation: .peer(id: peerId)))
+                        updateControllers()
                     })
                 } else {
-                    navigationController?.pushViewController(ChatControllerImpl(context: context, chatLocation: .peer(id: peerId)))
+                    updateControllers()
                 }
             }
             
@@ -344,7 +371,7 @@ func openResolvedUrlImpl(
                     |> deliverOnMainQueue).startStandalone(next: { peer in
                         if let peer = peer {
                             context.sharedContext.applicationBindings.dismissNativeController()
-                            continueWithPeer(peer.id)
+                            continueWithPeer(peer.id, nil)
                         }
                     })
                 } else {
@@ -352,7 +379,7 @@ func openResolvedUrlImpl(
                     |> deliverOnMainQueue).startStandalone(next: { peer in
                         if let peer = peer {
                             context.sharedContext.applicationBindings.dismissNativeController()
-                            continueWithPeer(peer.id)
+                            continueWithPeer(peer.id, nil)
                         }
                     })
                     /*let query = to.trimmingCharacters(in: CharacterSet(charactersIn: "0123456789").inverted)
@@ -377,13 +404,8 @@ func openResolvedUrlImpl(
                     context.sharedContext.applicationBindings.dismissNativeController()
                 } else {
                     let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.onlyWriteable, .excludeDisabled], selectForumThreads: true))
-                    controller.peerSelected = { [weak controller] peer, _ in
-                        let peerId = peer.id
-                        
-                        if let strongController = controller {
-                            strongController.dismiss()
-                            continueWithPeer(peerId)
-                        }
+                    controller.peerSelected = { peer, threadId in
+                        continueWithPeer(peer.id, threadId)
                     }
                     context.sharedContext.applicationBindings.dismissNativeController()
                     navigationController?.pushViewController(controller)
@@ -581,7 +603,13 @@ func openResolvedUrlImpl(
             }
         case let .premiumOffer(reference):
             dismissInput()
-            let controller = PremiumIntroScreen(context: context, source: .deeplink(reference))
+            let controller = context.sharedContext.makePremiumIntroController(context: context, source: .deeplink(reference), forceDark: false, dismissed: nil)
+            if let navigationController = navigationController {
+                navigationController.pushViewController(controller, animated: true)
+            }
+        case let .premiumMultiGift(reference):
+            dismissInput()
+            let controller = context.sharedContext.makePremiumGiftController(context: context, source: .deeplink(reference), completion: nil)
             if let navigationController = navigationController {
                 navigationController.pushViewController(controller, animated: true)
             }
@@ -860,15 +888,6 @@ func openResolvedUrlImpl(
                 }
             })
         case let .boost(peerId, status, myBoostStatus):
-            var isCurrent = false
-            if case let .chat(chatPeerId, _, _) = urlContext, chatPeerId == peerId {
-                isCurrent = true
-            }
-            var forceDark = false
-            if let updatedPresentationData, updatedPresentationData.initial.theme.overallDarkAppearance {
-                forceDark = true
-            }
-        
             var dismissedImpl: (() -> Void)?
             if let storyProgressPauseContext = contentContext as? StoryProgressPauseContext {
                 let updateExternalController = storyProgressPauseContext.update
@@ -877,32 +896,46 @@ func openResolvedUrlImpl(
                 }
             }
         
-            PremiumBoostScreen(
-                context: context,
-                contentContext: contentContext,
-                peerId: peerId,
-                isCurrent: isCurrent,
-                status: status,
-                myBoostStatus: myBoostStatus,
-                forceDark: forceDark,
-                openPeer: { peer in
-                    openPeer(peer, .chat(textInputState: nil, subject: nil, peekData: nil))
-                },
-                presentController: { [weak navigationController] c in
-                    (navigationController?.viewControllers.last as? ViewController)?.present(c, in: .window(.root))
-                },
-                pushController: { [weak navigationController] c in
-                    navigationController?.pushViewController(c)
-                    
-                    if c is PremiumLimitScreen {
-                        if let storyProgressPauseContext = contentContext as? StoryProgressPauseContext {
-                            storyProgressPauseContext.update(c)
-                        }
-                    }
-                }, dismissed: {
+            if let peerId, let status {
+                var isCurrent = false
+                if case let .chat(chatPeerId, _, _) = urlContext, chatPeerId == peerId {
+                    isCurrent = true
+                }
+                var forceDark = false
+                if let updatedPresentationData, updatedPresentationData.initial.theme.overallDarkAppearance {
+                    forceDark = true
+                }
+                let controller = PremiumBoostLevelsScreen(
+                    context: context,
+                    peerId: peerId,
+                    mode: .user(mode: isCurrent ? .current : .external),
+                    status: status,
+                    myBoostStatus: myBoostStatus,
+                    openPeer:  { peer in
+                        openPeer(peer, .chat(textInputState: nil, subject: nil, peekData: nil))
+                    },
+                    forceDark: forceDark
+                )
+                controller.disposed = {
                     dismissedImpl?()
                 }
-            )
+                navigationController?.pushViewController(controller)
+                
+                if let storyProgressPauseContext = contentContext as? StoryProgressPauseContext {
+                    storyProgressPauseContext.update(controller)
+                }
+            } else {
+                let controller = textAlertController(context: context, updatedPresentationData: updatedPresentationData, title: nil, text: presentationData.strings.Chat_ErrorCantBoost, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})])
+                present(controller, nil)
+                
+                controller.dismissed = { _ in
+                    dismissedImpl?()
+                }
+                
+                if let storyProgressPauseContext = contentContext as? StoryProgressPauseContext {
+                    storyProgressPauseContext.update(controller)
+                }
+            }
         case let .premiumGiftCode(slug):
             var forceDark = false
             if let updatedPresentationData, updatedPresentationData.initial.theme.overallDarkAppearance {

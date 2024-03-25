@@ -28,6 +28,8 @@ import ImageCompression
 import TextFormat
 import MediaEditor
 import PeerInfoScreen
+import PeerInfoStoryGridScreen
+import ShareWithPeersScreen
 
 private class DetailsChatPlaceholderNode: ASDisplayNode, NavigationDetailsPlaceholderNode {
     private var presentationData: PresentationData
@@ -38,7 +40,7 @@ private class DetailsChatPlaceholderNode: ASDisplayNode, NavigationDetailsPlaceh
     
     init(context: AccountContext) {
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: self.presentationData.chatWallpaper, theme: self.presentationData.theme, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: context.currentLimitsConfiguration.with { $0 }, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: context.account.peerId, mode: .standard(previewing: false), chatLocation: .peer(id: context.account.peerId), subject: nil, peerNearbyData: nil, greetingData: nil, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, importState: nil, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil)
+        self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: self.presentationData.chatWallpaper, theme: self.presentationData.theme, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: context.currentLimitsConfiguration.with { $0 }, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: context.account.peerId, mode: .standard(.default), chatLocation: .peer(id: context.account.peerId), subject: nil, peerNearbyData: nil, greetingData: nil, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, importState: nil, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil)
         
         self.wallpaperBackgroundNode = createWallpaperBackgroundNode(context: context, forChatDisplay: true, useSharedAnimationPhase: true)
         self.emptyNode = ChatEmptyNode(context: context, interaction: nil)
@@ -51,7 +53,7 @@ private class DetailsChatPlaceholderNode: ASDisplayNode, NavigationDetailsPlaceh
     
     func updatePresentationData(_ presentationData: PresentationData) {
         self.presentationData = presentationData
-        self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: self.presentationData.chatWallpaper, theme: self.presentationData.theme, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: self.presentationInterfaceState.limitsConfiguration, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: self.presentationInterfaceState.accountPeerId, mode: .standard(previewing: false), chatLocation: self.presentationInterfaceState.chatLocation, subject: nil, peerNearbyData: nil, greetingData: nil, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, importState: nil, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil)
+        self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: self.presentationData.chatWallpaper, theme: self.presentationData.theme, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: self.presentationInterfaceState.limitsConfiguration, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: self.presentationInterfaceState.accountPeerId, mode: .standard(.default), chatLocation: self.presentationInterfaceState.chatLocation, subject: nil, peerNearbyData: nil, greetingData: nil, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, importState: nil, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil)
         
         self.wallpaperBackgroundNode.update(wallpaper: presentationData.chatWallpaper, animated: false)
     }
@@ -277,6 +279,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         
         let externalState = MediaEditorTransitionOutExternalState(
             storyTarget: nil,
+            isForcedTarget: customTarget != nil,
             isPeerArchived: false,
             transitionOut: nil
         )
@@ -353,6 +356,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 
                 let controller = MediaEditorScreen(
                     context: context,
+                    mode: .storyEditor,
                     subject: subject,
                     customTarget: customTarget,
                     transitionIn: transitionIn,
@@ -508,6 +512,19 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                     viewControllers.removeSubrange(range)
                     self.setViewControllers(viewControllers, animated: false)
                 }
+            } else if self.viewControllers.contains(where: { $0 is PeerInfoStoryGridScreen }) {
+                var viewControllers: [UIViewController] = []
+                for i in (0 ..< self.viewControllers.count) {
+                    let controller = self.viewControllers[i]
+                    if i == 0 {
+                        viewControllers.append(controller)
+                    } else if controller is MediaEditorScreen {
+                        viewControllers.append(controller)
+                    } else if controller is ShareWithPeersScreen {
+                        viewControllers.append(controller)
+                    }
+                }
+                self.setViewControllers(viewControllers, animated: false)
             }
         }
         
@@ -522,13 +539,17 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 var viewControllers = self.viewControllers
                 
                 let archiveController = ChatListControllerImpl(context: context, location: .chatList(groupId: .archive), controlsHistoryPreload: false, hideNetworkActivityStatus: false, previewing: false, enableDebugActions: false)
-                externalState.transitionOut = archiveController.storyCameraTransitionOut()
+                if !externalState.isForcedTarget {
+                    externalState.transitionOut = archiveController.storyCameraTransitionOut()
+                }
                 chatListController = archiveController
                 viewControllers.insert(archiveController, at: 1)
                 self.setViewControllers(viewControllers, animated: false)
             } else {
                 chatListController = self.chatListController as? ChatListControllerImpl
-                externalState.transitionOut = chatListController?.storyCameraTransitionOut()
+                if !externalState.isForcedTarget {
+                    externalState.transitionOut = chatListController?.storyCameraTransitionOut()
+                }
             }
              
             if let chatListController {

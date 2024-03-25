@@ -64,11 +64,11 @@ public class ChatMessageFileBubbleContentNode: ChatMessageBubbleContentNode {
             }
         }
         
-        self.interactiveFileNode.dateAndStatusNode.reactionSelected = { [weak self] value in
+        self.interactiveFileNode.dateAndStatusNode.reactionSelected = { [weak self] _, value, sourceView in
             guard let strongSelf = self, let item = strongSelf.item else {
                 return
             }
-            item.controllerInteraction.updateMessageReaction(item.message, .reaction(value))
+            item.controllerInteraction.updateMessageReaction(item.topMessage, .reaction(value), false, sourceView)
         }
         
         self.interactiveFileNode.dateAndStatusNode.openReactionPreview = { [weak self] gesture, sourceNode, value in
@@ -112,8 +112,11 @@ public class ChatMessageFileBubbleContentNode: ChatMessageBubbleContentNode {
                 incoming = false
             }
             let statusType: ChatMessageDateAndStatusType?
-            switch preparePosition {
-            case .linear(_, .None), .linear(_, .Neighbour(true, _, _)):
+            if case .customChatContents = item.associatedData.subject {
+                statusType = nil
+            } else {
+                switch preparePosition {
+                case .linear(_, .None), .linear(_, .Neighbour(true, _, _)):
                     if incoming {
                         statusType = .BubbleIncoming
                     } else {
@@ -127,6 +130,7 @@ public class ChatMessageFileBubbleContentNode: ChatMessageBubbleContentNode {
                     }
                 default:
                     statusType = nil
+                }
             }
             
             let automaticDownload = shouldDownloadMediaAutomatically(settings: item.controllerInteraction.automaticMediaDownloadSettings, peerType: item.associatedData.automaticDownloadPeerType, networkType: item.associatedData.automaticDownloadNetworkType, authorPeerId: item.message.author?.id, contactsPeerIds: item.associatedData.contactsPeerIds, media: selectedFile!)

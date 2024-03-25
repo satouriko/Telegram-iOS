@@ -67,7 +67,7 @@ public func chatListFilterPredicate(filter: ChatListFilterData, accountPeerId: E
         }
         if !filter.categories.contains(.contacts) && isContact {
             if let user = peer as? TelegramUser {
-                if user.botInfo == nil {
+                if user.botInfo == nil && !user.flags.contains(.isSupport) {
                     return false
                 }
             } else if let _ = peer as? TelegramSecretChat {
@@ -83,9 +83,12 @@ public func chatListFilterPredicate(filter: ChatListFilterData, accountPeerId: E
                 return false
             }
         }
+        if filter.categories.contains(.nonContacts) && peer.id == accountPeerId {
+            return false
+        }
         if !filter.categories.contains(.bots) {
             if let user = peer as? TelegramUser {
-                if user.botInfo != nil {
+                if user.botInfo != nil || user.flags.contains(.isSupport) {
                     return false
                 }
             }
@@ -110,7 +113,9 @@ public func chatListFilterPredicate(filter: ChatListFilterData, accountPeerId: E
     })
 }
 
-func chatListViewForLocation(chatListLocation: ChatListControllerLocation, location: ChatListNodeLocation, account: Account) -> Signal<ChatListNodeViewUpdate, NoError> {
+func chatListViewForLocation(chatListLocation: ChatListControllerLocation, location: ChatListNodeLocation, account: Account, shouldLoadCanMessagePeer: Bool) -> Signal<ChatListNodeViewUpdate, NoError> {
+    let accountPeerId = account.peerId
+    
     switch chatListLocation {
     case let .chatList(groupId):
         let filterPredicate: ChatListFilterPredicate?
@@ -123,17 +128,17 @@ func chatListViewForLocation(chatListLocation: ChatListControllerLocation, locat
         switch location {
         case let .initial(count, _):
             let signal: Signal<(ChatListView, ViewUpdateType), NoError>
-            signal = account.viewTracker.tailChatListView(groupId: groupId._asGroup(), filterPredicate: filterPredicate, count: count)
+            signal = account.viewTracker.tailChatListView(groupId: groupId._asGroup(), filterPredicate: filterPredicate, count: count, shouldLoadCanMessagePeer: shouldLoadCanMessagePeer)
             return signal
             |> map { view, updateType -> ChatListNodeViewUpdate in
-                return ChatListNodeViewUpdate(list: EngineChatList(view), type: updateType, scrollPosition: nil)
+                return ChatListNodeViewUpdate(list: EngineChatList(view, accountPeerId: accountPeerId), type: updateType, scrollPosition: nil)
             }
         case let .navigation(index, _):
             guard case let .chatList(index) = index else {
                 return .never()
             }
             var first = true
-            return account.viewTracker.aroundChatListView(groupId: groupId._asGroup(), filterPredicate: filterPredicate, index: index, count: 80)
+            return account.viewTracker.aroundChatListView(groupId: groupId._asGroup(), filterPredicate: filterPredicate, index: index, count: 80, shouldLoadCanMessagePeer: shouldLoadCanMessagePeer)
             |> map { view, updateType -> ChatListNodeViewUpdate in
                 let genericType: ViewUpdateType
                 if first {
@@ -142,7 +147,7 @@ func chatListViewForLocation(chatListLocation: ChatListControllerLocation, locat
                 } else {
                     genericType = updateType
                 }
-                return ChatListNodeViewUpdate(list: EngineChatList(view), type: genericType, scrollPosition: nil)
+                return ChatListNodeViewUpdate(list: EngineChatList(view, accountPeerId: accountPeerId), type: genericType, scrollPosition: nil)
             }
         case let .scroll(index, sourceIndex, scrollPosition, animated, _):
             guard case let .chatList(index) = index else {
@@ -152,7 +157,7 @@ func chatListViewForLocation(chatListLocation: ChatListControllerLocation, locat
             let directionHint: ListViewScrollToItemDirectionHint = sourceIndex > .chatList(index) ? .Down : .Up
             let chatScrollPosition: ChatListNodeViewScrollPosition = .index(index: index, position: scrollPosition, directionHint: directionHint, animated: animated)
             var first = true
-            return account.viewTracker.aroundChatListView(groupId: groupId._asGroup(), filterPredicate: filterPredicate, index: index, count: 80)
+            return account.viewTracker.aroundChatListView(groupId: groupId._asGroup(), filterPredicate: filterPredicate, index: index, count: 80, shouldLoadCanMessagePeer: shouldLoadCanMessagePeer)
             |> map { view, updateType -> ChatListNodeViewUpdate in
                 let genericType: ViewUpdateType
                 let scrollPosition: ChatListNodeViewScrollPosition? = first ? chatScrollPosition : nil
@@ -162,7 +167,7 @@ func chatListViewForLocation(chatListLocation: ChatListControllerLocation, locat
                 } else {
                     genericType = updateType
                 }
-                return ChatListNodeViewUpdate(list: EngineChatList(view), type: genericType, scrollPosition: scrollPosition)
+                return ChatListNodeViewUpdate(list: EngineChatList(view, accountPeerId: accountPeerId), type: genericType, scrollPosition: scrollPosition)
             }
         }
     case let .forum(peerId):
@@ -289,7 +294,10 @@ func chatListViewForLocation(chatListLocation: ChatListControllerLocation, locat
                     hasFailed: false,
                     isContact: false,
                     autoremoveTimeout: nil,
-                    storyStats: nil
+                    storyStats: nil,
+                    displayAsTopicList: false,
+                    isPremiumRequiredToMessage: false,
+                    mediaDraftContentType: nil
                 ))
             }
             
@@ -312,81 +320,64 @@ func chatListViewForLocation(chatListLocation: ChatListControllerLocation, locat
             return ChatListNodeViewUpdate(list: list, type: type, scrollPosition: nil)
         }
     case .savedMessagesChats:
-        var isFirst = true
+        let viewKey: PostboxViewKey = .savedMessagesIndex(peerId: account.peerId)
+        let interfaceStateKey: PostboxViewKey = .chatInterfaceState(peerId: account.peerId)
         
-        return account.postbox.aroundMessageHistoryViewForLocation(.peer(peerId: account.peerId, threadId: nil), anchor: .upperBound, ignoreMessagesInTimestampRange: nil, count: 1000, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: Set(), tagMask: nil, appendMessagesFromTheSameGroup: false, namespaces: .not(Set([Namespaces.Message.ScheduledCloud, Namespaces.Message.ScheduledLocal])), orderStatistics: [])
-        |> map { view, _, _ -> ChatListNodeViewUpdate in
-            let isLoading = view.isLoading
+        var isFirst = true
+        return account.postbox.combinedView(keys: [viewKey, interfaceStateKey])
+        |> map { views -> ChatListNodeViewUpdate in
+            guard let view = views.views[viewKey] as? MessageHistorySavedMessagesIndexView else {
+                preconditionFailure()
+            }
             
-            var items: [EngineChatList.Item] = []
-            
-            var topMessageByPeerId: [EnginePeer.Id: Message] = [:]
-            if !isLoading {
-                for entry in view.entries {
-                    guard let threadId = entry.message.threadId else {
-                        continue
-                    }
-                    let sourcePeerId = PeerId(threadId)
-                    
-                    if let currentTopMessage = topMessageByPeerId[sourcePeerId] {
-                        if currentTopMessage.index < entry.index {
-                            topMessageByPeerId[sourcePeerId] = entry.message
+            var draft: EngineChatList.Draft?
+            if let interfaceStateView = views.views[interfaceStateKey] as? ChatInterfaceStateView {
+                if let embeddedState = interfaceStateView.value, let _ = embeddedState.overrideChatTimestamp {
+                    if let opaqueState = _internal_decodeStoredChatInterfaceState(state: embeddedState) {
+                        if let text = opaqueState.synchronizeableInputState?.text {
+                            draft = EngineChatList.Draft(text: text, entities: opaqueState.synchronizeableInputState?.entities ?? [])
                         }
-                    } else {
-                        topMessageByPeerId[sourcePeerId] = entry.message
                     }
                 }
-                for (_, message) in topMessageByPeerId.sorted(by: { $0.value.index > $1.value.index }) {
-                    guard let threadId = message.threadId else {
-                        continue
-                    }
-                    let sourceId = PeerId(threadId)
-                    var sourcePeer = message.peers[sourceId]
-                    if sourcePeer == nil, let forwardInfo = message.forwardInfo, let authorSignature = forwardInfo.authorSignature {
-                        sourcePeer = TelegramUser(
-                            id: PeerId(namespace: Namespaces.Peer.Empty, id: PeerId.Id._internalFromInt64Value(1)),
-                            accessHash: nil,
-                            firstName: authorSignature,
-                            lastName: nil,
-                            username: nil,
-                            phone: nil,
-                            photo: [],
-                            botInfo: nil,
-                            restrictionInfo: nil,
-                            flags: [],
-                            emojiStatus: nil,
-                            usernames: [],
-                            storiesHidden: nil,
-                            nameColor: nil,
-                            backgroundEmojiId: nil,
-                            profileColor: nil,
-                            profileBackgroundEmojiId: nil
-                        )
-                    }
-                    guard let sourcePeer else {
-                        continue
-                    }
-                    let mappedMessageIndex = MessageIndex(id: MessageId(peerId: sourceId, namespace: message.index.id.namespace, id: message.index.id.id), timestamp: message.index.timestamp)
-                    items.append(EngineChatList.Item(
-                        id: .chatList(sourceId),
-                        index: .chatList(ChatListIndex(pinningIndex: nil, messageIndex: mappedMessageIndex)),
-                        messages: [EngineMessage(message)],
-                        readCounters: nil,
-                        isMuted: false,
-                        draft: nil,
-                        threadData: nil,
-                        renderedPeer: EngineRenderedPeer(peer: EnginePeer(sourcePeer)),
-                        presence: nil,
-                        hasUnseenMentions: false,
-                        hasUnseenReactions: false,
-                        forumTopicData: nil,
-                        topForumTopicItems: [],
-                        hasFailed: false,
-                        isContact: false,
-                        autoremoveTimeout: nil,
-                        storyStats: nil
-                    ))
+            }
+             
+            var items: [EngineChatList.Item] = []
+            for item in view.items {
+                guard let sourcePeer = item.peer else {
+                    continue
                 }
+                
+                let sourceId = PeerId(item.id)
+                
+                var messages: [EngineMessage] = []
+                if let topMessage = item.topMessage {
+                    messages.append(EngineMessage(topMessage))
+                }
+                
+                let mappedMessageIndex = MessageIndex(id: MessageId(peerId: sourceId, namespace: item.index.id.namespace, id: item.index.id.id), timestamp: item.index.timestamp)
+                
+                items.append(EngineChatList.Item(
+                    id: .chatList(sourceId),
+                    index: .chatList(ChatListIndex(pinningIndex: item.pinnedIndex.flatMap(UInt16.init), messageIndex: mappedMessageIndex)),
+                    messages: messages,
+                    readCounters: nil,
+                    isMuted: false,
+                    draft: sourceId == accountPeerId ? draft : nil,
+                    threadData: nil,
+                    renderedPeer: EngineRenderedPeer(peer: EnginePeer(sourcePeer)),
+                    presence: nil,
+                    hasUnseenMentions: false,
+                    hasUnseenReactions: false,
+                    forumTopicData: nil,
+                    topForumTopicItems: [],
+                    hasFailed: false,
+                    isContact: false,
+                    autoremoveTimeout: nil,
+                    storyStats: nil,
+                    displayAsTopicList: false,
+                    isPremiumRequiredToMessage: false,
+                    mediaDraftContentType: nil
+                ))
             }
             
             let list = EngineChatList(
@@ -395,7 +386,7 @@ func chatListViewForLocation(chatListLocation: ChatListControllerLocation, locat
                 additionalItems: [],
                 hasEarlier: false,
                 hasLater: false,
-                isLoading: isLoading
+                isLoading: view.isLoading
             )
             
             let type: ViewUpdateType

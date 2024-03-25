@@ -2508,6 +2508,7 @@ final class StorageUsageScreenComponent: Component {
             let _ = (chatMediaListPreviewControllerData(
                 context: component.context,
                 chatLocation: .peer(id: message.id.peerId),
+                chatFilterTag: nil,
                 chatLocationContextHolder: nil,
                 message: message,
                 standalone: true,
@@ -2563,7 +2564,7 @@ final class StorageUsageScreenComponent: Component {
                         
                         var chatLocation: NavigateToChatControllerParams.Location = .peer(peer)
                         if case let .channel(channel) = peer, channel.flags.contains(.isForum), let threadId = message.threadId {
-                            chatLocation = .replyThread(ChatReplyThreadMessage(messageId: MessageId(peerId: peer.id, namespace: Namespaces.Message.Cloud, id: Int32(clamping: threadId)), threadId: threadId, channelMessageId: nil, isChannelPost: false, isForumPost: true, maxMessage: nil, maxReadIncomingMessageId: nil, maxReadOutgoingMessageId: nil, unreadCount: 0, initialFilledHoles: IndexSet(), initialAnchor: .automatic, isNotAvailable: false))
+                            chatLocation = .replyThread(ChatReplyThreadMessage(peerId: peer.id, threadId: threadId, channelMessageId: nil, isChannelPost: false, isForumPost: true, maxMessage: nil, maxReadIncomingMessageId: nil, maxReadOutgoingMessageId: nil, unreadCount: 0, initialFilledHoles: IndexSet(), initialAnchor: .automatic, isNotAvailable: false))
                         }
                         
                         component.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
@@ -2666,7 +2667,7 @@ final class StorageUsageScreenComponent: Component {
                         
                         var chatLocation: NavigateToChatControllerParams.Location = .peer(peer)
                         if case let .channel(channel) = peer, channel.flags.contains(.isForum), let threadId = message.threadId {
-                            chatLocation = .replyThread(ChatReplyThreadMessage(messageId: MessageId(peerId: peer.id, namespace: Namespaces.Message.Cloud, id: Int32(clamping: threadId)), threadId: threadId, channelMessageId: nil, isChannelPost: false, isForumPost: true, maxMessage: nil, maxReadIncomingMessageId: nil, maxReadOutgoingMessageId: nil, unreadCount: 0, initialFilledHoles: IndexSet(), initialAnchor: .automatic, isNotAvailable: false))
+                            chatLocation = .replyThread(ChatReplyThreadMessage(peerId: peer.id, threadId: threadId, channelMessageId: nil, isChannelPost: false, isForumPost: true, maxMessage: nil, maxReadIncomingMessageId: nil, maxReadOutgoingMessageId: nil, unreadCount: 0, initialFilledHoles: IndexSet(), initialAnchor: .automatic, isNotAvailable: false))
                         }
                         
                         component.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
@@ -2724,6 +2725,7 @@ final class StorageUsageScreenComponent: Component {
             let _ = component.context.sharedContext.openChatMessage(OpenChatMessageParams(
                 context: component.context,
                 chatLocation: .peer(id: message.id.peerId),
+                chatFilterTag: nil,
                 chatLocationContextHolder: nil,
                 message: galleryMessage,
                 standalone: true,

@@ -21,11 +21,7 @@ import TextFormat
 import UniversalMediaPlayer
 import InstantPageCache
 
-public enum PremiumGiftSource: Equatable {
-    case profile
-    case attachMenu
-    case settings
-    
+extension PremiumGiftSource {
     var identifier: String? {
         switch self {
         case .profile:
@@ -34,6 +30,16 @@ public enum PremiumGiftSource: Equatable {
             return "attach"
         case .settings:
             return "settings"
+        case .chatList:
+            return "chats"
+        case .channelBoost:
+            return "channel_boost"
+        case let .deeplink(reference):
+            if let reference = reference {
+                return "deeplink_\(reference)"
+            } else {
+                return "deeplink"
+            }
         }
     }
 }
@@ -311,12 +317,6 @@ private final class PremiumGiftScreenContentComponent: CombinedComponent {
             
             if !component.isCompleted {
                 if let products = component.products {
-                    let gradientColors: [UIColor] = [
-                        UIColor(rgb: 0x8e77ff),
-                        UIColor(rgb: 0x9a6fff),
-                        UIColor(rgb: 0xb36eee)
-                    ]
-                    
                     let shortestOptionPrice: (Int64, NSDecimalNumber)
                     if let product = products.last {
                         shortestOptionPrice = (Int64(Float(product.storeProduct.priceCurrencyAndAmount.amount) / Float(product.months)), product.storeProduct.priceValue.dividing(by: NSDecimalNumber(value: product.months)))
@@ -346,14 +346,20 @@ private final class PremiumGiftScreenContentComponent: CombinedComponent {
                         var accessibilitySubtitle = ""
                         var pricePerMonth = environment.strings.Premium_PricePerMonth(product.storeProduct.pricePerMonth(Int(product.months))).string
                         
+                        var labelPrice = pricePerMonth
                         if component.peers.count > 1 {
-                            subtitle = "\(product.storeProduct.price) x \(component.peers.count)"
                             pricePerMonth = product.storeProduct.multipliedPrice(count: component.peers.count)
+                            
+                            subtitle = ""
+                            labelPrice = "\(product.storeProduct.price) x \(component.peers.count)"
                         } else {
                             if discountValue > 0 {
                                 subtitle = "**\(defaultPrice)** \(product.price)"
                                 accessibilitySubtitle = product.price
                             }
+                            
+                            subtitle = ""
+                            labelPrice = product.price
                         }
                         
                         items.append(SectionGroupComponent.Item(
@@ -363,13 +369,13 @@ private final class PremiumGiftScreenContentComponent: CombinedComponent {
                                     PremiumOptionComponent(
                                         title: giftTitle,
                                         subtitle: subtitle,
-                                        labelPrice: pricePerMonth,
+                                        labelPrice: labelPrice,
                                         discount: discount,
                                         multiple: component.peers.count > 1,
                                         selected: product.id == component.selectedProductId,
                                         primaryTextColor: textColor,
                                         secondaryTextColor: subtitleColor,
-                                        accentColor: gradientColors[i],
+                                        accentColor: environment.theme.list.itemAccentColor,
                                         checkForegroundColor: environment.theme.list.itemCheckColors.foregroundColor,
                                         checkBorderColor: environment.theme.list.itemCheckColors.strokeColor
                                     )
@@ -418,14 +424,19 @@ private final class PremiumGiftScreenContentComponent: CombinedComponent {
                 UIColor(rgb: 0xef6922),
                 UIColor(rgb: 0xe95a2c),
                 UIColor(rgb: 0xe74e33),
+                UIColor(rgb: 0xe74e33), //replace
+                UIColor(rgb: 0xe54937),
                 UIColor(rgb: 0xe3433c),
                 UIColor(rgb: 0xdb374b),
                 UIColor(rgb: 0xcb3e6d),
                 UIColor(rgb: 0xbc4395),
                 UIColor(rgb: 0xab4ac4),
+                UIColor(rgb: 0xa34cd7),
                 UIColor(rgb: 0x9b4fed),
                 UIColor(rgb: 0x8958ff),
                 UIColor(rgb: 0x676bff),
+                UIColor(rgb: 0x676bff), //replace
+                UIColor(rgb: 0x6172ff),
                 UIColor(rgb: 0x5b79ff),
                 UIColor(rgb: 0x4492ff),
                 UIColor(rgb: 0x429bd5),
@@ -515,6 +526,16 @@ private final class PremiumGiftScreenContentComponent: CombinedComponent {
                             demoSubject = .colors
                         case .wallpapers:
                             demoSubject = .wallpapers
+                        case .messageTags:
+                            demoSubject = .messageTags
+                        case .lastSeen:
+                            demoSubject = .lastSeen
+                        case .messagePrivacy:
+                            demoSubject = .messagePrivacy
+                        case .business:
+                            demoSubject = .business
+                        default:
+                            demoSubject = .doubleLimits
                         }
                         
                         let buttonText: String
@@ -879,14 +900,14 @@ private final class PremiumGiftScreenComponent: CombinedComponent {
                         
             let purpose: AppStoreTransactionPurpose
             var quantity: Int32 = 1
-            if case .settings = self.source {
-                purpose = .giftCode(peerIds: self.peerIds, boostPeer: nil, currency: currency, amount: amount)
-                quantity = Int32(self.peerIds.count)
-            } else if let peerId = self.peerIds.first {
+            
+            if self.source == .profile || self.source == .attachMenu, let peerId = self.peerIds.first {
                 purpose = .gift(peerId: peerId, currency: currency, amount: amount)
             } else {
-                fatalError()
+                purpose = .giftCode(peerIds: self.peerIds, boostPeer: nil, currency: currency, amount: amount)
+                quantity = Int32(self.peerIds.count)
             }
+            
             let _ = (self.context.engine.payments.canPurchasePremium(purpose: purpose)
             |> deliverOnMainQueue).start(next: { [weak self] available in
                 if let strongSelf = self {

@@ -6,9 +6,9 @@ private final class ManagedMessageHistoryHolesContext {
     private struct LocationKey: Equatable {
         var peerId: PeerId
         var threadId: Int64?
-        var space: MessageHistoryHoleSpace
+        var space: MessageHistoryHoleOperationSpace
         
-        init(peerId: PeerId, threadId: Int64?, space: MessageHistoryHoleSpace) {
+        init(peerId: PeerId, threadId: Int64?, space: MessageHistoryHoleOperationSpace) {
             self.peerId = peerId
             self.threadId = threadId
             self.space = space
@@ -157,8 +157,11 @@ private final class ManagedMessageHistoryHolesContext {
          }*/
         
         for entry in entries {
-            if self.completedEntries[entry] != nil {
-                continue
+            if let previousTimestamp = self.completedEntries[entry] {
+                if previousTimestamp >= CFAbsoluteTimeGetCurrent() - 20.0 {
+                    Logger.shared.log("ManagedMessageHistoryHoles", "Not adding recently finished entry \(entry)")
+                    continue
+                }
             }
             
             switch entry.hole {

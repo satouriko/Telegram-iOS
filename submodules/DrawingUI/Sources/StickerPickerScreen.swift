@@ -192,6 +192,7 @@ private final class StickerSelectionComponent: Component {
                 insertText: { _ in
                 },
                 backwardsDeleteText: {},
+                openStickerEditor: {},
                 presentController: { [weak self] c, a in
                     if let self, let controller = self.component?.getController() {
                         controller.present(c, in: .window(.root), with: a)
@@ -725,7 +726,7 @@ public class StickerPickerScreen: ViewController {
                 }
                 let presentationData = context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkPresentationTheme)
                 
-                let message = Message(stableId: 0, stableVersion: 0, id: MessageId(peerId: PeerId(0), namespace: Namespaces.Message.Local, id: 0), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0, flags: [], tags: [], globalTags: [], localTags: [], forwardInfo: nil, author: nil, text: "", attributes: [], media: [file.media], peers: SimpleDictionary(), associatedMessages: SimpleDictionary(), associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
+                let message = Message(stableId: 0, stableVersion: 0, id: MessageId(peerId: PeerId(0), namespace: Namespaces.Message.Local, id: 0), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0, flags: [], tags: [], globalTags: [], localTags: [], customTags: [], forwardInfo: nil, author: nil, text: "", attributes: [], media: [file.media], peers: SimpleDictionary(), associatedMessages: SimpleDictionary(), associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
                 
                 let gallery = GalleryController(context: context, source: .standaloneMessage(message), streamSingleVideo: true, replaceRootController: { _, _ in
                 }, baseNavigationController: nil)
@@ -1115,6 +1116,7 @@ public class StickerPickerScreen: ViewController {
                                         groupId: "search",
                                         title: nil,
                                         subtitle: nil,
+                                        badge: nil,
                                         actionButtonTitle: nil,
                                         isFeatured: false,
                                         isPremiumLocked: false,
@@ -1169,6 +1171,7 @@ public class StickerPickerScreen: ViewController {
                                 groupId: "search",
                                 title: nil,
                                 subtitle: nil,
+                                badge: nil,
                                 actionButtonTitle: nil,
                                 isFeatured: false,
                                 isPremiumLocked: false,
@@ -1199,6 +1202,7 @@ public class StickerPickerScreen: ViewController {
                                         groupId: "search",
                                         title: nil,
                                         subtitle: nil,
+                                        badge: nil,
                                         actionButtonTitle: nil,
                                         isFeatured: false,
                                         isPremiumLocked: false,
@@ -1440,6 +1444,7 @@ public class StickerPickerScreen: ViewController {
                                 groupId: "search",
                                 title: nil,
                                 subtitle: nil,
+                                badge: nil,
                                 actionButtonTitle: nil,
                                 isFeatured: false,
                                 isPremiumLocked: false,
@@ -1470,6 +1475,7 @@ public class StickerPickerScreen: ViewController {
                                         groupId: "search",
                                         title: nil,
                                         subtitle: nil,
+                                        badge: nil,
                                         actionButtonTitle: nil,
                                         isFeatured: false,
                                         isPremiumLocked: false,

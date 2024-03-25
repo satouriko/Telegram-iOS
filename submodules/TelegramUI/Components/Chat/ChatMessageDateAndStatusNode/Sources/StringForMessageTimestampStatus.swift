@@ -71,22 +71,28 @@ public func stringForMessageTimestampStatus(accountPeerId: PeerId, message: Mess
         }
     }
 
-    let timestamp: Int32
+    var timestamp: Int32
     if let scheduleTime = message.scheduleTime {
         timestamp = scheduleTime
     } else {
         timestamp = message.timestamp
     }
-    var dateText = stringForMessageTimestamp(timestamp: timestamp, dateTimeFormat: dateTimeFormat)
-    if timestamp == scheduleWhenOnlineTimestamp {
-        dateText = "         "
-    }
     
     var displayFullDate = false
     if case .full = format, timestamp > 100000 {
         displayFullDate = true
-    } else if let _ = message.forwardInfo, message.id.peerId == accountPeerId {
+    } else if let forwardInfo = message.forwardInfo, message.id.peerId == accountPeerId {
         displayFullDate = true
+        timestamp = forwardInfo.date
+    }
+    
+    if let sourceAuthorInfo = message.sourceAuthorInfo, let orignalDate = sourceAuthorInfo.orignalDate {
+        timestamp = orignalDate
+    }
+    
+    var dateText = stringForMessageTimestamp(timestamp: timestamp, dateTimeFormat: dateTimeFormat)
+    if timestamp == scheduleWhenOnlineTimestamp {
+        dateText = "         "
     }
     
     if displayFullDate {
@@ -96,7 +102,7 @@ public func stringForMessageTimestampStatus(accountPeerId: PeerId, message: Mess
         
         var t: time_t = time_t(timestamp)
         var timeinfo: tm = tm()
-        gmtime_r(&t, &timeinfo)
+        localtime_r(&t, &timeinfo)
         
         var now: time_t = time_t(nowTimestamp)
         var timeinfoNow: tm = tm()

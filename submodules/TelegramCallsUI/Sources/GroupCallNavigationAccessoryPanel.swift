@@ -634,7 +634,11 @@ public final class GroupCallNavigationAccessoryPanel: ASDisplayNode {
         var isChannel = false
         if let currentData = self.currentData {
             if currentData.isChannel || currentData.info.isStream {
-                title = self.strings.VoiceChatChannel_Title
+                if let titleValue = currentData.info.title, !titleValue.isEmpty {
+                    title = titleValue
+                } else {
+                    title = self.strings.VoiceChatChannel_Title
+                }
                 isChannel = true
             }
         }
@@ -748,7 +752,7 @@ public final class GroupCallNavigationAccessoryPanel: ASDisplayNode {
         
         self.textNode.attributedText = NSAttributedString(string: text, font: Font.regular(13.0), textColor: self.theme.chat.inputPanel.secondaryTextColor)
         
-        var constrainedWidth = size.width / 2.0 - 56.0
+        var constrainedWidth = size.width - leftInset - rightInset - 32.0 - joinButtonSize.width - 60.0
         if isScheduled {
             constrainedWidth = size.width - 100.0
         }

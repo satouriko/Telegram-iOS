@@ -29,7 +29,7 @@ public enum LocationBroadcastPanelSource {
 private func presentLiveLocationController(context: AccountContext, peerId: PeerId, controller: ViewController) {
     let presentImpl: (EngineMessage?) -> Void = { [weak controller] message in
         if let message = message, let strongController = controller {
-            let _ = context.sharedContext.openChatMessage(OpenChatMessageParams(context: context, chatLocation: nil, chatLocationContextHolder: nil, message: message._asMessage(), standalone: false, reverseMessageGalleryOrder: false, navigationController: strongController.navigationController as? NavigationController, modal: true, dismissInput: {
+            let _ = context.sharedContext.openChatMessage(OpenChatMessageParams(context: context, chatLocation: nil, chatFilterTag: nil, chatLocationContextHolder: nil, message: message._asMessage(), standalone: false, reverseMessageGalleryOrder: false, navigationController: strongController.navigationController as? NavigationController, modal: true, dismissInput: {
                 controller?.view.endEditing(true)
             }, present: { c, a in
                 controller?.present(c, in: .window(.root), with: a, blockInteraction: true)
@@ -65,6 +65,8 @@ open class TelegramBaseController: ViewController, KeyShortcutResponder {
     public private(set) var accessoryPanelContainerHeight: CGFloat = 0.0
     
     public let mediaAccessoryPanelVisibility: MediaAccessoryPanelVisibility
+    public var tempHideAccessoryPanels: Bool = false
+    
     public let locationBroadcastPanelSource: LocationBroadcastPanelSource
     public let groupCallPanelSource: GroupCallPanelSource
     
@@ -408,13 +410,17 @@ open class TelegramBaseController: ViewController, KeyShortcutResponder {
         let navigationHeight = super.navigationLayout(layout: layout).navigationFrame.height - self.additionalNavigationBarHeight
         
         let mediaAccessoryPanelHidden: Bool
-        switch self.mediaAccessoryPanelVisibility {
-        case .always:
-            mediaAccessoryPanelHidden = false
-        case .none:
+        if self.tempHideAccessoryPanels {
             mediaAccessoryPanelHidden = true
-        case let .specific(size):
-            mediaAccessoryPanelHidden = size != layout.metrics.widthClass
+        } else {
+            switch self.mediaAccessoryPanelVisibility {
+            case .always:
+                mediaAccessoryPanelHidden = false
+            case .none:
+                mediaAccessoryPanelHidden = true
+            case let .specific(size):
+                mediaAccessoryPanelHidden = size != layout.metrics.widthClass
+            }
         }
         
         var additionalHeight: CGFloat = 0.0
@@ -643,7 +649,12 @@ open class TelegramBaseController: ViewController, KeyShortcutResponder {
             }
         }
         
-        if let (item, previousItem, nextItem, order, type, _) = self.playlistStateAndType, !mediaAccessoryPanelHidden {
+        var isViewOnceMessage = false
+        if let (item, _, _, _, _, _) = self.playlistStateAndType, let source = item.playbackData?.source, case let .telegramFile(_, _, isViewOnce) = source, isViewOnce {
+            isViewOnceMessage = true
+        }
+        
+        if let (item, previousItem, nextItem, order, type, _) = self.playlistStateAndType, !mediaAccessoryPanelHidden && !isViewOnceMessage {
             let panelHeight = MediaNavigationAccessoryHeaderNode.minimizedHeight
             let panelFrame = CGRect(origin: CGPoint(x: 0.0, y: panelStartY), size: CGSize(width: layout.size.width, height: panelHeight))
             additionalHeight += panelHeight
@@ -818,7 +829,7 @@ open class TelegramBaseController: ViewController, KeyShortcutResponder {
                                 strongSelf.displayNode.view.window?.endEditing(true)
                                 strongSelf.present(controller, in: .window(.root))
                             } else if case let .messages(chatLocation, _, _) = playlistLocation {
-                                let signal = strongSelf.context.sharedContext.messageFromPreloadedChatHistoryViewForLocation(id: id.messageId, location: ChatHistoryLocationInput(content: .InitialSearch(subject: MessageHistoryInitialSearchSubject(location: .id(id.messageId), quote: nil), count: 60, highlight: true), id: 0), context: strongSelf.context, chatLocation: chatLocation, subject: nil, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>(value: nil), tagMask: MessageTags.music)
+                                let signal = strongSelf.context.sharedContext.messageFromPreloadedChatHistoryViewForLocation(id: id.messageId, location: ChatHistoryLocationInput(content: .InitialSearch(subject: MessageHistoryInitialSearchSubject(location: .id(id.messageId), quote: nil), count: 60, highlight: true), id: 0), context: strongSelf.context, chatLocation: chatLocation, subject: nil, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>(value: nil), tag: .tag(MessageTags.music))
                                 
                                 var cancelImpl: (() -> Void)?
                                 let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }

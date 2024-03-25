@@ -19,6 +19,7 @@ import AccountContext
 import AnimatedAvatarSetNode
 import ComponentFlow
 import EmojiStatusComponent
+import TextNodeWithEntities
 
 final class UndoOverlayControllerNode: ViewControllerTracingNode {
     private let presentationData: PresentationData
@@ -40,7 +41,7 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
     private var stickerOffset: CGPoint?
     private var emojiStatus: ComponentView<Empty>?
     private let titleNode: ImmediateTextNode
-    private let textNode: ImmediateTextNode
+    private let textNode: ImmediateTextNodeWithEntities
     private let buttonNode: HighlightTrackingButtonNode
     private let undoButtonTextNode: ImmediateTextNode
     private let undoButtonNode: HighlightTrackingButtonNode
@@ -52,10 +53,13 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
     private var content: UndoOverlayContent
     private let blurred: Bool
     
+    private let additionalView: UndoOverlayControllerAdditionalView?
+    
     private let effectView: UIView
     
     private let animationBackgroundColor: UIColor
         
+    private var isTimeoutDisabled: Bool = false
     private var originalRemainingSeconds: Double
     private var remainingSeconds: Double
     private var timer: SwiftSignalKit.Timer?
@@ -64,12 +68,14 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
     
     private var fetchResourceDisposable: Disposable?
     
-    init(presentationData: PresentationData, content: UndoOverlayContent, elevatedLayout: Bool, placementPosition: UndoOverlayController.Position, blurred: Bool, action: @escaping (UndoOverlayAction) -> Bool, dismiss: @escaping () -> Void) {
+    init(presentationData: PresentationData, content: UndoOverlayContent, elevatedLayout: Bool, placementPosition: UndoOverlayController.Position, blurred: Bool, additionalView: (() -> UndoOverlayControllerAdditionalView?)?, action: @escaping (UndoOverlayAction) -> Bool, dismiss: @escaping () -> Void) {
         self.presentationData = presentationData
         self.elevatedLayout = elevatedLayout
         self.placementPosition = placementPosition
         self.blurred = blurred
         self.content = content
+        
+        self.additionalView = additionalView?()
         
         self.action = action
         self.dismiss = dismiss
@@ -81,7 +87,7 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
         self.titleNode.displaysAsynchronously = false
         self.titleNode.maximumNumberOfLines = 0
         
-        self.textNode = ImmediateTextNode()
+        self.textNode = ImmediateTextNodeWithEntities()
         self.textNode.displaysAsynchronously = false
         self.textNode.maximumNumberOfLines = 0
         
@@ -639,10 +645,19 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
                 self.animatedStickerNode = nil
                 
                 let body = MarkdownAttributeSet(font: Font.regular(14.0), textColor: .white)
-                let bold = MarkdownAttributeSet(font: Font.semibold(14.0), textColor: .white)
+                let bold: MarkdownAttributeSet
+                if savedMessages {
+                    bold = MarkdownAttributeSet(font: Font.semibold(14.0), textColor: presentationData.theme.list.itemAccentColor.withMultiplied(hue: 0.933, saturation: 0.61, brightness: 1.0), additionalAttributes: ["URL": ""])
+                } else {
+                    bold = MarkdownAttributeSet(font: Font.semibold(14.0), textColor: .white)
+                }
                 let attributedText = parseMarkdownIntoAttributedString(text, attributes: MarkdownAttributes(body: body, bold: bold, link: body, linkAttribute: { _ in return nil }), textAlignment: .natural)
                 self.textNode.attributedText = attributedText
                 self.textNode.maximumNumberOfLines = 2
+            
+                if savedMessages {
+                    isUserInteractionEnabled = true
+                }
                 
                 displayUndo = false
                 self.originalRemainingSeconds = 3
@@ -1144,6 +1159,47 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
                 } else {
                     displayUndo = false
                 }
+            case let .messageTagged(context, isSingleMessage, customEmoji, isBuiltinReaction, customUndoText):
+                self.avatarNode = nil
+                self.iconNode = nil
+                self.iconCheckNode = nil
+                self.animationNode = AnimationNode(animation: "anim_savedmessages", colors: [:], scale: 0.066)
+                self.animatedStickerNode = nil
+                
+                let rawText = isSingleMessage ? presentationData.strings.Chat_ToastMessageTagged_Text(".") : presentationData.strings.Chat_ToastMessagesTagged_Text(".")
+                let attributedText = NSMutableAttributedString(string: rawText.string, font: Font.regular(14.0), textColor: .white)
+                for range in rawText.ranges {
+                    attributedText.addAttributes([ChatTextInputAttributes.customEmoji: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: customEmoji.fileId.id, file: customEmoji, custom: nil)], range: range.range)
+                }
+                self.textNode.customItemLayout = { size, _ in
+                    if isBuiltinReaction {
+                        return CGSize(width: size.width * 2.0, height: size.height * 2.0)
+                    }
+                    return size
+                }
+            
+                self.textNode.arguments = TextNodeWithEntities.Arguments(
+                    context: context,
+                    cache: context.animationCache,
+                    renderer: context.animationRenderer,
+                    placeholderColor: UIColor(white: 1.0, alpha: 0.1),
+                    attemptSynchronous: false
+                )
+                self.textNode.visibility = true
+            
+                self.textNode.attributedText = attributedText
+                self.textNode.maximumNumberOfLines = 2
+                
+                displayUndo = false
+                self.originalRemainingSeconds = 3
+            
+                if let customUndoText = customUndoText {
+                    undoText = customUndoText
+                    displayUndo = true
+                    isUserInteractionEnabled = true
+                } else {
+                    displayUndo = false
+                }
         }
         
         self.remainingSeconds = self.originalRemainingSeconds
@@ -1172,7 +1228,7 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
         switch content {
         case .removedChat:
             self.panelWrapperNode.addSubnode(self.timerTextNode)
-        case .archivedChat, .hidArchive, .revealedArchive, .autoDelete, .succeed, .emoji, .swipeToReply, .actionSucceeded, .stickersModified, .chatAddedToFolder, .chatRemovedFromFolder, .messagesUnpinned, .setProximityAlert, .invitedToVoiceChat, .linkCopied, .banned, .importedMessage, .audioRate, .forward, .gigagroupConversion, .linkRevoked, .voiceChatRecording, .voiceChatFlag, .voiceChatCanSpeak, .copy, .mediaSaved, .paymentSent, .image, .inviteRequestSent, .notificationSoundAdded, .universal, .premiumPaywall, .peers:
+        case .archivedChat, .hidArchive, .revealedArchive, .autoDelete, .succeed, .emoji, .swipeToReply, .actionSucceeded, .stickersModified, .chatAddedToFolder, .chatRemovedFromFolder, .messagesUnpinned, .setProximityAlert, .invitedToVoiceChat, .linkCopied, .banned, .importedMessage, .audioRate, .forward, .gigagroupConversion, .linkRevoked, .voiceChatRecording, .voiceChatFlag, .voiceChatCanSpeak, .copy, .mediaSaved, .paymentSent, .image, .inviteRequestSent, .notificationSoundAdded, .universal, .premiumPaywall, .peers, .messageTagged:
             if self.textNode.tapAttributeAction != nil || displayUndo {
                 self.isUserInteractionEnabled = true
             } else {
@@ -1242,6 +1298,24 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
         self.animatedStickerNode?.started = { [weak self] in
             self?.stillStickerNode?.isHidden = true
         }
+        
+        if let additionalView = self.additionalView {
+            additionalView.interaction = UndoOverlayControllerAdditionalViewInteraction(disableTimeout: { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.isTimeoutDisabled = true
+                self.timer?.invalidate()
+                self.remainingSeconds = self.originalRemainingSeconds
+                self.checkTimer()
+            }, dismiss: { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.dismiss()
+            })
+            self.view.addSubview(additionalView)
+        }
     }
     
     deinit {
@@ -1256,6 +1330,16 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
         }
         
         self.panelNode.view.addSubview(self.effectView)
+        
+        if self.additionalView != nil {
+            self.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.tapGesture(_:))))
+        }
+    }
+    
+    @objc private func tapGesture(_ recognizer: UITapGestureRecognizer) {
+        if case .ended = recognizer.state {
+            self.dismiss()
+        }
     }
     
     @objc private func buttonPressed() {
@@ -1309,11 +1393,13 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
                     self.containerLayoutUpdated(layout: validLayout, transition: .immediate)
                 }
             }
-            let timer = SwiftSignalKit.Timer(timeout: 0.5, repeat: false, completion: { [weak self] in
-                self?.checkTimer()
-            }, queue: .mainQueue())
-            self.timer = timer
-            timer.start()
+            if !self.isTimeoutDisabled {
+                let timer = SwiftSignalKit.Timer(timeout: 0.5, repeat: false, completion: { [weak self] in
+                    self?.checkTimer()
+                }, queue: .mainQueue())
+                self.timer = timer
+                timer.start()
+            }
         }
     }
     
@@ -1557,6 +1643,12 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
             let avatarsFrame = CGRect(origin: CGPoint(x: 13.0, y: floor((contentHeight - multiAvatarsSize.height) / 2.0) + verticalOffset), size: multiAvatarsSize)
             transition.updateFrame(node: multiAvatarsNode, frame: avatarsFrame)
         }
+        
+        if let additionalView = self.additionalView {
+            let additionalViewFrame = CGRect(origin: CGPoint(x: 0.0, y: panelWrapperFrame.maxY), size: CGSize(width: layout.size.width, height: layout.size.height - insets.bottom - panelWrapperFrame.maxY))
+            transition.updateFrame(view: additionalView, frame: additionalViewFrame)
+            additionalView.update(size: additionalViewFrame.size, transition: transition)
+        }
     }
     
     func animateIn(asReplacement: Bool) {
@@ -1593,6 +1685,10 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
         
         self.animatedStickerNode?.visibility = true
         
+        if let additionalView = self.additionalView {
+            additionalView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
+        }
+        
         self.checkTimer()
     }
     
@@ -1608,6 +1704,10 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
         }
         self.panelNode.layer.animateScale(from: 1.0, to: 0.96, duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false)
         self.panelWrapperNode.layer.animateScale(from: 1.0, to: 0.96, duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false)
+        
+        if let additionalView = self.additionalView {
+            additionalView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false)
+        }
     }
     
     func animateOutWithReplacement(completion: @escaping () -> Void) {
@@ -1622,9 +1722,24 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
     }
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        if !self.panelNode.frame.insetBy(dx: -60.0, dy: 0.0).contains(point) {
-            return nil
+        if let additionalView = self.additionalView {
+            if let result = additionalView.hitTest(self.view.convert(point, to: additionalView), with: event) {
+                return result
+            }
         }
-        return super.hitTest(point, with: event)
+        
+        if !self.panelNode.frame.insetBy(dx: -60.0, dy: 0.0).contains(point) {
+            if self.additionalView != nil && self.isTimeoutDisabled {
+            } else {
+                return nil
+            }
+        }
+        let result = super.hitTest(point, with: event)
+        if result == self {
+            if self.additionalView != nil && self.isTimeoutDisabled {
+                return self.view
+            }
+        }
+        return result
     }
 }

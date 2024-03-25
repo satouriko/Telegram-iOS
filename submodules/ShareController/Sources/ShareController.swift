@@ -20,6 +20,7 @@ import TelegramIntents
 import AnimationCache
 import MultiAnimationRenderer
 import ObjectiveC
+import UndoUI
 
 private var ObjCKey_DeinitWatcher: Int?
 
@@ -356,6 +357,7 @@ public protocol ShareControllerAccountContext: AnyObject {
     var accountId: AccountRecordId { get }
     var accountPeerId: EnginePeer.Id { get }
     var stateManager: AccountStateManager { get }
+    var engineData: TelegramEngine.EngineData { get }
     var animationCache: AnimationCache { get }
     var animationRenderer: MultiAnimationRenderer { get }
     var contentSettings: ContentSettings { get }
@@ -375,6 +377,9 @@ public final class ShareControllerAppAccountContext: ShareControllerAccountConte
     }
     public var stateManager: AccountStateManager {
         return self.context.account.stateManager
+    }
+    public var engineData: TelegramEngine.EngineData {
+        return self.context.engine.data
     }
     public var animationCache: AnimationCache {
         return self.context.animationCache
@@ -446,7 +451,7 @@ public final class ShareController: ViewController {
     private let segmentedValues: [ShareControllerSegmentedValue]?
     private let fromForeignApp: Bool
     
-    private let peers = Promise<([(EngineRenderedPeer, EnginePeer.Presence?)], EnginePeer)>()
+    private let peers = Promise<([(peer: EngineRenderedPeer, presence: EnginePeer.Presence?, requiresPremiumForMessaging: Bool)], EnginePeer)>()
     private let peersDisposable = MetaDisposable()
     private let readyDisposable = MetaDisposable()
     private let accountActiveDisposable = MetaDisposable()
@@ -463,12 +468,21 @@ public final class ShareController: ViewController {
             }
         }
     }
+    public var enqueued: (([PeerId], [Int64]) -> Void)? {
+        didSet {
+            if self.isNodeLoaded {
+                self.controllerNode.enqueued = enqueued
+            }
+        }
+    }
     
     public var openShareAsImage: (([Message]) -> Void)?
     
     public var shareStory: (() -> Void)?
 
     public var debugAction: (() -> Void)?
+    
+    public var parentNavigationController: NavigationController?
     
     public convenience init(context: AccountContext, subject: ShareControllerSubject, presetText: String? = nil, preferredAction: ShareControllerPreferredAction = .default, showInChat: ((Message) -> Void)? = nil, fromForeignApp: Bool = false, segmentedValues: [ShareControllerSegmentedValue]? = nil, externalShare: Bool = true, immediateExternalShare: Bool = false, switchableAccounts: [AccountWithInfo] = [], immediatePeerId: PeerId? = nil, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, forceTheme: PresentationTheme? = nil, forcedActionTitle: String? = nil, shareAsLink: Bool = false) {
         self.init(
@@ -515,6 +529,7 @@ public final class ShareController: ViewController {
         super.init(navigationBarPresentationData: nil)
         
         self.statusBar.statusBarStyle = .Ignore
+        self.automaticallyControlPresentationContextLayout = false
         
         switch subject {
             case let .url(text):
@@ -695,7 +710,7 @@ public final class ShareController: ViewController {
             fromPublicChannel = true
         }
         
-        self.displayNode = ShareControllerNode(environment: self.environment, presentationData: self.presentationData, presetText: self.presetText, defaultAction: self.defaultAction, requestLayout: { [weak self] transition in
+        self.displayNode = ShareControllerNode(controller: self, environment: self.environment, presentationData: self.presentationData, presetText: self.presetText, defaultAction: self.defaultAction, requestLayout: { [weak self] transition in
             self?.requestLayout(transition: transition)
         }, presentError: { [weak self] title, text in
             guard let strongSelf = self else {
@@ -704,6 +719,7 @@ public final class ShareController: ViewController {
             strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: title, text: text, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
         }, externalShare: self.externalShare, immediateExternalShare: self.immediateExternalShare, immediatePeerId: self.immediatePeerId, fromForeignApp: self.fromForeignApp, forceTheme: self.forceTheme, fromPublicChannel: fromPublicChannel, segmentedValues: self.segmentedValues, shareStory: self.shareStory)
         self.controllerNode.completed = self.completed
+        self.controllerNode.enqueued = self.enqueued
         self.controllerNode.present = { [weak self] c in
             self?.presentInGlobalOverlay(c)
         }
@@ -1196,6 +1212,40 @@ public final class ShareController: ViewController {
             ])
             strongSelf.view.endEditing(true)
             strongSelf.present(controller, in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+        }
+        self.controllerNode.disabledPeerSelected = { [weak self] peer in
+            guard let self else {
+                return
+            }
+            
+            self.forEachController { c in
+                if let c = c as? UndoOverlayController {
+                    c.dismiss()
+                }
+                return true
+            }
+            
+            var hasAction = false
+            if let context = self.currentContext as? ShareControllerAppAccountContext {
+                let premiumConfiguration = PremiumConfiguration.with(appConfiguration: context.context.currentAppConfiguration.with { $0 })
+                if !premiumConfiguration.isPremiumDisabled {
+                    hasAction = true
+                }
+            }
+            
+            self.present(UndoOverlayController(presentationData: presentationData, content: .premiumPaywall(title: nil, text: presentationData.strings.Chat_ToastMessagingRestrictedToPremium_Text(peer.compactDisplayTitle).string, customUndoText: hasAction ? presentationData.strings.Chat_ToastMessagingRestrictedToPremium_Action : nil, timeout: nil, linkAction: { _ in
+            }), elevatedLayout: false, animateInAsReplacement: false, action: { [weak self] action in
+                guard let self, let parentNavigationController = self.parentNavigationController, let context = self.currentContext as? ShareControllerAppAccountContext else {
+                    return false
+                }
+                if case .undo = action {
+                    self.controllerNode.cancel?()
+                    
+                    let premiumController = context.context.sharedContext.makePremiumIntroController(context: context.context, source: .settings, forceDark: false, dismissed: nil)
+                    parentNavigationController.pushViewController(premiumController)
+                }
+                return false
+            }), in: .current)
         }
         self.controllerNode.debugAction = { [weak self] in
             self?.debugAction?()
@@ -1808,7 +1858,7 @@ public final class ShareController: ViewController {
                     case let .progress(value):
                         return .progress(value)
                     case .done:
-                        return .done
+                        return .done([])
                     }
                 }
             }
@@ -1843,21 +1893,21 @@ public final class ShareController: ViewController {
             }
             |> mapToSignal { progressSets -> Signal<ShareState, ShareControllerError> in
                 if progressSets.isEmpty {
-                    return .single(.done)
+                    return .single(.done([]))
                 }
                 for item in progressSets {
                     if case .progress = item {
                         return .complete()
                     }
                 }
-                return .single(.done)
+                return .single(.done([]))
             }
         }
     }
     
     private func shareLegacy(text: String, peerIds: [EnginePeer.Id], topicIds: [EnginePeer.Id: Int64], showNames: Bool, silently: Bool) -> Signal<ShareState, ShareControllerError> {
         guard let currentContext = self.currentContext as? ShareControllerAppAccountContext else {
-            return .single(.done)
+            return .single(.done([]))
         }
         return currentContext.context.engine.data.get(EngineDataMap(
             peerIds.map(TelegramEngine.EngineData.Item.Peer.Peer.init(id:))
@@ -1890,6 +1940,8 @@ public final class ShareController: ViewController {
                     })
                 }
             }
+            
+            var correlationIds: [Int64] = []
             
             switch subject {
             case let .url(url):
@@ -2172,7 +2224,9 @@ public final class ShareController: ViewController {
                             return .fail(.generic)
                         }
                         
-                        messagesToEnqueue.append(.message(text: text, attributes: [], inlineStickers: [:], mediaReference: nil, threadId: threadId, replyToMessageId: replyToMessageId.flatMap { EngineMessageReplySubject(messageId: $0, quote: nil) }, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: []))
+                        let correlationId = Int64.random(in: Int64.min ... Int64.max)
+                        correlationIds.append(correlationId)
+                        messagesToEnqueue.append(.message(text: text, attributes: [], inlineStickers: [:], mediaReference: nil, threadId: threadId, replyToMessageId: replyToMessageId.flatMap { EngineMessageReplySubject(messageId: $0, quote: nil) }, replyToStoryId: nil, localGroupingKey: nil, correlationId: correlationId, bubbleUpEmojiOrStickersets: []))
                     }
                     for message in messages {
                         for media in message.media {
@@ -2230,7 +2284,9 @@ public final class ShareController: ViewController {
                             }
                         }
                         
-                        messagesToEnqueue.append(.forward(source: message.id, threadId: threadId, grouping: .auto, attributes: [], correlationId: nil))
+                        let correlationId = Int64.random(in: Int64.min ... Int64.max)
+                        correlationIds.append(correlationId)
+                        messagesToEnqueue.append(.forward(source: message.id, threadId: threadId, grouping: .auto, attributes: [], correlationId: correlationId))
                     }
                     messagesToEnqueue = transformMessages(messagesToEnqueue, showNames: showNames, silently: silently)
                     shareSignals.append(enqueueMessages(account: currentContext.context.account, peerId: peerId, messages: messagesToEnqueue))
@@ -2244,7 +2300,7 @@ public final class ShareController: ViewController {
                     case let .progress(value):
                         return .progress(value)
                     case .done:
-                        return .done
+                        return .done([])
                     }
                 }
             }
@@ -2293,7 +2349,7 @@ public final class ShareController: ViewController {
                         }
                     }
                     if !hasStatuses {
-                        return .single(.done)
+                        return .single(.done(correlationIds))
                     }
                     return .complete()
                 }
@@ -2416,36 +2472,56 @@ public final class ShareController: ViewController {
             peer,
             tailChatList |> take(1)
         )
-        |> mapToSignal { maybeAccountPeer, view -> Signal<([(EngineRenderedPeer, EnginePeer.Presence?)], EnginePeer), NoError> in
+        |> mapToSignal { maybeAccountPeer, view -> Signal<([(peer: EngineRenderedPeer, presence: EnginePeer.Presence?, requiresPremiumForMessaging: Bool)], EnginePeer), NoError> in
             let accountPeer = maybeAccountPeer!
             
             var peers: [EngineRenderedPeer] = []
+            var possiblePremiumRequiredPeers = Set<EnginePeer.Id>()
             for entry in view.0.entries.reversed() {
                 switch entry {
-                    case let .MessageEntry(entryData):
-                        if let peer = entryData.renderedPeer.peers[entryData.renderedPeer.peerId], peer.id != accountPeer.id, canSendMessagesToPeer(peer) {
-                            peers.append(EngineRenderedPeer(entryData.renderedPeer))
+                case let .MessageEntry(entryData):
+                    if let peer = entryData.renderedPeer.peers[entryData.renderedPeer.peerId], peer.id != accountPeer.id, canSendMessagesToPeer(peer) {
+                        peers.append(EngineRenderedPeer(entryData.renderedPeer))
+                        if let user = peer as? TelegramUser, user.flags.contains(.requirePremium) {
+                            possiblePremiumRequiredPeers.insert(user.id)
                         }
-                    default:
-                        break
+                    }
+                default:
+                    break
                 }
             }
 
-            let key = PostboxViewKey.peerPresences(peerIds: Set(peers.map(\.peerId)))
-            return account.stateManager.postbox.combinedView(keys: [key])
-            |> map { views -> [EnginePeer.Id: EnginePeer.Presence?] in
+            let peerPresencesKey = PostboxViewKey.peerPresences(peerIds: Set(peers.map(\.peerId)))
+            
+            var keys: [PostboxViewKey] = []
+            keys.append(peerPresencesKey)
+            
+            for id in possiblePremiumRequiredPeers {
+                keys.append(.cachedPeerData(peerId: id))
+            }
+            
+            return account.stateManager.postbox.combinedView(keys: keys)
+            |> map { views -> ([EnginePeer.Id: EnginePeer.Presence?], [EnginePeer.Id: Bool]) in
                 var result: [EnginePeer.Id: EnginePeer.Presence?] = [:]
-                if let view = views.views[key] as? PeerPresencesView {
+                if let view = views.views[peerPresencesKey] as? PeerPresencesView {
                     result = view.presences.mapValues { value -> EnginePeer.Presence? in
                         return EnginePeer.Presence(value)
                     }
                 }
-                return result
+                var requiresPremiumForMessaging: [EnginePeer.Id: Bool] = [:]
+                for id in possiblePremiumRequiredPeers {
+                    if let view = views.views[.cachedPeerData(peerId: id)] as? CachedPeerDataView, let data = view.cachedPeerData as? CachedUserData {
+                        requiresPremiumForMessaging[id] = data.flags.contains(.premiumRequired)
+                    } else {
+                        requiresPremiumForMessaging[id] = false
+                    }
+                }
+                return (result, requiresPremiumForMessaging)
             }
-            |> map { presenceMap -> ([(EngineRenderedPeer, EnginePeer.Presence?)], EnginePeer) in
-                var resultPeers: [(EngineRenderedPeer, EnginePeer.Presence?)] = []
+            |> map { presenceMap, requiresPremiumForMessaging -> ([(peer: EngineRenderedPeer, presence: EnginePeer.Presence?, requiresPremiumForMessaging: Bool)], EnginePeer) in
+                var resultPeers: [(peer: EngineRenderedPeer, presence: EnginePeer.Presence?, requiresPremiumForMessaging: Bool)] = []
                 for peer in peers {
-                    resultPeers.append((peer, presenceMap[peer.peerId].flatMap { $0 }))
+                    resultPeers.append((peer, presenceMap[peer.peerId].flatMap { $0 }, requiresPremiumForMessaging[peer.peerId] ?? false))
                 }
                 return (resultPeers, accountPeer)
             }

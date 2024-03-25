@@ -216,11 +216,12 @@ public func galleryItemForEntry(
         } else if let file = media as? TelegramMediaFile {
             if file.isVideo {
                 let content: UniversalVideoContent
+                let captureProtected = message.isCopyProtected() || message.containsSecretMedia || message.minAutoremoveOrClearTimeout == viewOnceTimeout
                 if file.isAnimated {
-                    content = NativeVideoContent(id: .message(message.stableId, file.fileId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: file), imageReference: mediaImage.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), loopVideo: true, enableSound: false, tempFilePath: tempFilePath, captureProtected: message.isCopyProtected(), storeAfterDownload: generateStoreAfterDownload?(message, file))
+                    content = NativeVideoContent(id: .message(message.stableId, file.fileId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: file), imageReference: mediaImage.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), loopVideo: true, enableSound: false, tempFilePath: tempFilePath, captureProtected: captureProtected, storeAfterDownload: generateStoreAfterDownload?(message, file))
                 } else {
                     if true || (file.mimeType == "video/mpeg4" || file.mimeType == "video/mov" || file.mimeType == "video/mp4") {
-                        content = NativeVideoContent(id: .message(message.stableId, file.fileId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: file), imageReference: mediaImage.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), streamVideo: .conservative, loopVideo: loopVideos, tempFilePath: tempFilePath, captureProtected: message.isCopyProtected(), storeAfterDownload: generateStoreAfterDownload?(message, file))
+                        content = NativeVideoContent(id: .message(message.stableId, file.fileId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: file), imageReference: mediaImage.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), streamVideo: .conservative, loopVideo: loopVideos, tempFilePath: tempFilePath, captureProtected: captureProtected, storeAfterDownload: generateStoreAfterDownload?(message, file))
                     } else {
                         content = PlatformVideoContent(id: .message(message.id, message.stableId, file.fileId), userLocation: .peer(message.id.peerId), content: .file(.message(message: MessageReference(message), media: file)), streamVideo: streamVideos, loopVideo: loopVideos)
                     }
@@ -247,13 +248,18 @@ public func galleryItemForEntry(
                 if let result = addLocallyGeneratedEntities(text, enabledTypes: [.timecode], entities: entities, mediaDuration: file.duration.flatMap(Double.init)) {
                     entities = result
                 }
+                
+                var originData = GalleryItemOriginData(title: message.effectiveAuthor.flatMap(EnginePeer.init)?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder), timestamp: message.timestamp)
+                if Namespaces.Message.allNonRegular.contains(message.id.namespace) {
+                    originData = GalleryItemOriginData(title: nil, timestamp: nil)
+                }
                                 
                 let caption = galleryCaptionStringWithAppliedEntities(context: context, text: text, entities: entities, message: message)
                 return UniversalVideoGalleryItem(
                     context: context,
                     presentationData: presentationData,
                     content: content,
-                    originData: GalleryItemOriginData(title: message.effectiveAuthor.flatMap(EnginePeer.init)?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder), timestamp: message.timestamp),
+                    originData: originData,
                     indexData: location.flatMap { GalleryItemIndexData(position: Int32($0.index), totalCount: Int32($0.count)) },
                     contentInfo: .message(message),
                     caption: caption,
@@ -323,11 +329,11 @@ public func galleryItemForEntry(
             var content: UniversalVideoContent?
             switch websiteType(of: webpageContent.websiteName) {
                 case .instagram where webpageContent.file != nil && webpageContent.image != nil && webpageContent.file!.isVideo:
-                    content = NativeVideoContent(id: .message(message.stableId, webpageContent.file?.id ?? webpage.webpageId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: webpageContent.file!), imageReference: webpageContent.image.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), streamVideo: .conservative, enableSound: true, captureProtected: message.isCopyProtected(), storeAfterDownload: nil)
+                    content = NativeVideoContent(id: .message(message.stableId, webpageContent.file?.id ?? webpage.webpageId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: webpageContent.file!), imageReference: webpageContent.image.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), streamVideo: .conservative, enableSound: true, captureProtected: message.isCopyProtected() || message.containsSecretMedia, storeAfterDownload: nil)
                 default:
                     if let embedUrl = webpageContent.embedUrl, let image = webpageContent.image {
                         if let file = webpageContent.file, file.isVideo {
-                            content = NativeVideoContent(id: .message(message.stableId, file.fileId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: file), imageReference: mediaImage.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), streamVideo: .conservative, loopVideo: loopVideos, tempFilePath: tempFilePath, captureProtected: message.isCopyProtected(), storeAfterDownload: generateStoreAfterDownload?(message, file))
+                            content = NativeVideoContent(id: .message(message.stableId, file.fileId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: file), imageReference: mediaImage.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), streamVideo: .conservative, loopVideo: loopVideos, tempFilePath: tempFilePath, captureProtected: message.isCopyProtected() || message.containsSecretMedia, storeAfterDownload: generateStoreAfterDownload?(message, file))
                         } else if URL(string: embedUrl)?.pathExtension == "mp4" {
                             content = SystemVideoContent(userLocation: .peer(message.id.peerId), url: embedUrl, imageReference: .webPage(webPage: WebpageReference(webpage), media: image), dimensions: webpageContent.embedSize?.cgSize ?? CGSize(width: 640.0, height: 640.0), duration: webpageContent.duration.flatMap(Double.init) ?? 0.0)
                         }
@@ -347,11 +353,17 @@ public func galleryItemForEntry(
                     }
                     description = galleryCaptionStringWithAppliedEntities(context: context, text: descriptionText, entities: entities, message: message)
                 }
+                
+                var originData = GalleryItemOriginData(title: message.effectiveAuthor.flatMap(EnginePeer.init)?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder), timestamp: message.timestamp)
+                if Namespaces.Message.allNonRegular.contains(message.id.namespace) {
+                    originData = GalleryItemOriginData(title: nil, timestamp: nil)
+                }
+                
                 return UniversalVideoGalleryItem(
                     context: context,
                     presentationData: presentationData,
                     content: content,
-                    originData: GalleryItemOriginData(title: message.effectiveAuthor.flatMap(EnginePeer.init)?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder), timestamp: message.timestamp),
+                    originData: originData,
                     indexData: location.flatMap { GalleryItemIndexData(position: Int32($0.index), totalCount: Int32($0.count)) },
                     contentInfo: .message(message),
                     caption: NSAttributedString(string: ""),
@@ -409,12 +421,12 @@ private enum GalleryMessageHistoryView {
         }
     }
     
-    var tagMask: MessageTags? {
+    var tag: HistoryViewInputTag? {
         switch self {
         case .entries:
             return nil
         case let .view(view, _):
-            return view.tagMask
+            return view.tag
         }
     }
     
@@ -516,7 +528,7 @@ public class GalleryController: ViewController, StandalonePresentableController,
     private var hasLeftEntries: Bool = false
     private var hasRightEntries: Bool = false
     private var loadingMore: Bool = false
-    private var tagMask: MessageTags?
+    private var tag: HistoryViewInputTag?
     private var centralEntryStableId: UInt32?
     private var configuration: GalleryConfiguration?
     
@@ -595,7 +607,22 @@ public class GalleryController: ViewController, StandalonePresentableController,
         let message: Signal<(Message, Bool)?, NoError>
         var translateToLanguage: Signal<String?, NoError> = .single(nil)
         switch source {
-            case let .peerMessagesAtId(messageId, _, _):
+            case let .peerMessagesAtId(messageId, chatLocation, customTag, _):
+                var peerIdValue: PeerId?
+                var threadIdValue: Int64?
+                switch chatLocation {
+                case let .peer(peerId):
+                    peerIdValue = peerId
+                case let .replyThread(message):
+                    peerIdValue = message.peerId
+                    threadIdValue = message.threadId
+                case .customChatContents:
+                    break
+                }
+                if peerIdValue == context.account.peerId, let customTag {
+                    context.engine.messages.internalReindexSavedMessagesCustomTagsIfNeeded(threadId: threadIdValue, tag: customTag)
+                }
+            
                 message = context.account.postbox.messageAtId(messageId)
                 |> mapToSignal { message -> Signal<(Message, Bool)?, NoError> in
                     if let message, let peer = message.peers[message.id.peerId] as? TelegramGroup, let migrationPeerId = peer.migrationReference?.peerId {
@@ -635,15 +662,23 @@ public class GalleryController: ViewController, StandalonePresentableController,
         |> mapToSignal { messageAndPeerIsCopyProtected -> Signal<GalleryMessageHistoryView?, NoError> in
             let (message, peerIsCopyProtected) = messageAndPeerIsCopyProtected!
             switch source {
-                case let .peerMessagesAtId(_, chatLocation, chatLocationContextHolder):
+                case let .peerMessagesAtId(_, chatLocation, customTag, chatLocationContextHolder):
                     if let tags = tagsForMessage(message) {
                         let namespaces: MessageIdNamespaces
                         if Namespaces.Message.allScheduled.contains(message.id.namespace) {
                             namespaces = .just(Namespaces.Message.allScheduled)
+                        } else if Namespaces.Message.allQuickReply.contains(message.id.namespace) {
+                            namespaces = .just(Namespaces.Message.allQuickReply)
                         } else {
-                            namespaces = .not(Namespaces.Message.allScheduled)
+                            namespaces = .not(Namespaces.Message.allNonRegular)
                         }
-                        return context.account.postbox.aroundMessageHistoryViewForLocation(context.chatLocationInput(for: chatLocation, contextHolder: chatLocationContextHolder), anchor: .index(message.index), ignoreMessagesInTimestampRange: nil, count: 50, clipHoles: false, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: [], tagMask: tags, appendMessagesFromTheSameGroup: false, namespaces: namespaces, orderStatistics: [.combinedLocation])
+                        let inputTag: HistoryViewInputTag
+                        if let customTag {
+                            inputTag = .customTag(customTag, tags)
+                        } else {
+                            inputTag = .tag(tags)
+                        }
+                        return context.account.postbox.aroundMessageHistoryViewForLocation(context.chatLocationInput(for: chatLocation, contextHolder: chatLocationContextHolder), anchor: .index(message.index), ignoreMessagesInTimestampRange: nil, count: 50, clipHoles: false, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: [], tag: inputTag, appendMessagesFromTheSameGroup: false, namespaces: namespaces, orderStatistics: [.combinedLocation])
                         |> mapToSignal { (view, _, _) -> Signal<GalleryMessageHistoryView?, NoError> in
                             let mapped = GalleryMessageHistoryView.view(view, peerIsCopyProtected)
                             return .single(mapped)
@@ -700,7 +735,7 @@ public class GalleryController: ViewController, StandalonePresentableController,
                         loop: for i in 0 ..< entries.count {
                             let message = entries[i].message
                             switch source {
-                                case let .peerMessagesAtId(messageId, _, _):
+                                case let .peerMessagesAtId(messageId, _, _, _):
                                     if message.id == messageId {
                                         centralEntryStableId = message.stableId
                                         break loop
@@ -718,7 +753,7 @@ public class GalleryController: ViewController, StandalonePresentableController,
                             }
                         }
                         
-                        strongSelf.tagMask = view.tagMask
+                        strongSelf.tag = view.tag
                         
                         if invertItemOrder {
                             strongSelf.entries = entries.reversed()
@@ -1136,7 +1171,7 @@ public class GalleryController: ViewController, StandalonePresentableController,
         self.isOpaqueWhenInOverlay = true
         
         switch source {
-        case let .peerMessagesAtId(id, _, _):
+        case let .peerMessagesAtId(id, _, _, _):
             if id.peerId.namespace == Namespaces.Peer.SecretChat {
                 self.screenCaptureEventsDisposable = (screenCaptureEvents()
                 |> deliverOnMainQueue).start(next: { [weak self] _ in
@@ -1357,7 +1392,7 @@ public class GalleryController: ViewController, StandalonePresentableController,
                     }
                     
                     switch strongSelf.source {
-                        case let .peerMessagesAtId(_, chatLocation, chatLocationContextHolder):
+                        case let .peerMessagesAtId(_, chatLocation, _, chatLocationContextHolder):
                             var reloadAroundIndex: MessageIndex?
                             if index <= 2 && strongSelf.hasLeftEntries {
                                 reloadAroundIndex = strongSelf.entries.first?.index
@@ -1365,14 +1400,16 @@ public class GalleryController: ViewController, StandalonePresentableController,
                                 reloadAroundIndex = strongSelf.entries.last?.index
                             }
                             let peerIsCopyProtected = strongSelf.peerIsCopyProtected
-                            if let reloadAroundIndex = reloadAroundIndex, let tagMask = strongSelf.tagMask {
+                            if let reloadAroundIndex = reloadAroundIndex, let tag = strongSelf.tag {
                                 let namespaces: MessageIdNamespaces
                                 if Namespaces.Message.allScheduled.contains(message.id.namespace) {
                                     namespaces = .just(Namespaces.Message.allScheduled)
+                                } else if Namespaces.Message.allQuickReply.contains(message.id.namespace) {
+                                    namespaces = .just(Namespaces.Message.allQuickReply)
                                 } else {
-                                    namespaces = .not(Namespaces.Message.allScheduled)
+                                    namespaces = .not(Namespaces.Message.allNonRegular)
                                 }
-                                let signal = strongSelf.context.account.postbox.aroundMessageHistoryViewForLocation(strongSelf.context.chatLocationInput(for: chatLocation, contextHolder: chatLocationContextHolder), anchor: .index(reloadAroundIndex), ignoreMessagesInTimestampRange: nil, count: 50, clipHoles: false, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: [], tagMask: tagMask, appendMessagesFromTheSameGroup: false, namespaces: namespaces, orderStatistics: [.combinedLocation])
+                                let signal = strongSelf.context.account.postbox.aroundMessageHistoryViewForLocation(strongSelf.context.chatLocationInput(for: chatLocation, contextHolder: chatLocationContextHolder), anchor: .index(reloadAroundIndex), ignoreMessagesInTimestampRange: nil, count: 50, clipHoles: false, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: [], tag: tag, appendMessagesFromTheSameGroup: false, namespaces: namespaces, orderStatistics: [.combinedLocation])
                                 |> mapToSignal { (view, _, _) -> Signal<GalleryMessageHistoryView?, NoError> in
                                     let mapped = GalleryMessageHistoryView.view(view, peerIsCopyProtected)
                                     return .single(mapped)

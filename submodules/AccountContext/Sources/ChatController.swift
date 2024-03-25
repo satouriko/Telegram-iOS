@@ -18,13 +18,16 @@ public final class ChatMessageItemAssociatedData: Equatable {
     public struct DisplayTranscribeButton: Equatable {
         public let canBeDisplayed: Bool
         public let displayForNotConsumed: Bool
+        public let providedByGroupBoost: Bool
         
         public init(
             canBeDisplayed: Bool,
-            displayForNotConsumed: Bool
+            displayForNotConsumed: Bool,
+            providedByGroupBoost: Bool
         ) {
             self.canBeDisplayed = canBeDisplayed
             self.displayForNotConsumed = displayForNotConsumed
+            self.providedByGroupBoost = providedByGroupBoost
         }
     }
     
@@ -41,6 +44,7 @@ public final class ChatMessageItemAssociatedData: Equatable {
     public let currentlyPlayingMessageId: EngineMessage.Index?
     public let isCopyProtectionEnabled: Bool
     public let availableReactions: AvailableReactions?
+    public let savedMessageTags: SavedMessageTags?
     public let defaultReaction: MessageReaction.Reaction?
     public let isPremium: Bool
     public let forceInlineReactions: Bool
@@ -53,6 +57,9 @@ public final class ChatMessageItemAssociatedData: Equatable {
     public let recommendedChannels: RecommendedChannels?
     public let audioTranscriptionTrial: AudioTranscription.TrialState
     public let chatThemes: [TelegramTheme]
+    public let deviceContactsNumbers: Set<String>
+    public let isStandalone: Bool
+    public let isInline: Bool
     
     public init(
         automaticDownloadPeerType: MediaAutoDownloadPeerType,
@@ -68,18 +75,22 @@ public final class ChatMessageItemAssociatedData: Equatable {
         currentlyPlayingMessageId: EngineMessage.Index? = nil,
         isCopyProtectionEnabled: Bool = false,
         availableReactions: AvailableReactions?,
+        savedMessageTags: SavedMessageTags?,
         defaultReaction: MessageReaction.Reaction?,
         isPremium: Bool,
         accountPeer: EnginePeer?,
         forceInlineReactions: Bool = false,
-        alwaysDisplayTranscribeButton: DisplayTranscribeButton = DisplayTranscribeButton(canBeDisplayed: false, displayForNotConsumed: false),
+        alwaysDisplayTranscribeButton: DisplayTranscribeButton = DisplayTranscribeButton(canBeDisplayed: false, displayForNotConsumed: false, providedByGroupBoost: false),
         topicAuthorId: EnginePeer.Id? = nil,
         hasBots: Bool = false,
         translateToLanguage: String? = nil,
         maxReadStoryId: Int32? = nil,
         recommendedChannels: RecommendedChannels? = nil,
         audioTranscriptionTrial: AudioTranscription.TrialState = .defaultValue,
-        chatThemes: [TelegramTheme] = []
+        chatThemes: [TelegramTheme] = [],
+        deviceContactsNumbers: Set<String> = Set(),
+        isStandalone: Bool = false,
+        isInline: Bool = false
     ) {
         self.automaticDownloadPeerType = automaticDownloadPeerType
         self.automaticDownloadPeerId = automaticDownloadPeerId
@@ -94,6 +105,7 @@ public final class ChatMessageItemAssociatedData: Equatable {
         self.currentlyPlayingMessageId = currentlyPlayingMessageId
         self.isCopyProtectionEnabled = isCopyProtectionEnabled
         self.availableReactions = availableReactions
+        self.savedMessageTags = savedMessageTags
         self.defaultReaction = defaultReaction
         self.isPremium = isPremium
         self.accountPeer = accountPeer
@@ -106,6 +118,9 @@ public final class ChatMessageItemAssociatedData: Equatable {
         self.recommendedChannels = recommendedChannels
         self.audioTranscriptionTrial = audioTranscriptionTrial
         self.chatThemes = chatThemes
+        self.deviceContactsNumbers = deviceContactsNumbers
+        self.isStandalone = isStandalone
+        self.isInline = isInline
     }
     
     public static func == (lhs: ChatMessageItemAssociatedData, rhs: ChatMessageItemAssociatedData) -> Bool {
@@ -148,6 +163,9 @@ public final class ChatMessageItemAssociatedData: Equatable {
         if lhs.availableReactions != rhs.availableReactions {
             return false
         }
+        if lhs.savedMessageTags != rhs.savedMessageTags {
+            return false
+        }
         if lhs.isPremium != rhs.isPremium {
             return false
         }
@@ -179,6 +197,15 @@ public final class ChatMessageItemAssociatedData: Equatable {
             return false
         }
         if lhs.chatThemes != rhs.chatThemes {
+            return false
+        }
+        if lhs.deviceContactsNumbers != rhs.deviceContactsNumbers {
+            return false
+        }
+        if lhs.isStandalone != rhs.isStandalone {
+            return false
+        }
+        if lhs.isInline != rhs.isInline {
             return false
         }
         return true
@@ -717,6 +744,7 @@ public enum ChatControllerSubject: Equatable {
     case scheduledMessages
     case pinnedMessages(id: EngineMessage.Id?)
     case messageOptions(peerIds: [EnginePeer.Id], ids: [EngineMessage.Id], info: MessageOptionsInfo)
+    case customChatContents(contents: ChatCustomContentsProtocol)
     
     public static func ==(lhs: ChatControllerSubject, rhs: ChatControllerSubject) -> Bool {
         switch lhs {
@@ -744,6 +772,12 @@ public enum ChatControllerSubject: Equatable {
             } else {
                 return false
             }
+        case let .customChatContents(lhsValue):
+            if case let .customChatContents(rhsValue) = rhs, lhsValue === rhsValue {
+                return true
+            } else {
+                return false
+            }
         }
     }
     
@@ -758,16 +792,41 @@ public enum ChatControllerSubject: Equatable {
 }
 
 public enum ChatControllerPresentationMode: Equatable {
-    case standard(previewing: Bool)
+    public enum StandardPresentation: Equatable {
+        case `default`
+        case previewing
+        case embedded(invertDirection: Bool)
+    }
+    
+    case standard(StandardPresentation)
     case overlay(NavigationController?)
     case inline(NavigationController?)
+}
+
+public enum ChatInputTextCommand: Equatable {
+    case command(PeerCommand)
+    case shortcut(ShortcutMessageList.Item)
+}
+
+public struct ChatInputQueryCommandsResult: Equatable {
+    public var commands: [ChatInputTextCommand]
+    public var accountPeer: EnginePeer?
+    public var hasShortcuts: Bool
+    public var query: String
+    
+    public init(commands: [ChatInputTextCommand], accountPeer: EnginePeer?, hasShortcuts: Bool, query: String) {
+        self.commands = commands
+        self.accountPeer = accountPeer
+        self.hasShortcuts = hasShortcuts
+        self.query = query
+    }
 }
 
 public enum ChatPresentationInputQueryResult: Equatable {
     case stickers([FoundStickerItem])
     case hashtags([String])
     case mentions([EnginePeer])
-    case commands([PeerCommand])
+    case commands(ChatInputQueryCommandsResult)
     case emojis([(String, TelegramMediaFile?, String)], NSRange)
     case contextRequestResult(EnginePeer?, ChatContextResultCollection?)
     
@@ -882,6 +941,24 @@ public extension Peer {
     }
 }
 
+public struct ChatControllerCustomNavigationPanelNodeLayoutResult {
+    public var backgroundHeight: CGFloat
+    public var insetHeight: CGFloat
+    public var hitTestSlop: CGFloat
+    
+    public init(backgroundHeight: CGFloat, insetHeight: CGFloat, hitTestSlop: CGFloat) {
+        self.backgroundHeight = backgroundHeight
+        self.insetHeight = insetHeight
+        self.hitTestSlop = hitTestSlop
+    }
+}
+
+public protocol ChatControllerCustomNavigationPanelNode: ASDisplayNode {
+    typealias LayoutResult = ChatControllerCustomNavigationPanelNodeLayoutResult
+    
+    func updateLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition, chatController: ChatController) -> LayoutResult
+}
+
 public protocol ChatController: ViewController {
     var chatLocation: ChatLocation { get }
     var canReadHistory: ValuePromise<Bool> { get }
@@ -889,8 +966,18 @@ public protocol ChatController: ViewController {
     
     var purposefulAction: (() -> Void)? { get set }
     
+    var stateUpdated: ((ContainedViewLayoutTransition) -> Void)? { get set }
+    var customDismissSearch: (() -> Void)? { get set }
+    
     var selectedMessageIds: Set<EngineMessage.Id>? { get }
     var presentationInterfaceStateSignal: Signal<Any, NoError> { get }
+    
+    var customNavigationBarContentNode: NavigationBarContentNode? { get }
+    var customNavigationPanelNode: ChatControllerCustomNavigationPanelNode? { get }
+    
+    var visibleContextController: ViewController? { get }
+    
+    var alwaysShowSearchResultsAsList: Bool { get set }
     
     func updatePresentationMode(_ mode: ChatControllerPresentationMode)
     func beginMessageSearch(_ query: String)
@@ -906,6 +993,10 @@ public protocol ChatController: ViewController {
     func cancelSelectingMessages()
     func activateSearch(domain: ChatSearchDomain, query: String)
     func beginClearHistory(type: InteractiveHistoryClearingType)
+    
+    func performScrollToTop() -> Bool
+    func transferScrollingVelocity(_ velocity: CGFloat)
+    func updateIsScrollingLockedAtTop(isScrollingLockedAtTop: Bool)
 }
 
 public protocol ChatMessagePreviewItemNode: AnyObject {
@@ -985,7 +1076,30 @@ public enum ChatHistoryListSource {
     }
     
     case `default`
-    case custom(messages: Signal<([Message], Int32, Bool), NoError>, messageId: MessageId, quote: Quote?, loadMore: (() -> Void)?)
+    case custom(messages: Signal<([Message], Int32, Bool), NoError>, messageId: MessageId?, quote: Quote?, loadMore: (() -> Void)?)
+    case customView(historyView: Signal<(MessageHistoryView, ViewUpdateType), NoError>)
+}
+
+public enum ChatQuickReplyShortcutType {
+    case generic
+    case greeting
+    case away
+}
+
+public enum ChatCustomContentsKind: Equatable {
+    case quickReplyMessageInput(shortcut: String, shortcutType: ChatQuickReplyShortcutType)
+}
+
+public protocol ChatCustomContentsProtocol: AnyObject {
+    var kind: ChatCustomContentsKind { get }
+    var historyView: Signal<(MessageHistoryView, ViewUpdateType), NoError> { get }
+    var messageLimit: Int? { get }
+    
+    func enqueueMessages(messages: [EnqueueMessage])
+    func deleteMessages(ids: [EngineMessage.Id])
+    func editMessage(id: EngineMessage.Id, text: String, media: RequestEditMessageMedia, entities: TextEntitiesMessageAttribute?, webpagePreviewAttribute: WebpagePreviewMessageAttribute?, disableUrlPreview: Bool)
+    
+    func quickReplyUpdateShortcut(value: String)
 }
 
 public enum ChatHistoryListDisplayHeaders {
@@ -1004,7 +1118,7 @@ public protocol ChatControllerInteractionProtocol: AnyObject {
 
 public enum ChatHistoryNodeHistoryState: Equatable {
     case loading
-    case loaded(isEmpty: Bool)
+    case loaded(isEmpty: Bool, hasReachedLimits: Bool)
 }
 
 public protocol ChatHistoryListNode: ListView {

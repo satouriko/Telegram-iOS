@@ -105,14 +105,15 @@ public final class SparseMessageList {
                 self.sparseItemsDisposable = (self.account.postbox.transaction { transaction -> Api.InputPeer? in
                     return transaction.getPeer(peerId).flatMap(apiInputPeer)
                 }
-                                              |> mapToSignal { inputPeer -> Signal<SparseItems, NoError> in
+                |> mapToSignal { inputPeer -> Signal<SparseItems, NoError> in
                     guard let inputPeer = inputPeer else {
                         return .single(SparseItems(items: []))
                     }
                     guard let messageFilter = messageFilterForTagMask(messageTag) else {
                         return .single(SparseItems(items: []))
                     }
-                    return account.network.request(Api.functions.messages.getSearchResultsPositions(peer: inputPeer, filter: messageFilter, offsetId: 0, limit: 1000))
+                    //TODO:api
+                    return account.network.request(Api.functions.messages.getSearchResultsPositions(flags: 0, peer: inputPeer, savedPeerId: nil, filter: messageFilter, offsetId: 0, limit: 1000))
                     |> map { result -> SparseItems in
                         switch result {
                         case let .searchResultsPositions(totalCount, positions):
@@ -191,7 +192,7 @@ public final class SparseMessageList {
             
             let location: ChatLocationInput = .peer(peerId: self.peerId, threadId: self.threadId)
             
-            self.topItemsDisposable.set((self.account.postbox.aroundMessageHistoryViewForLocation(location, anchor: .upperBound, ignoreMessagesInTimestampRange: nil, count: count, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: Set(), tagMask: self.messageTag, appendMessagesFromTheSameGroup: false, namespaces: .not(Set(Namespaces.Message.allScheduled)), orderStatistics: [])
+            self.topItemsDisposable.set((self.account.postbox.aroundMessageHistoryViewForLocation(location, anchor: .upperBound, ignoreMessagesInTimestampRange: nil, count: count, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: Set(), tag: .tag(self.messageTag), appendMessagesFromTheSameGroup: false, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: [])
             |> deliverOn(self.queue)).start(next: { [weak self] view, updateType, _ in
                 guard let strongSelf = self else {
                     return
@@ -725,6 +726,7 @@ public final class SparseMessageCalendar {
         private let peerId: PeerId
         private let threadId: Int64?
         private let messageTag: MessageTags
+        private let displayMedia: Bool
 
         private var state: InternalState
         let statePromise = Promise<InternalState>()
@@ -741,12 +743,13 @@ public final class SparseMessageCalendar {
             return self.isLoadingMorePromise.get()
         }
 
-        init(queue: Queue, account: Account, peerId: PeerId, threadId: Int64?, messageTag: MessageTags) {
+        init(queue: Queue, account: Account, peerId: PeerId, threadId: Int64?, messageTag: MessageTags, displayMedia: Bool) {
             self.queue = queue
             self.account = account
             self.peerId = peerId
             self.threadId = threadId
             self.messageTag = messageTag
+            self.displayMedia = displayMedia
 
             self.state = InternalState(nextRequestOffset: 0, minTimestamp: nil, messagesByDay: [:])
             self.statePromise.set(.single(self.state))
@@ -790,6 +793,9 @@ public final class SparseMessageCalendar {
             if self.threadId != nil {
                 return
             }
+            if !self.displayMedia {
+                return
+            }
 
             self.isLoadingMore = true
 
@@ -817,7 +823,8 @@ public final class SparseMessageCalendar {
                 guard let messageFilter = messageFilterForTagMask(messageTag) else {
                     return .single(LoadResult(messagesByDay: [:], nextOffset: nil, minMessageId: nil, minTimestamp: nil))
                 }
-                return self.account.network.request(Api.functions.messages.getSearchResultsCalendar(peer: inputPeer, filter: messageFilter, offsetId: nextRequestOffset, offsetDate: 0))
+                //TODO:api
+                return self.account.network.request(Api.functions.messages.getSearchResultsCalendar(flags: 0, peer: inputPeer, savedPeerId: nil, filter: messageFilter, offsetId: nextRequestOffset, offsetDate: 0))
                 |> map(Optional.init)
                 |> `catch` { _ -> Signal<Api.messages.SearchResultsCalendar?, NoError> in
                     return .single(nil)
@@ -903,11 +910,11 @@ public final class SparseMessageCalendar {
     public var minTimestamp: Int32?
     private var disposable: Disposable?
 
-    init(account: Account, peerId: PeerId, threadId: Int64?, messageTag: MessageTags) {
+    init(account: Account, peerId: PeerId, threadId: Int64?, messageTag: MessageTags, displayMedia: Bool) {
         let queue = Queue()
         self.queue = queue
         self.impl = QueueLocalObject(queue: queue, generate: {
-            return Impl(queue: queue, account: account, peerId: peerId, threadId: threadId, messageTag: messageTag)
+            return Impl(queue: queue, account: account, peerId: peerId, threadId: threadId, messageTag: messageTag, displayMedia: displayMedia)
         })
 
         self.disposable = self.state.start(next: { [weak self] state in

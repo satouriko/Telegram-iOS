@@ -14,15 +14,18 @@ public typealias EngineStringIndexTokenTransliteration = StringIndexTokenTransli
 public final class OpaqueChatInterfaceState {
     public let opaqueData: Data?
     public let historyScrollMessageIndex: MessageIndex?
+    public let mediaDraftState: MediaDraftState?
     public let synchronizeableInputState: SynchronizeableChatInputState?
 
     public init(
         opaqueData: Data?,
         historyScrollMessageIndex: MessageIndex?,
+        mediaDraftState: MediaDraftState?,
         synchronizeableInputState: SynchronizeableChatInputState?
     ) {
         self.opaqueData = opaqueData
         self.historyScrollMessageIndex = historyScrollMessageIndex
+        self.mediaDraftState = mediaDraftState
         self.synchronizeableInputState = synchronizeableInputState
     }
 }
@@ -349,6 +352,10 @@ public extension TelegramEngine {
         public func updateDefaultChannelMemberBannedRights(peerId: PeerId, rights: TelegramChatBannedRights) -> Signal<Never, NoError> {
             return _internal_updateDefaultChannelMemberBannedRights(account: self.account, peerId: peerId, rights: rights)
         }
+        
+        public func updateChannelBoostsToUnlockRestrictions(peerId: PeerId, boosts: Int32) -> Signal<Never, NoError> {
+            return _internal_updateChannelBoostsToUnlockRestrictions(account: self.account, peerId: peerId, boosts: boosts)
+        }
 
         public func createChannel(title: String, description: String?, username: String? = nil) -> Signal<PeerId, CreateChannelError> {
             return _internal_createChannel(account: self.account, title: title, description: description, username: username)
@@ -416,6 +423,10 @@ public extension TelegramEngine {
         public func updateGroupSpecificStickerset(peerId: PeerId, info: StickerPackCollectionInfo?) -> Signal<Void, UpdateGroupSpecificStickersetError> {
             return _internal_updateGroupSpecificStickerset(postbox: self.account.postbox, network: self.account.network, peerId: peerId, info: info)
         }
+        
+        public func updateGroupSpecificEmojiset(peerId: PeerId, info: StickerPackCollectionInfo?) -> Signal<Void, UpdateGroupSpecificEmojisetError> {
+            return _internal_updateGroupSpecificEmojiset(postbox: self.account.postbox, network: self.account.network, peerId: peerId, info: info)
+        }
 
         public func joinChannel(peerId: PeerId, hash: String?) -> Signal<RenderedChannelParticipant?, JoinChannelError> {
             return _internal_joinChannel(account: self.account, peerId: peerId, hash: hash)
@@ -458,6 +469,10 @@ public extension TelegramEngine {
 
         public func peerSpecificStickerPack(peerId: PeerId) -> Signal<PeerSpecificStickerPackData, NoError> {
             return _internal_peerSpecificStickerPack(postbox: self.account.postbox, network: self.account.network, peerId: peerId)
+        }
+        
+        public func peerSpecificEmojiPack(peerId: PeerId) -> Signal<PeerSpecificStickerPackData, NoError> {
+            return _internal_peerSpecificEmojiPack(postbox: self.account.postbox, network: self.account.network, peerId: peerId)
         }
 
         public func addRecentlySearchedPeer(peerId: PeerId) -> Signal<Void, NoError> {
@@ -571,6 +586,10 @@ public extension TelegramEngine {
 
         public func updateChatListFiltersInteractively(_ f: @escaping ([ChatListFilter]) -> [ChatListFilter]) -> Signal<[ChatListFilter], NoError> {
             return _internal_updateChatListFiltersInteractively(postbox: self.account.postbox, f)
+        }
+        
+        public func updateChatListFiltersDisplayTags(isEnabled: Bool) {
+            let _ = _internal_updateChatListFiltersDisplayTagsInteractively(postbox: self.account.postbox, displayTags: isEnabled).startStandalone()
         }
 
         public func updatedChatListFilters() -> Signal<[ChatListFilter], NoError> {
@@ -863,6 +882,7 @@ public extension TelegramEngine {
                 return OpaqueChatInterfaceState(
                     opaqueData: internalState.opaqueData,
                     historyScrollMessageIndex: internalState.historyScrollMessageIndex,
+                    mediaDraftState: internalState.mediaDraftState,
                     synchronizeableInputState: internalState.synchronizeableInputState
                 )
             }
@@ -873,6 +893,7 @@ public extension TelegramEngine {
                 guard let data = try? AdaptedPostboxEncoder().encode(InternalChatInterfaceState(
                     synchronizeableInputState: state.synchronizeableInputState,
                     historyScrollMessageIndex: state.historyScrollMessageIndex,
+                    mediaDraftState: state.mediaDraftState,
                     opaqueData: state.opaqueData
                 )) else {
                     return
@@ -881,9 +902,21 @@ public extension TelegramEngine {
                 #if DEBUG
                 let _ = try! AdaptedPostboxDecoder().decode(InternalChatInterfaceState.self, from: data)
                 #endif
+                
+                var overrideChatTimestamp: Int32?
+                if let inputState = state.synchronizeableInputState {
+                    overrideChatTimestamp = inputState.timestamp
+                }
+                
+                if let mediaDraftState = state.mediaDraftState {
+                    if let current = overrideChatTimestamp, mediaDraftState.timestamp < current {
+                    } else {
+                        overrideChatTimestamp = mediaDraftState.timestamp
+                    }
+                }
 
                 let storedState = StoredPeerChatInterfaceState(
-                    overrideChatTimestamp: state.synchronizeableInputState?.timestamp,
+                    overrideChatTimestamp: overrideChatTimestamp,
                     historyScrollMessageIndex: state.historyScrollMessageIndex,
                     associatedMessageIds: (state.synchronizeableInputState?.replySubject?.messageId).flatMap({ [$0] }) ?? [],
                     data: data
@@ -1043,7 +1076,7 @@ public extension TelegramEngine {
                 
                 transaction.setMessageHistoryThreadInfo(peerId: id, threadId: threadId, info: nil)
                 
-                _internal_clearHistory(transaction: transaction, mediaBox: self.account.postbox.mediaBox, peerId: id, threadId: threadId, namespaces: .not(Namespaces.Message.allScheduled))
+                _internal_clearHistory(transaction: transaction, mediaBox: self.account.postbox.mediaBox, peerId: id, threadId: threadId, namespaces: .not(Namespaces.Message.allNonRegular))
             }
             |> ignoreValues
         }
@@ -1055,7 +1088,7 @@ public extension TelegramEngine {
                     
                     transaction.setMessageHistoryThreadInfo(peerId: id, threadId: threadId, info: nil)
                     
-                    _internal_clearHistory(transaction: transaction, mediaBox: self.account.postbox.mediaBox, peerId: id, threadId: threadId, namespaces: .not(Namespaces.Message.allScheduled))
+                    _internal_clearHistory(transaction: transaction, mediaBox: self.account.postbox.mediaBox, peerId: id, threadId: threadId, namespaces: .not(Namespaces.Message.allNonRegular))
                 }
             }
             |> ignoreValues
@@ -1063,13 +1096,23 @@ public extension TelegramEngine {
         
         public func toggleForumChannelTopicPinned(id: EnginePeer.Id, threadId: Int64) -> Signal<Never, SetForumChannelTopicPinnedError> {
             return self.account.postbox.transaction { transaction -> ([Int64], Int) in
-                var limit = 5
-                let appConfiguration: AppConfiguration = transaction.getPreferencesEntry(key: PreferencesKeys.appConfiguration)?.get(AppConfiguration.self) ?? AppConfiguration.defaultValue
-                if let data = appConfiguration.data, let value = data["topics_pinned_limit"] as? Double {
-                    limit = Int(value)
+                if id == self.account.peerId {
+                    let appConfiguration: AppConfiguration = transaction.getPreferencesEntry(key: PreferencesKeys.appConfiguration)?.get(AppConfiguration.self) ?? AppConfiguration.defaultValue
+                    
+                    let accountPeer = transaction.getPeer(self.account.peerId)
+                    let limitsConfiguration = UserLimitsConfiguration(appConfiguration: appConfiguration, isPremium: accountPeer?.isPremium ?? false)
+                    let limit = limitsConfiguration.maxPinnedSavedChatCount
+                    
+                    return (transaction.getPeerPinnedThreads(peerId: id), Int(limit))
+                } else {
+                    var limit = 5
+                    let appConfiguration: AppConfiguration = transaction.getPreferencesEntry(key: PreferencesKeys.appConfiguration)?.get(AppConfiguration.self) ?? AppConfiguration.defaultValue
+                    if let data = appConfiguration.data, let value = data["topics_pinned_limit"] as? Double {
+                        limit = Int(value)
+                    }
+                    
+                    return (transaction.getPeerPinnedThreads(peerId: id), limit)
                 }
-                
-                return (transaction.getPeerPinnedThreads(peerId: id), limit)
             }
             |> castError(SetForumChannelTopicPinnedError.self)
             |> mapToSignal { threadIds, limit -> Signal<Never, SetForumChannelTopicPinnedError> in
@@ -1263,6 +1306,87 @@ public extension TelegramEngine {
         public func requestRecommendedChannels(peerId: EnginePeer.Id, forceUpdate: Bool = false) -> Signal<Never, NoError> {
             return _internal_requestRecommendedChannels(account: self.account, peerId: peerId, forceUpdate: forceUpdate)
         }
+        
+        public func isPremiumRequiredToContact(_ peerIds: [EnginePeer.Id]) -> Signal<[EnginePeer.Id], NoError> {
+            return _internal_updateIsPremiumRequiredToContact(account: self.account, peerIds: peerIds)
+        }
+        
+        public func subscribeIsPremiumRequiredForMessaging(id: EnginePeer.Id) -> Signal<Bool, NoError> {
+            if id.namespace != Namespaces.Peer.CloudUser {
+                return .single(false)
+            }
+            
+            return self.account.postbox.combinedView(keys: [
+                PostboxViewKey.basicPeer(self.account.peerId),
+                PostboxViewKey.basicPeer(id),
+                PostboxViewKey.cachedPeerData(peerId: id)
+            ])
+            |> map { views -> Bool in
+                guard let basicAccountPeerView = views.views[PostboxViewKey.basicPeer(self.account.peerId)] as? BasicPeerView else {
+                    return false
+                }
+                guard let accountPeer = basicAccountPeerView.peer else {
+                    return false
+                }
+                if accountPeer.isPremium {
+                    return false
+                }
+                
+                guard let basicPeerView = views.views[PostboxViewKey.basicPeer(id)] as? BasicPeerView else {
+                    return false
+                }
+                guard let user = basicPeerView.peer as? TelegramUser else {
+                    return false
+                }
+                guard let cachedDataView = views.views[PostboxViewKey.cachedPeerData(peerId: id)] as? CachedPeerDataView else {
+                    return false
+                }
+                if !user.flags.contains(.requirePremium) {
+                    return false
+                }
+                
+                /*#if DEBUG
+                if "".isEmpty {
+                    return true
+                }
+                #endif*/
+                
+                if let cachedData = cachedDataView.cachedPeerData as? CachedUserData {
+                    if cachedData.flags.contains(.premiumRequired) {
+                        return true
+                    } else {
+                        return false
+                    }
+                } else {
+                    return true
+                }
+            }
+            |> distinctUntilChanged
+            |> mapToSignal { maybeValue -> Signal<Bool, NoError> in
+                if !maybeValue {
+                    return .single(false)
+                }
+                
+                return self.account.postbox.aroundMessageHistoryViewForLocation(.peer(peerId: id, threadId: nil), anchor: .upperBound, ignoreMessagesInTimestampRange: nil, count: 44, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: Set(), tag: nil, appendMessagesFromTheSameGroup: false, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: [])
+                |> map { view -> Bool in
+                    for entry in view.0.entries {
+                        if entry.message.flags.contains(.Incoming) {
+                            return false
+                        }
+                    }
+                    return true
+                }
+                |> distinctUntilChanged
+            }
+        }
+        
+        public func updateSavedMessagesViewAsTopics(value: Bool) {
+            let _ = (self.account.postbox.transaction { transaction -> Void in
+                transaction.updatePreferencesEntry(key: PreferencesKeys.displaySavedChatsAsTopics(), { _ in
+                    return PreferencesEntry(EngineDisplaySavedChatsAsTopics(value: value))
+                })
+            }).start()
+        }
     }
 }
 
@@ -1276,6 +1400,7 @@ public func _internal_decodeStoredChatInterfaceState(state: StoredPeerChatInterf
     return OpaqueChatInterfaceState(
         opaqueData: internalState.opaqueData,
         historyScrollMessageIndex: internalState.historyScrollMessageIndex,
+        mediaDraftState: internalState.mediaDraftState,
         synchronizeableInputState: internalState.synchronizeableInputState
     )
 }

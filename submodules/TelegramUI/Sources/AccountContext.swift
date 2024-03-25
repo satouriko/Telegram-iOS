@@ -477,13 +477,13 @@ public final class AccountContextImpl: AccountContext {
         case let .peer(peerId):
             return .peer(peerId: peerId, threadId: nil)
         case let .replyThread(data):
-            if data.isForumPost {
-                return .peer(peerId: data.messageId.peerId, threadId: Int64(data.messageId.id))
+            if data.isForumPost || data.peerId.namespace != Namespaces.Peer.CloudChannel {
+                return .peer(peerId: data.peerId, threadId: data.threadId)
             } else {
                 let context = chatLocationContext(holder: contextHolder, account: self.account, data: data)
-                return .thread(peerId: data.messageId.peerId, threadId: makeMessageThreadId(data.messageId), data: context.state)
+                return .thread(peerId: data.peerId, threadId: data.threadId, data: context.state)
             }
-        case .feed:
+        case .customChatContents:
             preconditionFailure()
         }
     }
@@ -494,7 +494,7 @@ public final class AccountContextImpl: AccountContext {
             return .single(nil)
         case let .replyThread(data):
             if data.isForumPost, let peerId = location.peerId {
-                let viewKey: PostboxViewKey = .messageHistoryThreadInfo(peerId: data.messageId.peerId, threadId: Int64(data.messageId.id))
+                let viewKey: PostboxViewKey = .messageHistoryThreadInfo(peerId: data.peerId, threadId: data.threadId)
                 return self.account.postbox.combinedView(keys: [viewKey])
                 |> map { views -> MessageId? in
                     if let threadInfo = views.views[viewKey] as? MessageHistoryThreadInfoView, let data = threadInfo.info?.data.get(MessageHistoryThreadData.self) {
@@ -503,11 +503,13 @@ public final class AccountContextImpl: AccountContext {
                         return nil
                     }
                 }
-            } else {
+            } else if data.peerId.namespace == Namespaces.Peer.CloudChannel {
                 let context = chatLocationContext(holder: contextHolder, account: self.account, data: data)
                 return context.maxReadOutgoingMessageId
+            } else {
+                return .single(nil)
             }
-        case .feed:
+        case .customChatContents:
             return .single(nil)
         }
     }
@@ -530,7 +532,7 @@ public final class AccountContextImpl: AccountContext {
             }
         case let .replyThread(data):
             if data.isForumPost {
-                let viewKey: PostboxViewKey = .messageHistoryThreadInfo(peerId: data.messageId.peerId, threadId: Int64(data.messageId.id))
+                let viewKey: PostboxViewKey = .messageHistoryThreadInfo(peerId: data.peerId, threadId: data.threadId)
                 return self.account.postbox.combinedView(keys: [viewKey])
                 |> map { views -> Int in
                     if let threadInfo = views.views[viewKey] as? MessageHistoryThreadInfoView, let data = threadInfo.info?.data.get(MessageHistoryThreadData.self) {
@@ -539,11 +541,13 @@ public final class AccountContextImpl: AccountContext {
                         return 0
                     }
                 }
+            } else if data.peerId.namespace != Namespaces.Peer.CloudChannel {
+                return .single(0)
             } else {
                 let context = chatLocationContext(holder: contextHolder, account: self.account, data: data)
                 return context.unreadCount
             }
-        case .feed:
+        case .customChatContents:
             return .single(0)
         }
     }
@@ -555,7 +559,7 @@ public final class AccountContextImpl: AccountContext {
         case let .replyThread(data):
             let context = chatLocationContext(holder: contextHolder, account: self.account, data: data)
             context.applyMaxReadIndex(messageIndex: messageIndex)
-        case .feed:
+        case .customChatContents:
             break
         }
     }
@@ -722,7 +726,7 @@ private final class ChatLocationReplyContextHolderImpl: ChatLocationContextHolde
     let context: ReplyThreadHistoryContext
     
     init(account: Account, data: ChatReplyThreadMessage) {
-        self.context = ReplyThreadHistoryContext(account: account, peerId: data.messageId.peerId, data: data)
+        self.context = ReplyThreadHistoryContext(account: account, peerId: data.peerId, data: data)
     }
 }
 

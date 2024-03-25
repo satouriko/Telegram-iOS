@@ -248,7 +248,8 @@ public func generateWebAppThemeParams(_ presentationTheme: PresentationTheme) ->
         "section_bg_color": Int32(bitPattern: presentationTheme.list.itemBlocksBackgroundColor.rgb),
         "section_header_text_color": Int32(bitPattern: presentationTheme.list.freeTextColor.rgb),
         "subtitle_text_color": Int32(bitPattern: presentationTheme.list.itemSecondaryTextColor.rgb),
-        "destructive_text_color": Int32(bitPattern: presentationTheme.list.itemDestructiveColor.rgb)
+        "destructive_text_color": Int32(bitPattern: presentationTheme.list.itemDestructiveColor.rgb),
+        "section_separator_color": Int32(bitPattern: presentationTheme.list.itemBlocksSeparatorColor.rgb)
     ]
 }
 
@@ -289,6 +290,8 @@ public final class WebAppController: ViewController, AttachmentContainable {
         private var keepAliveDisposable: Disposable?
         
         private var paymentDisposable: Disposable?
+        
+        private var lastExpansionTimestamp: Double?
         
         private var didTransitionIn = false
         private var dismissed = false
@@ -649,13 +652,25 @@ public final class WebAppController: ViewController, AttachmentContainable {
             transition.updateFrame(node: self.topOverscrollNode, frame: CGRect(origin: CGPoint(x: 0.0, y: -1000.0), size: CGSize(width: layout.size.width, height: 1000.0)))
             
             if let webView = self.webView {
-                let frame = CGRect(origin: CGPoint(x: layout.safeInsets.left, y: navigationBarHeight), size: CGSize(width: layout.size.width - layout.safeInsets.left - layout.safeInsets.right, height: max(1.0, layout.size.height - navigationBarHeight - layout.intrinsicInsets.bottom)))
+                var scrollInset = UIEdgeInsets(top: 0.0, left: 0.0, bottom: layout.intrinsicInsets.bottom, right: 0.0)
+                var frameBottomInset: CGFloat = 0.0
+                if scrollInset.bottom > 40.0 {
+                    frameBottomInset = scrollInset.bottom
+                    scrollInset.bottom = 0.0
+                }
+                
+                let frame = CGRect(origin: CGPoint(x: layout.safeInsets.left, y: navigationBarHeight), size: CGSize(width: layout.size.width - layout.safeInsets.left - layout.safeInsets.right, height: max(1.0, layout.size.height - navigationBarHeight - frameBottomInset)))
                 
                 var bottomInset = layout.intrinsicInsets.bottom + layout.additionalInsets.bottom
                 if let inputHeight = self.validLayout?.0.inputHeight, inputHeight > 44.0 {
                     bottomInset = max(bottomInset, inputHeight)
                 }
                 let viewportFrame = CGRect(origin: CGPoint(x: layout.safeInsets.left, y: navigationBarHeight), size: CGSize(width: layout.size.width - layout.safeInsets.left - layout.safeInsets.right, height: max(1.0, layout.size.height - navigationBarHeight - bottomInset)))
+                
+                if webView.scrollView.contentInset != scrollInset {
+                    webView.scrollView.contentInset = scrollInset
+                    webView.scrollView.scrollIndicatorInsets = scrollInset
+                }
                 
                 if previousLayout != nil && (previousLayout?.inputHeight ?? 0.0).isZero, let inputHeight = layout.inputHeight, inputHeight > 44.0, transition.isAnimated {
                     webView.scrollToActiveElement(layout: layout, completion: { [weak self] contentOffset in
@@ -726,7 +741,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
             guard let eventName = body["eventName"] as? String else {
                 return
             }
-            
+            let currentTimestamp = CACurrentMediaTime()
             let eventData = (body["eventData"] as? String)?.data(using: .utf8)
             let json = try? JSONSerialization.jsonObject(with: eventData ?? Data(), options: []) as? [String: Any]
             
@@ -791,7 +806,12 @@ public final class WebAppController: ViewController, AttachmentContainable {
                 case "web_app_request_theme":
                     self.sendThemeChangedEvent()
                 case "web_app_expand":
-                    controller.requestAttachmentMenuExpansion()
+                    if let lastExpansionTimestamp = self.lastExpansionTimestamp, currentTimestamp < lastExpansionTimestamp + 1.0 {
+                        
+                    } else {
+                        self.lastExpansionTimestamp = currentTimestamp
+                        controller.requestAttachmentMenuExpansion()
+                    }
                 case "web_app_close":
                     controller.dismiss()
                 case "web_app_open_tg_link":
@@ -833,7 +853,6 @@ public final class WebAppController: ViewController, AttachmentContainable {
                 case "web_app_open_link":
                     if let json = json, let url = json["url"] as? String {
                         let tryInstantView = json["try_instant_view"] as? Bool ?? false
-                        let currentTimestamp = CACurrentMediaTime()
                         if let lastTouchTimestamp = self.webView?.lastTouchTimestamp, currentTimestamp < lastTouchTimestamp + 10.0 {
                             self.webView?.lastTouchTimestamp = nil
                             if tryInstantView {

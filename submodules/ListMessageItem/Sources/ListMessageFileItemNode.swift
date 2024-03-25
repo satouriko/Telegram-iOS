@@ -595,7 +595,7 @@ public final class ListMessageFileItemNode: ListMessageNode {
             var leftOffset: CGFloat = 0.0
             var selectionNodeWidthAndApply: (CGFloat, (CGSize, Bool) -> ItemListSelectableControlNode)?
             if case let .selectable(selected) = item.selection {
-                let (selectionWidth, selectionApply) = selectionNodeLayout(item.presentationData.theme.theme.list.itemCheckColors.strokeColor, item.presentationData.theme.theme.list.itemCheckColors.fillColor, item.presentationData.theme.theme.list.itemCheckColors.foregroundColor, selected, false)
+                let (selectionWidth, selectionApply) = selectionNodeLayout(item.presentationData.theme.theme.list.itemCheckColors.strokeColor, item.presentationData.theme.theme.list.itemCheckColors.fillColor, item.presentationData.theme.theme.list.itemCheckColors.foregroundColor, selected, .regular)
                 selectionNodeWidthAndApply = (selectionWidth, selectionApply)
                 leftOffset += selectionWidth
             }
@@ -818,7 +818,7 @@ public final class ListMessageFileItemNode: ListMessageNode {
                 descriptionText = NSAttributedString(string: " ", font: descriptionFont, textColor: item.presentationData.theme.theme.list.itemSecondaryTextColor)
             }
             
-            if let _ = item.message?.threadId, let threadInfo = item.message?.associatedThreadInfo {
+            if let _ = item.message?.threadId, item.message?.id.peerId.namespace == Namespaces.Peer.CloudChannel, let threadInfo = item.message?.associatedThreadInfo {
                 if isInstantVideo || isVoice {
                     titleExtraData = (NSAttributedString(string: threadInfo.title, font: titleFont, textColor: item.presentationData.theme.theme.list.itemPrimaryTextColor), true, threadInfo.icon, threadInfo.iconColor)
                 } else {

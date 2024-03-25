@@ -6,10 +6,11 @@ public enum ChatNavigationButtonAction: Equatable {
     case clearHistory
     case clearCache
     case cancelMessageSelection
-    case search
+    case search(hasTags: Bool)
     case dismiss
     case toggleInfoPanel
     case spacer
+    case edit
 }
 
 public struct ChatNavigationButton: Equatable {

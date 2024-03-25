@@ -225,9 +225,11 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
         var layoutInput: LayoutInput
         var constrainedSize: CGSize
         var availableReactions: AvailableReactions?
+        var savedMessageTags: SavedMessageTags?
         var reactions: [MessageReaction]
         var reactionPeers: [(MessageReaction.Reaction, EnginePeer)]
         var displayAllReactionPeers: Bool
+        var areReactionsTags: Bool
         var replyCount: Int
         var isPinned: Bool
         var hasAutoremove: Bool
@@ -245,9 +247,11 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             layoutInput: LayoutInput,
             constrainedSize: CGSize,
             availableReactions: AvailableReactions?,
+            savedMessageTags: SavedMessageTags?,
             reactions: [MessageReaction],
             reactionPeers: [(MessageReaction.Reaction, EnginePeer)],
             displayAllReactionPeers: Bool,
+            areReactionsTags: Bool,
             replyCount: Int,
             isPinned: Bool,
             hasAutoremove: Bool,
@@ -258,15 +262,17 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             self.context = context
             self.presentationData = presentationData
             self.edited = edited
-            self.impressionCount = impressionCount
+            self.impressionCount = impressionCount == 0 ? nil : impressionCount
             self.dateText = dateText
             self.type = type
             self.layoutInput = layoutInput
             self.availableReactions = availableReactions
+            self.savedMessageTags = savedMessageTags
             self.constrainedSize = constrainedSize
             self.reactions = reactions
             self.reactionPeers = reactionPeers
             self.displayAllReactionPeers = displayAllReactionPeers
+            self.areReactionsTags = areReactionsTags
             self.replyCount = replyCount
             self.isPinned = isPinned
             self.hasAutoremove = hasAutoremove
@@ -313,7 +319,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             }
         }
     }
-    public var reactionSelected: ((MessageReaction.Reaction) -> Void)?
+    public var reactionSelected: ((ReactionButtonAsyncNode, MessageReaction.Reaction, ContextExtractedContentContainingView?) -> Void)?
     public var openReactionPreview: ((ContextGesture?, ContextExtractedContentContainingView, MessageReaction.Reaction) -> Void)?
     
     override public init() {
@@ -388,6 +394,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                     selectedForeground: themeColors.reactionActiveForeground.argb,
                     extractedBackground: arguments.presentationData.theme.theme.contextMenu.backgroundColor.argb,
                     extractedForeground: arguments.presentationData.theme.theme.contextMenu.primaryColor.argb,
+                    extractedSelectedForeground: arguments.presentationData.theme.theme.overallDarkAppearance ? themeColors.reactionActiveForeground.argb : arguments.presentationData.theme.theme.list.itemCheckColors.foregroundColor.argb,
                     deselectedMediaPlaceholder: themeColors.reactionInactiveMediaPlaceholder.argb,
                     selectedMediaPlaceholder: themeColors.reactionActiveMediaPlaceholder.argb
                 )
@@ -400,7 +407,8 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                     deselectedForeground: themeColors.reactionInactiveForeground.argb,
                     selectedForeground: themeColors.reactionActiveForeground.argb,
                     extractedBackground: arguments.presentationData.theme.theme.contextMenu.backgroundColor.argb,
-                    extractedForeground:  arguments.presentationData.theme.theme.contextMenu.primaryColor.argb,
+                    extractedForeground: arguments.presentationData.theme.theme.contextMenu.primaryColor.argb,
+                    extractedSelectedForeground: arguments.presentationData.theme.theme.overallDarkAppearance ? themeColors.reactionActiveForeground.argb : arguments.presentationData.theme.theme.list.itemCheckColors.foregroundColor.argb,
                     deselectedMediaPlaceholder: themeColors.reactionInactiveMediaPlaceholder.argb,
                     selectedMediaPlaceholder: themeColors.reactionActiveMediaPlaceholder.argb
                 )
@@ -736,14 +744,15 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                 resultingHeight = layoutSize.height
                 reactionButtonsResult = reactionButtonsContainer.update(
                     context: arguments.context,
-                    action: { value in
+                    action: { itemNode, value, sourceView in
                         guard let strongSelf = self else {
                             return
                         }
-                        strongSelf.reactionSelected?(value)
+                        strongSelf.reactionSelected?(itemNode, value, sourceView)
                     },
                     reactions: [],
                     colors: reactionColors,
+                    isTag: arguments.areReactionsTags,
                     constrainedWidth: arguments.constrainedSize.width
                 )
             case let .trailingContent(contentWidth, reactionSettings):
@@ -755,11 +764,11 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                     
                     reactionButtonsResult = reactionButtonsContainer.update(
                         context: arguments.context,
-                        action: { value in
+                        action: { itemNode, value, sourceView in
                             guard let strongSelf = self else {
                                 return
                             }
-                            strongSelf.reactionSelected?(value)
+                            strongSelf.reactionSelected?(itemNode, value, sourceView)
                         },
                         reactions: arguments.reactions.map { reaction in
                             var centerAnimation: TelegramMediaFile?
@@ -793,31 +802,43 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                                 }
                             }
                             
+                            var title: String?
+                            if arguments.areReactionsTags, let savedMessageTags = arguments.savedMessageTags {
+                                for tag in savedMessageTags.tags {
+                                    if tag.reaction == reaction.value {
+                                        title = tag.title
+                                    }
+                                }
+                            }
+                            
                             return ReactionButtonsAsyncLayoutContainer.Reaction(
                                 reaction: ReactionButtonComponent.Reaction(
                                     value: reaction.value,
                                     centerAnimation: centerAnimation,
-                                    animationFileId: animationFileId
+                                    animationFileId: animationFileId,
+                                    title: title
                                 ),
                                 count: Int(reaction.count),
-                                peers: peers,
+                                peers: arguments.areReactionsTags ? [] : peers,
                                 chosenOrder: reaction.chosenOrder
                             )
                         },
                         colors: reactionColors,
+                        isTag: arguments.areReactionsTags,
                         constrainedWidth: arguments.constrainedSize.width
                     )
                 } else {
                     reactionButtonsResult = reactionButtonsContainer.update(
                         context: arguments.context,
-                        action: { value in
+                        action: { itemNode, value, sourceView in
                             guard let strongSelf = self else {
                                 return
                             }
-                            strongSelf.reactionSelected?(value)
+                            strongSelf.reactionSelected?(itemNode, value, sourceView)
                         },
                         reactions: [],
                         colors: reactionColors,
+                        isTag: arguments.areReactionsTags,
                         constrainedWidth: arguments.constrainedSize.width
                     )
                 }

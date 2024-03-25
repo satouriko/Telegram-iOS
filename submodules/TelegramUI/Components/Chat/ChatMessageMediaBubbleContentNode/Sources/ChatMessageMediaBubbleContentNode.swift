@@ -58,11 +58,11 @@ public class ChatMessageMediaBubbleContentNode: ChatMessageBubbleContentNode {
             }
         }
         
-        self.interactiveImageNode.updateMessageReaction = { [weak self] message, value in
+        self.interactiveImageNode.updateMessageReaction = { [weak self] message, value, force, sourceView in
             guard let strongSelf = self, let item = strongSelf.item else {
                 return
             }
-            item.controllerInteraction.updateMessageReaction(message, value)
+            item.controllerInteraction.updateMessageReaction(message, value, force, sourceView)
         }
 
         self.interactiveImageNode.activatePinch = { [weak self] sourceNode in
@@ -256,7 +256,7 @@ public class ChatMessageMediaBubbleContentNode: ChatMessageBubbleContentNode {
             }
             var viewCount: Int?
             var dateReplies = 0
-            var dateReactionsAndPeers = mergedMessageReactionsAndPeers(accountPeer: item.associatedData.accountPeer, message: item.message)
+            var dateReactionsAndPeers = mergedMessageReactionsAndPeers(accountPeerId: item.context.account.peerId, accountPeer: item.associatedData.accountPeer, message: item.message)
             if item.message.isRestricted(platform: "ios", contentSettings: item.context.currentContentSettings.with { $0 }) {
                 dateReactionsAndPeers = ([], [])
             }
@@ -284,7 +284,10 @@ public class ChatMessageMediaBubbleContentNode: ChatMessageBubbleContentNode {
             let dateText = stringForMessageTimestampStatus(accountPeerId: item.context.account.peerId, message: item.message, dateTimeFormat: item.presentationData.dateTimeFormat, nameDisplayOrder: item.presentationData.nameDisplayOrder, strings: item.presentationData.strings, format: dateFormat, associatedData: item.associatedData)
 
             let statusType: ChatMessageDateAndStatusType?
-            switch preparePosition {
+            if case .customChatContents = item.associatedData.subject {
+                statusType = nil
+            } else {
+                switch preparePosition {
                 case .linear(_, .None), .linear(_, .Neighbour(true, _, _)):
                     if item.message.effectivelyIncoming(item.context.account.peerId) {
                         statusType = .ImageIncoming
@@ -301,6 +304,7 @@ public class ChatMessageMediaBubbleContentNode: ChatMessageBubbleContentNode {
                     statusType = nil
                 default:
                     statusType = nil
+                }
             }
 
             var isReplyThread = false

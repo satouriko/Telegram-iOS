@@ -10,6 +10,9 @@ import ProgressNavigationButtonNode
 import ImageCompression
 import LegacyMediaPickerUI
 import Postbox
+import TextFormat
+import MoreButtonNode
+import ContextUI
 
 final class AuthorizationSequenceSignUpController: ViewController {
     private var controllerNode: AuthorizationSequenceSignUpControllerNode {
@@ -18,16 +21,21 @@ final class AuthorizationSequenceSignUpController: ViewController {
     
     private var validLayout: ContainerViewLayout?
     
+    private let moreButtonNode: MoreButtonNode
+    
     private let presentationData: PresentationData
     private let back: () -> Void
     
     var initialName: (String, String) = ("", "")
     private var termsOfService: UnauthorizedAccountTermsOfService?
     
-    var signUpWithName: ((String, String, Data?, Any?, TGVideoEditAdjustments?) -> Void)?
+    var signUpWithName: ((String, String, Data?, Any?, TGVideoEditAdjustments?, Bool) -> Void)?
+    var openUrl: ((String) -> Void)?
     
     var avatarAsset: Any?
     var avatarAdjustments: TGVideoEditAdjustments?
+    
+    var announceSignUp = true
     
     private let hapticFeedback = HapticFeedback()
     
@@ -41,6 +49,9 @@ final class AuthorizationSequenceSignUpController: ViewController {
     init(presentationData: PresentationData, back: @escaping () -> Void, displayCancel: Bool) {
         self.presentationData = presentationData
         self.back = back
+        
+        self.moreButtonNode = MoreButtonNode(theme: self.presentationData.theme)
+        self.moreButtonNode.iconNode.enqueueState(.more, animated: false)
         
         super.init(navigationBarPresentationData: NavigationBarPresentationData(theme: AuthorizationSequenceController.navigationBarTheme(presentationData.theme), strings: NavigationBarStrings(presentationStrings: presentationData.strings)))
         
@@ -66,6 +77,14 @@ final class AuthorizationSequenceSignUpController: ViewController {
         if displayCancel {
             self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed))
         }
+        
+        self.navigationItem.rightBarButtonItem = UIBarButtonItem(customDisplayNode: self.moreButtonNode)
+        
+        self.moreButtonNode.action = { [weak self] _, gesture in
+            if let strongSelf = self {
+                strongSelf.morePressed(node: strongSelf.moreButtonNode.contextSourceNode, gesture: gesture)
+            }
+        }
     }
     
     required init(coder aDecoder: NSCoder) {
@@ -77,6 +96,46 @@ final class AuthorizationSequenceSignUpController: ViewController {
         }), TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Login_CancelPhoneVerificationStop, action: { [weak self] in
             self?.back()
         })]), in: .window(.root))
+    }
+    
+    @objc private func moreButtonPressed() {
+        self.moreButtonNode.buttonPressed()
+    }
+    
+    @objc private func morePressed(node: ContextReferenceContentNode, gesture: ContextGesture?) {
+        let presentationData = self.presentationData
+        
+        let announceSignUp = self.announceSignUp
+        var items: [ContextMenuItem] = []
+        
+        let nop: ((ContextMenuActionItem.Action) -> Void)? = nil
+        items.append(.action(ContextMenuActionItem(text: presentationData.strings.Login_Announce_Info, textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: nop)))
+        items.append(.separator)
+        items.append(.action(ContextMenuActionItem(text: presentationData.strings.Login_Announce_Notify, icon: { theme in
+            if !announceSignUp {
+                return nil
+            }
+            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+        }, iconPosition: .left, action: { [weak self] _, a in
+            a(.default)
+          
+            self?.announceSignUp = true
+        })))
+        
+        items.append(.action(ContextMenuActionItem(text: presentationData.strings.Login_Announce_DontNotify, icon: { theme in
+            if announceSignUp {
+                return nil
+            }
+            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+        }, iconPosition: .left, action: { [weak self] _, a in
+            a(.default)
+
+            self?.announceSignUp = false
+        })))
+        
+        
+        let contextController = ContextController(presentationData: self.presentationData, source: .reference(AuthorizationContextReferenceContentSource(controller: self, sourceNode: node)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+        self.present(contextController, in: .window(.root))
     }
     
     func updateNavigationItems() {
@@ -122,7 +181,32 @@ final class AuthorizationSequenceSignUpController: ViewController {
                 return
             }
             strongSelf.view.endEditing(true)
-            strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: strongSelf.presentationData.strings.Login_TermsOfServiceHeader, text: termsOfService.text, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+
+            let presentAlertImpl: () -> Void = {
+                guard let strongSelf = self else {
+                    return
+                }
+                var dismissImpl: (() -> Void)?
+                let alertTheme = AlertControllerTheme(presentationData: strongSelf.presentationData)
+                let attributedText = stringWithAppliedEntities(termsOfService.text, entities: termsOfService.entities, baseColor: alertTheme.primaryColor, linkColor: alertTheme.accentColor, baseFont: Font.regular(13.0), linkFont: Font.regular(13.0), boldFont: Font.semibold(13.0), italicFont: Font.italic(13.0), boldItalicFont: Font.semiboldItalic(13.0), fixedFont: Font.regular(13.0), blockQuoteFont: Font.regular(13.0), message: nil)
+                let contentNode = TextAlertContentNode(theme: alertTheme, title: NSAttributedString(string: strongSelf.presentationData.strings.Login_TermsOfServiceHeader, font: Font.medium(17.0), textColor: alertTheme.primaryColor, paragraphAlignment: .center), text: attributedText, actions: [
+                    TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {
+                        dismissImpl?()
+                    })
+                ], actionLayout: .vertical, dismissOnOutsideTap: true)
+                contentNode.textAttributeAction = (NSAttributedString.Key(rawValue: TelegramTextAttributes.URL), { value in
+                    if let value = value as? String {
+                        strongSelf.openUrl?(value)
+                    }
+                })
+                let controller = AlertController(theme: alertTheme, contentNode: contentNode)
+                dismissImpl = { [weak controller] in
+                    controller?.dismissAnimated()
+                }
+                strongSelf.view.endEditing(true)
+                strongSelf.present(controller, in: .window(.root))
+            }
+            presentAlertImpl()
         }
         
         self.controllerNode.updateData(firstName: self.initialName.0, lastName: self.initialName.1, hasTermsOfService: self.termsOfService != nil)
@@ -184,7 +268,21 @@ final class AuthorizationSequenceSignUpController: ViewController {
                 let result = compressImageToJPEG(image, quality: 0.7, tempFilePath: tempFile.path)
                 TempBox.shared.dispose(tempFile)
                 return result
-            }), self.avatarAsset, self.avatarAdjustments)
+            }), self.avatarAsset, self.avatarAdjustments, self.announceSignUp)
         }
+    }
+}
+
+private final class AuthorizationContextReferenceContentSource: ContextReferenceContentSource {
+    private let controller: ViewController
+    private let sourceNode: ContextReferenceContentNode
+    
+    init(controller: ViewController, sourceNode: ContextReferenceContentNode) {
+        self.controller = controller
+        self.sourceNode = sourceNode
+    }
+    
+    func transitionInfo() -> ContextControllerReferenceViewInfo? {
+        return ContextControllerReferenceViewInfo(referenceView: self.sourceNode.view, contentAreaInScreenSpace: UIScreen.main.bounds)
     }
 }

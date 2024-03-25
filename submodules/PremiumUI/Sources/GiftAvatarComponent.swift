@@ -14,9 +14,9 @@ import MergedAvatarsNode
 import MultilineTextComponent
 import TelegramPresentationData
 
-private let sceneVersion: Int = 3
+private let sceneVersion: Int = 1
 
-class GiftAvatarComponent: Component {
+final class GiftAvatarComponent: Component {
     let context: AccountContext
     let theme: PresentationTheme
     let peers: [EnginePeer]
@@ -106,7 +106,7 @@ class GiftAvatarComponent: Component {
         }
         
         private func setup() {
-            guard let url = getAppBundle().url(forResource: "gift", withExtension: "scn"), let scene = try? SCNScene(url: url, options: nil) else {
+            guard let scene = loadCompressedScene(name: "gift", version: sceneVersion) else {
                 return
             }
             

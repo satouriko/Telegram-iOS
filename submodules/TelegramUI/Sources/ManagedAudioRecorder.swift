@@ -8,6 +8,7 @@ import UniversalMediaPlayer
 import AccountContext
 import OpusBinding
 import ChatPresentationInterfaceState
+import AudioWaveform
 
 private let kOutputBus: UInt32 = 0
 private let kInputBus: UInt32 = 1
@@ -167,8 +168,6 @@ final class ManagedAudioRecorderContext {
     private var micLevelPeak: Int16 = 0
     private var micLevelPeakCount: Int = 0
     private var audioLevelPeakUpdate: Double = 0.0
-    
-    fileprivate var isPaused = false
     
     private var recordingStateUpdateTimestamp: Double?
     
@@ -403,7 +402,7 @@ final class ManagedAudioRecorderContext {
     
         if self.audioSessionDisposable == nil {
             let queue = self.queue
-            self.audioSessionDisposable = self.mediaManager.audioSession.push(audioSessionType: .record(speaker: self.beginWithTone, withOthers: false), activate: { [weak self] state in
+            self.audioSessionDisposable = self.mediaManager.audioSession.push(audioSessionType: .record(speaker: self.beginWithTone, video: false, withOthers: false), activate: { [weak self] state in
                 queue.async {
                     if let strongSelf = self, !strongSelf.paused {
                         strongSelf.hasAudioSession = true
@@ -447,6 +446,18 @@ final class ManagedAudioRecorderContext {
                 return
             }
         }
+    }
+    
+    func pause() {
+        assert(self.queue.isCurrent())
+        
+        self.stop()
+    }
+    
+    func resume() {
+        assert(self.queue.isCurrent())
+        
+        self.start()
     }
     
     func stop() {
@@ -508,7 +519,7 @@ final class ManagedAudioRecorderContext {
             var currentEncoderPacketSize = 0
             
             while currentEncoderPacketSize < encoderPacketSizeInBytes {
-                if audioBuffer.count != 0 {
+                if self.audioBuffer.count != 0 {
                     let takenBytes = min(self.audioBuffer.count, encoderPacketSizeInBytes - currentEncoderPacketSize)
                     if takenBytes != 0 {
                         self.audioBuffer.withUnsafeBytes { rawBytes -> Void in
@@ -697,6 +708,22 @@ final class ManagedAudioRecorderImpl: ManagedAudioRecorder {
         self.queue.async {
             if let context = self.contextRef?.takeUnretainedValue() {
                 context.start()
+            }
+        }
+    }
+    
+    func pause() {
+        self.queue.async {
+            if let context = self.contextRef?.takeUnretainedValue() {
+                context.pause()
+            }
+        }
+    }
+    
+    func resume() {
+        self.queue.async {
+            if let context = self.contextRef?.takeUnretainedValue() {
+                context.resume()
             }
         }
     }

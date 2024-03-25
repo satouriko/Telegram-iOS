@@ -15,6 +15,8 @@ import EntityKeyboard
 import TextNodeWithEntities
 import PremiumUI
 import TooltipUI
+import TopMessageReactions
+import TelegramNotices
 
 extension ChatControllerImpl {
     func openMessageContextMenu(message: Message, selectAll: Bool, node: ASDisplayNode, frame: CGRect, anyRecognizer: UIGestureRecognizer?, location: CGPoint?) -> Void {
@@ -48,7 +50,7 @@ extension ChatControllerImpl {
                 contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState: self.presentationInterfaceState, context: self.context, messages: updatedMessages, controllerInteraction: self.controllerInteraction, selectAll: selectAll, interfaceInteraction: self.interfaceInteraction, messageNode: node as? ChatMessageItemView),
                 peerMessageAllowedReactions(context: self.context, message: topMessage),
                 peerMessageSelectedReactions(context: self.context, message: topMessage),
-                topMessageReactions(context: self.context, message: topMessage),
+                topMessageReactions(context: self.context, message: topMessage, subPeerId: self.chatLocation.threadId.flatMap(EnginePeer.Id.init)),
                 ApplicationSpecificNotice.getChatTextSelectionTips(accountManager: self.context.sharedContext.accountManager)
             ).startStandalone(next: { [weak self] peer, actions, allowedReactions, selectedReactions, topReactions, chatTextSelectionTips in
                 guard let self else {
@@ -111,6 +113,16 @@ extension ChatControllerImpl {
                 if canAddMessageReactions(message: topMessage), let allowedReactions = allowedReactions, !topReactions.isEmpty {
                     actions.reactionItems = topReactions.map(ReactionContextItem.reaction)
                     actions.selectedReactionItems = selectedReactions.reactions
+                    if message.areReactionsTags(accountPeerId: self.context.account.peerId) {
+                        if self.presentationInterfaceState.isPremium {
+                            actions.reactionsTitle = presentationData.strings.Chat_ContextMenuTagsTitle
+                        } else {
+                            actions.reactionsTitle = presentationData.strings.Chat_MessageContextMenu_NonPremiumTagsTitle
+                            actions.reactionsLocked = true
+                            actions.selectedReactionItems = Set()
+                        }
+                        actions.allPresetReactionsAreAvailable = true
+                    }
                     
                     if let channel = self.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel, case .broadcast = channel.info {
                         actions.alwaysAllowPremiumReactions = true
@@ -154,7 +166,7 @@ extension ChatControllerImpl {
                                     animationCache: animationCache,
                                     animationRenderer: animationRenderer,
                                     isStandalone: false,
-                                    subject: .reaction(onlyTop: false),
+                                    subject: message.areReactionsTags(accountPeerId: self.context.account.peerId) ? .messageTag : .reaction(onlyTop: false),
                                     hasTrending: false,
                                     topReactionItems: reactionItems,
                                     areUnicodeEmojiEnabled: false,
@@ -277,12 +289,13 @@ extension ChatControllerImpl {
                 if let location = location {
                     source = .location(ChatMessageContextLocationContentSource(controller: self, location: node.view.convert(node.bounds, to: nil).origin.offsetBy(dx: location.x, dy: location.y)))
                 } else {
-                    source = .extracted(ChatMessageContextExtractedContentSource(chatNode: self.chatDisplayNode, engine: self.context.engine, message: message, selectAll: selectAll))
+                    source = .extracted(ChatMessageContextExtractedContentSource(chatController: self, chatNode: self.chatDisplayNode, engine: self.context.engine, message: message, selectAll: selectAll))
                 }
                 
                 self.canReadHistory.set(false)
                 
-                let controller = ContextController(presentationData: self.presentationData, source: source, items: actionsSignal, recognizer: recognizer, gesture: gesture)
+                let isSecret = self.presentationInterfaceState.copyProtectionEnabled || self.chatLocation.peerId?.namespace == Namespaces.Peer.SecretChat
+                let controller = ContextController(presentationData: self.presentationData, source: source, items: actionsSignal, recognizer: recognizer, gesture: gesture, disableScreenshots: isSecret)
                 controller.dismissed = { [weak self] in
                     self?.canReadHistory.set(true)
                 }
@@ -301,17 +314,7 @@ extension ChatControllerImpl {
                     }
                     
                     controller?.dismissWithoutContent()
-
-                    let context = self.context
-                    var replaceImpl: ((ViewController) -> Void)?
-                    let controller = PremiumDemoScreen(context: context, subject: .uniqueReactions, action: {
-                        let controller = PremiumIntroScreen(context: context, source: .reactions)
-                        replaceImpl?(controller)
-                    })
-                    replaceImpl = { [weak controller] c in
-                        controller?.replace(with: c)
-                    }
-                    self.push(controller)
+                    self.presentTagPremiumPaywall()
                 }
                 
                 controller.reactionSelected = { [weak self, weak controller] chosenUpdatedReaction, isLarge in
@@ -327,7 +330,7 @@ extension ChatControllerImpl {
                     
                     let chosenReaction: MessageReaction.Reaction = chosenUpdatedReaction.reaction
                     
-                    let currentReactions = mergedMessageReactions(attributes: message.attributes)?.reactions ?? []
+                    let currentReactions = mergedMessageReactions(attributes: message.attributes, isTags: message.areReactionsTags(accountPeerId: self.context.account.peerId))?.reactions ?? []
                     var updatedReactions: [MessageReaction.Reaction] = currentReactions.filter(\.isSelected).map(\.value)
                     var removedReaction: MessageReaction.Reaction?
                     var isFirst = false
@@ -340,27 +343,21 @@ extension ChatControllerImpl {
                         isFirst = !currentReactions.contains(where: { $0.value == chosenReaction })
                     }
                     
-                    /*guard let allowedReactions = allowedReactions else {
-                        itemNode.openMessageContextMenu()
-                        return
-                    }
-                    
-                    switch allowedReactions {
-                    case let .set(set):
-                        if !messageAlreadyHasThisReaction && updatedReactions.contains(where: { !set.contains($0) }) {
-                            itemNode.openMessageContextMenu()
-                            return
-                        }
-                    case .all:
-                        break
-                    }*/
-                    
-                    if removedReaction == nil, case .custom = chosenReaction {
-                        if let peer = self.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel, case .broadcast = peer.info {
-                        } else {
+                    if message.areReactionsTags(accountPeerId: self.context.account.peerId) {
+                        if removedReaction == nil, !topReactions.contains(where: { $0.reaction.rawValue == chosenReaction }) {
                             if !self.presentationInterfaceState.isPremium {
                                 controller?.premiumReactionsSelected?()
                                 return
+                            }
+                        }
+                    } else {
+                        if removedReaction == nil, case .custom = chosenReaction {
+                            if let peer = self.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel, case .broadcast = peer.info {
+                            } else {
+                                if !self.presentationInterfaceState.isPremium {
+                                    controller?.premiumReactionsSelected?()
+                                    return
+                                }
                             }
                         }
                     }
@@ -389,13 +386,32 @@ extension ChatControllerImpl {
                                                 standaloneReactionAnimation.frame = self.chatDisplayNode.bounds
                                                 self.chatDisplayNode.addSubnode(standaloneReactionAnimation)
                                             }, completion: { [weak self, weak itemNode, weak targetView] in
-                                                guard let self, let itemNode = itemNode, let targetView = targetView else {
+                                                guard let self, let itemNode, let targetView else {
                                                     return
                                                 }
                                                 
-                                                let _ = self
-                                                let _ = itemNode
-                                                let _ = targetView
+                                                if self.chatLocation.peerId == self.context.account.peerId {
+                                                    let _ = (ApplicationSpecificNotice.getSavedMessageTagLabelSuggestion(accountManager: self.context.sharedContext.accountManager)
+                                                    |> take(1)
+                                                    |> deliverOnMainQueue).startStandalone(next: { [weak self, weak targetView, weak itemNode] value in
+                                                        guard let self, let targetView, let itemNode else {
+                                                            return
+                                                        }
+                                                        if value >= 3 {
+                                                            return
+                                                        }
+                                                        
+                                                        let _ = itemNode
+                                                        
+                                                        let rect = self.chatDisplayNode.view.convert(targetView.bounds, from: targetView).insetBy(dx: -8.0, dy: -8.0)
+                                                        let tooltipScreen = TooltipScreen(account: self.context.account, sharedContext: self.context.sharedContext, text: .plain(text: self.presentationData.strings.Chat_TooltipAddTagLabel), location: .point(rect, .bottom), displayDuration: .manual, shouldDismissOnTouch: { _, _ in
+                                                            return .dismiss(consume: false)
+                                                        })
+                                                        self.present(tooltipScreen, in: .current)
+                                                        
+                                                        let _ = ApplicationSpecificNotice.incrementSavedMessageTagLabelSuggestion(accountManager: self.context.sharedContext.accountManager).startStandalone()
+                                                    })
+                                                }
                                             })
                                         } else {
                                             controller.dismiss()
@@ -423,7 +439,7 @@ extension ChatControllerImpl {
                         }
                     }
                     
-                    let _ = updateMessageReactionsInteractively(account: self.context.account, messageId: message.id, reactions: mappedUpdatedReactions, isLarge: isLarge, storeAsRecentlyUsed: true).startStandalone()
+                    let _ = updateMessageReactionsInteractively(account: self.context.account, messageIds: [message.id], reactions: mappedUpdatedReactions, isLarge: isLarge, storeAsRecentlyUsed: true).startStandalone()
                 }
 
                 self.forEachController({ controller in

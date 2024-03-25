@@ -211,6 +211,24 @@ public struct PresentationResourcesItemList {
         })
     }
     
+    public static func itemListRemoveIconImage(_ theme: PresentationTheme) -> UIImage? {
+        return theme.image(PresentationResourceKey.itemListRemoveIconImage.rawValue, { theme in
+            return generateImage(CGSize(width: 15.0, height: 15.0), contextGenerator: { size, context in
+                context.clear(CGRect(origin: CGPoint(), size: size))
+                context.setBlendMode(.copy)
+                context.setStrokeColor(theme.list.disclosureArrowColor.cgColor)
+                context.setLineWidth(2.0)
+                context.setLineCap(.round)
+                context.move(to: CGPoint(x: 1.0, y: 1.0))
+                context.addLine(to: CGPoint(x: size.width - 1.0, y: size.height - 1.0))
+                context.strokePath()
+                context.move(to: CGPoint(x: size.width - 1.0, y: 1.0))
+                context.addLine(to: CGPoint(x: 1.0, y: size.height - 1.0))
+                context.strokePath()
+            })
+        })
+    }
+    
     public static func makeVisibleIcon(_ theme: PresentationTheme) -> UIImage? {
         return theme.image(PresentationResourceKey.itemListMakeVisibleIcon.rawValue, { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "Contact List/MakeVisibleIcon"), color: theme.list.itemAccentColor)
@@ -278,7 +296,31 @@ public struct PresentationResourcesItemList {
     
     public static func addBoostsIcon(_ theme: PresentationTheme) -> UIImage? {
         return theme.image(PresentationResourceKey.itemListAddBoostsIcon.rawValue, { theme in
-            return generateTintedImage(image: UIImage(bundleImageName: "Premium/AddBoosts"), color: theme.list.itemAccentColor)
+            return generateTintedImage(image: UIImage(bundleImageName: "Premium/Gift"), color: theme.list.itemAccentColor)
+        })
+    }
+    
+    public static func premiumIcon(_ theme: PresentationTheme) -> UIImage? {
+        return theme.image(PresentationResourceKey.itemListPremiumIcon.rawValue, { theme in
+            return generateImage(CGSize(width: 16.0, height: 16.0), contextGenerator: { size, context in
+                let bounds = CGRect(origin: .zero, size: size)
+                context.clear(bounds)
+                
+                let image = UIImage(bundleImageName: "Item List/PremiumIcon")!
+                context.clip(to: bounds, mask: image.cgImage!)
+                
+                let colorsArray: [CGColor] = [
+                    UIColor(rgb: 0x6b93ff).cgColor,
+                    UIColor(rgb: 0x6b93ff).cgColor,
+                    UIColor(rgb: 0x8d77ff).cgColor,
+                    UIColor(rgb: 0xb56eec).cgColor,
+                    UIColor(rgb: 0xb56eec).cgColor
+                ]
+                var locations: [CGFloat] = [0.0, 0.3, 0.5, 0.7, 1.0]
+                let gradient = CGGradient(colorsSpace: deviceColorSpace, colors: colorsArray as CFArray, locations: &locations)!
+
+                context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: 0.0), end: CGPoint(x: size.width, y: size.height), options: CGGradientDrawingOptions())
+            })
         })
     }
     

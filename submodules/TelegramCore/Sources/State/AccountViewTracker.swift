@@ -61,16 +61,30 @@ private func pollMessages(entries: [MessageHistoryEntry]) -> (Set<MessageId>, [M
     return (messageIds, messages)
 }
 
-private func fetchWebpage(account: Account, messageId: MessageId) -> Signal<Void, NoError> {
+private func fetchWebpage(account: Account, messageId: MessageId, threadId: Int64?) -> Signal<Void, NoError> {
     let accountPeerId = account.peerId
     return account.postbox.loadedPeerWithId(messageId.peerId)
     |> take(1)
     |> mapToSignal { peer in
         if let inputPeer = apiInputPeer(peer) {
-            let isScheduledMessage = Namespaces.Message.allScheduled.contains(messageId.namespace)
+            let targetMessageNamespace: MessageId.Namespace
+            if Namespaces.Message.allScheduled.contains(messageId.namespace) {
+                targetMessageNamespace = Namespaces.Message.ScheduledCloud
+            } else if Namespaces.Message.allQuickReply.contains(messageId.namespace) {
+                targetMessageNamespace = Namespaces.Message.QuickReplyCloud
+            } else {
+                targetMessageNamespace = Namespaces.Message.Cloud
+            }
+            
             let messages: Signal<Api.messages.Messages, MTRpcError>
-            if isScheduledMessage {
+            if Namespaces.Message.allScheduled.contains(messageId.namespace) {
                 messages = account.network.request(Api.functions.messages.getScheduledMessages(peer: inputPeer, id: [messageId.id]))
+            } else if Namespaces.Message.allQuickReply.contains(messageId.namespace) {
+                if let threadId {
+                    messages = account.network.request(Api.functions.messages.getQuickReplyMessages(flags: 1 << 0, shortcutId: Int32(clamping: threadId), id: [messageId.id], hash: 0))
+                } else {
+                    messages = .never()
+                }
             } else {
                 switch inputPeer {
                     case let .inputPeerChannel(channelId, accessHash):
@@ -109,7 +123,7 @@ private func fetchWebpage(account: Account, messageId: MessageId) -> Signal<Void
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                     
                     for message in messages {
-                        if let storeMessage = StoreMessage(apiMessage: message, accountPeerId: accountPeerId, peerIsForum: peer.isForum, namespace: isScheduledMessage ? Namespaces.Message.ScheduledCloud : Namespaces.Message.Cloud) {
+                        if let storeMessage = StoreMessage(apiMessage: message, accountPeerId: accountPeerId, peerIsForum: peer.isForum, namespace: targetMessageNamespace) {
                             var webpage: TelegramMediaWebpage?
                             for media in storeMessage.media {
                                 if let media = media as? TelegramMediaWebpage {
@@ -179,7 +193,7 @@ private func wrappedHistoryViewAdditionalData(chatLocation: ChatLocationInput, a
                 result.append(.peerChatState(peerId))
             }
         }
-    case .feed:
+    case .customChatContents:
         break
     }
     return result
@@ -292,7 +306,7 @@ public final class AccountViewTracker {
     private var nextUpdatedExtendedMediaDisposableId: Int32 = 0
     private var updatedExtendedMediaDisposables = DisposableDict<Int32>()
     
-    private var updatedUnsupportedMediaMessageIdsAndTimestamps: [MessageId: Int32] = [:]
+    private var updatedUnsupportedMediaMessageIdsAndTimestamps: [MessageAndThreadId: Int32] = [:]
     private var refreshSecretChatMediaMessageIdsAndTimestamps: [MessageId: Int32] = [:]
     private var refreshStoriesForMessageIdsAndTimestamps: [MessageId: Int32] = [:]
     private var nextUpdatedUnsupportedMediaDisposableId: Int32 = 0
@@ -300,6 +314,9 @@ public final class AccountViewTracker {
     private var refreshStoriesForPeerIdsAndTimestamps: [PeerId: Int32] = [:]
     private var refreshStoriesForPeerIdsDebounceDisposable: Disposable?
     private var pendingRefreshStoriesForPeerIds: [PeerId] = []
+    private var refreshCanSendMessagesForPeerIdsAndTimestamps: [PeerId: Int32] = [:]
+    private var refreshCanSendMessagesForPeerIdsDebounceDisposable: Disposable?
+    private var pendingRefreshCanSendMessagesForPeerIds: [PeerId] = []
     
     private var updatedSeenPersonalMessageIds = Set<MessageId>()
     private var updatedReactionsSeenForMessageIds = Set<MessageId>()
@@ -331,6 +348,9 @@ public final class AccountViewTracker {
     
     var resetPeerHoleManagement: ((PeerId) -> Void)?
     
+    private var quickRepliesUpdateDisposable: Disposable?
+    private var quickRepliesUpdateTimestamp: Double = 0.0
+    
     init(account: Account) {
         self.account = account
         self.accountPeerId = account.peerId
@@ -356,6 +376,7 @@ public final class AccountViewTracker {
         self.updatedViewCountDisposables.dispose()
         self.updatedReactionsDisposables.dispose()
         self.externallyUpdatedPeerIdDisposable.dispose()
+        self.quickRepliesUpdateDisposable?.dispose()
     }
     
     func reset() {
@@ -364,7 +385,7 @@ public final class AccountViewTracker {
         }
     }
     
-    private func updatePendingWebpages(viewId: Int32, messageIds: Set<MessageId>, localWebpages: [MessageId: (MediaId, String)]) {
+    private func updatePendingWebpages(viewId: Int32, threadId: Int64?, messageIds: Set<MessageId>, localWebpages: [MessageId: (MediaId, String)]) {
         self.queue.async {
             var addedMessageIds: [MessageId] = []
             var removedMessageIds: [MessageId] = []
@@ -437,7 +458,7 @@ public final class AccountViewTracker {
                                 }
                             })
                         } else if messageId.namespace == Namespaces.Message.Cloud {
-                            self.webpageDisposables[messageId] = fetchWebpage(account: account, messageId: messageId).start(completed: { [weak self] in
+                            self.webpageDisposables[messageId] = fetchWebpage(account: account, messageId: messageId, threadId: threadId).start(completed: { [weak self] in
                                 if let strongSelf = self {
                                     strongSelf.queue.async {
                                         strongSelf.webpageDisposables.removeValue(forKey: messageId)
@@ -1006,9 +1027,9 @@ public final class AccountViewTracker {
         }
     }
     
-    public func updateUnsupportedMediaForMessageIds(messageIds: Set<MessageId>) {
+    public func updateUnsupportedMediaForMessageIds(messageIds: Set<MessageAndThreadId>) {
         self.queue.async {
-            var addedMessageIds: [MessageId] = []
+            var addedMessageIds: [MessageAndThreadId] = []
             let timestamp = Int32(CFAbsoluteTimeGetCurrent())
             for messageId in messageIds {
                 let messageTimestamp = self.updatedUnsupportedMediaMessageIdsAndTimestamps[messageId]
@@ -1018,14 +1039,14 @@ public final class AccountViewTracker {
                 }
             }
             if !addedMessageIds.isEmpty {
-                for (peerId, messageIds) in messagesIdsGroupedByPeerId(Set(addedMessageIds)) {
+                for (peerIdAndThreadId, messageIds) in messagesIdsGroupedByPeerId(Set(addedMessageIds)) {
                     let disposableId = self.nextUpdatedUnsupportedMediaDisposableId
                     self.nextUpdatedUnsupportedMediaDisposableId += 1
                     
                     if let account = self.account {
                         let accountPeerId = account.peerId
                         let signal = account.postbox.transaction { transaction -> Peer? in
-                            if let peer = transaction.getPeer(peerId) {
+                            if let peer = transaction.getPeer(peerIdAndThreadId.peerId) {
                                 return peer
                             } else {
                                 return nil
@@ -1040,9 +1061,15 @@ public final class AccountViewTracker {
                                 if let inputPeer = apiInputPeer(peer) {
                                     fetchSignal = account.network.request(Api.functions.messages.getScheduledMessages(peer: inputPeer, id: messageIds.map { $0.id }))
                                 }
-                            } else if peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup {
+                            } else if let messageId = messageIds.first, messageId.namespace == Namespaces.Message.QuickReplyCloud {
+                                if let threadId = peerIdAndThreadId.threadId {
+                                    fetchSignal = account.network.request(Api.functions.messages.getQuickReplyMessages(flags: 1 << 0, shortcutId: Int32(clamping: threadId), id: messageIds.map { $0.id }, hash: 0))
+                                } else {
+                                    fetchSignal = .never()
+                                }
+                            } else if peerIdAndThreadId.peerId.namespace == Namespaces.Peer.CloudUser || peerIdAndThreadId.peerId.namespace == Namespaces.Peer.CloudGroup {
                                 fetchSignal = account.network.request(Api.functions.messages.getMessages(id: messageIds.map { Api.InputMessage.inputMessageID(id: $0.id) }))
-                            } else if peerId.namespace == Namespaces.Peer.CloudChannel {
+                            } else if peerIdAndThreadId.peerId.namespace == Namespaces.Peer.CloudChannel {
                                 if let inputChannel = apiInputChannel(peer) {
                                     fetchSignal = account.network.request(Api.functions.channels.getMessages(channel: inputChannel, id: messageIds.map { Api.InputMessage.inputMessageID(id: $0.id) }))
                                 }
@@ -1368,6 +1395,110 @@ public final class AccountViewTracker {
         }
     }
     
+    public func refreshCanSendMessagesForPeerIds(peerIds: [PeerId]) {
+        self.queue.async {
+            self.pendingRefreshCanSendMessagesForPeerIds.append(contentsOf: peerIds)
+            
+            if self.refreshCanSendMessagesForPeerIdsDebounceDisposable == nil {
+                self.refreshCanSendMessagesForPeerIdsDebounceDisposable = (Signal<Never, NoError>.complete() |> delay(0.15, queue: self.queue)).start(completed: {
+                    self.refreshCanSendMessagesForPeerIdsDebounceDisposable = nil
+                    
+                    let pendingPeerIds = self.pendingRefreshCanSendMessagesForPeerIds
+                    self.pendingRefreshCanSendMessagesForPeerIds.removeAll()
+                    self.internalRefreshCanSendMessagesStatsForPeerIds(peerIds: pendingPeerIds)
+                })
+            }
+        }
+    }
+    
+    private func internalRefreshCanSendMessagesStatsForPeerIds(peerIds: [PeerId]) {
+        self.queue.async {
+            var addedPeerIds: [PeerId] = []
+            let timestamp = Int32(CFAbsoluteTimeGetCurrent())
+            for peerId in peerIds {
+                let messageTimestamp = self.refreshCanSendMessagesForPeerIdsAndTimestamps[peerId]
+                var refresh = false
+                if let messageTimestamp = messageTimestamp {
+                    refresh = messageTimestamp < timestamp - 60 * 60
+                } else {
+                    refresh = true
+                }
+                
+                if refresh {
+                    self.refreshCanSendMessagesForPeerIdsAndTimestamps[peerId] = timestamp
+                    addedPeerIds.append(peerId)
+                }
+            }
+            if !addedPeerIds.isEmpty {
+                let disposableId = self.nextUpdatedUnsupportedMediaDisposableId
+                self.nextUpdatedUnsupportedMediaDisposableId += 1
+                
+                if let account = self.account {
+                    let signal = account.postbox.transaction { transaction -> [(PeerId, Api.InputUser)] in
+                        return addedPeerIds.compactMap { id -> (PeerId, Api.InputUser)? in
+                            if let user = transaction.getPeer(id).flatMap(apiInputUser) {
+                                return (id, user)
+                            } else {
+                                return nil
+                            }
+                        }
+                    }
+                    |> mapToSignal { inputPeers -> Signal<Never, NoError> in
+                        guard !inputPeers.isEmpty else {
+                            return .complete()
+                        }
+                        
+                        var requests: [Signal<Never, NoError>] = []
+                        
+                        let batchCount = 100
+                        var startIndex = 0
+                        while startIndex < inputPeers.count {
+                            var slice: [(PeerId, Api.InputUser)] = []
+                            for i in startIndex ..< min(startIndex + batchCount, inputPeers.count) {
+                                slice.append(inputPeers[i])
+                            }
+                            startIndex += batchCount
+                            requests.append(account.network.request(Api.functions.users.getIsPremiumRequiredToContact(id: slice.map(\.1)))
+                            |> `catch` { _ -> Signal<[Api.Bool], NoError> in
+                                return .single([])
+                            }
+                            |> mapToSignal { result -> Signal<Never, NoError> in
+                                return account.postbox.transaction { transaction in
+                                    for i in 0 ..< result.count {
+                                        if i < slice.count {
+                                            let value = result[i]
+                                            transaction.updatePeerCachedData(peerIds: Set([slice[i].0]), update: { _, cachedData in
+                                                var cachedData = cachedData as? CachedUserData ?? CachedUserData(about: nil, botInfo: nil, editableBotInfo: nil, peerStatusSettings: nil, pinnedMessageId: nil, isBlocked: false, commonGroupCount: 0, voiceCallsAvailable: true, videoCallsAvailable: true, callsPrivate: true, canPinMessages: true, hasScheduledMessages: true, autoremoveTimeout: .unknown, themeEmoticon: nil, photo: .unknown, personalPhoto: .unknown, fallbackPhoto: .unknown, premiumGiftOptions: [], voiceMessagesAvailable: true, wallpaper: nil, flags: [], businessHours: nil, businessLocation: nil, greetingMessage: nil, awayMessage: nil, connectedBot: nil)
+                                                var flags = cachedData.flags
+                                                if case .boolTrue = value {
+                                                    flags.insert(.premiumRequired)
+                                                } else {
+                                                    flags.remove(.premiumRequired)
+                                                }
+                                                cachedData = cachedData.withUpdatedFlags(flags)
+                                                return cachedData
+                                            })
+                                        }
+                                    }
+                                }
+                                |> ignoreValues
+                            })
+                        }
+                        
+                        return combineLatest(requests)
+                        |> ignoreValues
+                    }
+                    |> afterDisposed { [weak self] in
+                        self?.queue.async {
+                            self?.updatedUnsupportedMediaDisposables.set(nil, forKey: disposableId)
+                        }
+                    }
+                    self.updatedUnsupportedMediaDisposables.set(signal.start(), forKey: disposableId)
+                }
+            }
+        }
+    }
+    
     public func updateMarkAllMentionsSeen(peerId: PeerId, threadId: Int64?) {
         self.queue.async {
             guard let account = self.account else {
@@ -1392,13 +1523,13 @@ public final class AccountViewTracker {
                     })
                 }
                 
-                if let summary = transaction.getMessageTagSummary(peerId: peerId, threadId: threadId, tagMask: .unseenPersonalMessage, namespace: Namespaces.Message.Cloud), summary.count > 0 {
+                if let summary = transaction.getMessageTagSummary(peerId: peerId, threadId: threadId, tagMask: .unseenPersonalMessage, namespace: Namespaces.Message.Cloud, customTag: nil), summary.count > 0 {
                     var maxId: Int32 = summary.range.maxId
                     if let index = transaction.getTopPeerMessageIndex(peerId: peerId, namespace: Namespaces.Message.Cloud) {
                         maxId = index.id.id
                     }
                     
-                    transaction.replaceMessageTagSummary(peerId: peerId, threadId: threadId, tagMask: .unseenPersonalMessage, namespace: Namespaces.Message.Cloud, count: 0, maxId: maxId)
+                    transaction.replaceMessageTagSummary(peerId: peerId, threadId: threadId, tagMask: .unseenPersonalMessage, namespace: Namespaces.Message.Cloud, customTag: nil, count: 0, maxId: maxId)
                     addSynchronizeMarkAllUnseenPersonalMessagesOperation(transaction: transaction, peerId: peerId, maxId: summary.range.maxId)
                 }
                 
@@ -1475,13 +1606,13 @@ public final class AccountViewTracker {
                     })
                 }
                 
-                if let summary = transaction.getMessageTagSummary(peerId: peerId, threadId: threadId, tagMask: .unseenReaction, namespace: Namespaces.Message.Cloud) {
+                if let summary = transaction.getMessageTagSummary(peerId: peerId, threadId: threadId, tagMask: .unseenReaction, namespace: Namespaces.Message.Cloud, customTag: nil) {
                     var maxId: Int32 = summary.range.maxId
                     if let index = transaction.getTopPeerMessageIndex(peerId: peerId, namespace: Namespaces.Message.Cloud) {
                         maxId = index.id.id
                     }
                     
-                    transaction.replaceMessageTagSummary(peerId: peerId, threadId: threadId, tagMask: .unseenReaction, namespace: Namespaces.Message.Cloud, count: 0, maxId: maxId)
+                    transaction.replaceMessageTagSummary(peerId: peerId, threadId: threadId, tagMask: .unseenReaction, namespace: Namespaces.Message.Cloud, customTag: nil, count: 0, maxId: maxId)
                     addSynchronizeMarkAllUnseenReactionsOperation(transaction: transaction, peerId: peerId, maxId: summary.range.maxId)
                 }
                 
@@ -1625,11 +1756,13 @@ public final class AccountViewTracker {
                 if context.subscribers.isEmpty {
                     if let account = self.account {
                         let queue = self.queue
+                        Logger.shared.log("AccountViewTracker", "polledChannel: \(peerId) add keep polling")
                         context.disposable.set(keepPollingChannel(accountPeerId: account.peerId, postbox: account.postbox, network: account.network, peerId: peerId, stateManager: account.stateManager).start(next: { [weak context] isValidForTimeout in
                             queue.async {
                                 guard let context = context else {
                                     return
                                 }
+                                Logger.shared.log("AccountViewTracker", "polledChannel: \(peerId) set context isUpdated true for \(isValidForTimeout) seconds")
                                 context.isUpdated.set(
                                     .single(true)
                                     |> then(
@@ -1649,6 +1782,7 @@ public final class AccountViewTracker {
                         if let context = self.channelPollingContexts[peerId] {
                             context.subscribers.remove(index)
                             if context.subscribers.isEmpty {
+                                Logger.shared.log("AccountViewTracker", "polledChannel: \(peerId) remove keep polling")
                                 context.disposable.set(nil)
                             }
                         }
@@ -1705,7 +1839,7 @@ public final class AccountViewTracker {
             if let strongSelf = self {
                 strongSelf.queue.async {
                     let (messageIds, localWebpages) = pendingWebpages(entries: next.0.entries)
-                    strongSelf.updatePendingWebpages(viewId: viewId, messageIds: messageIds, localWebpages: localWebpages)
+                    strongSelf.updatePendingWebpages(viewId: viewId, threadId: chatLocation.threadId, messageIds: messageIds, localWebpages: localWebpages)
                     let (pollMessageIds, pollMessageDict) = pollMessages(entries: next.0.entries)
                     strongSelf.updatePolls(viewId: viewId, messageIds: pollMessageIds, messages: pollMessageDict)
                     if case let .peer(peerId, _) = chatLocation, peerId.namespace == Namespaces.Peer.CloudChannel {
@@ -1718,7 +1852,7 @@ public final class AccountViewTracker {
         }, disposed: { [weak self] viewId in
             if let strongSelf = self {
                 strongSelf.queue.async {
-                    strongSelf.updatePendingWebpages(viewId: viewId, messageIds: [], localWebpages: [:])
+                    strongSelf.updatePendingWebpages(viewId: viewId, threadId: chatLocation.threadId, messageIds: [], localWebpages: [:])
                     strongSelf.updatePolls(viewId: viewId, messageIds: [], messages: [:])
                     switch chatLocation {
                     case let .peer(peerId, _):
@@ -1729,7 +1863,7 @@ public final class AccountViewTracker {
                         if peerId.namespace == Namespaces.Peer.CloudChannel {
                             strongSelf.historyViewStateValidationContexts.updateView(id: viewId, view: nil, location: chatLocation)
                         }
-                    case .feed:
+                    case .customChatContents:
                         break
                     }
                 }
@@ -1742,7 +1876,7 @@ public final class AccountViewTracker {
             peerId = peerIdValue
         case let .thread(peerIdValue, _, _):
             peerId = peerIdValue
-        case .feed:
+        case .customChatContents:
             peerId = nil
         }
         if let peerId = peerId, peerId.namespace == Namespaces.Peer.CloudChannel {
@@ -1799,7 +1933,7 @@ public final class AccountViewTracker {
                             loaded = true
                             return history
                         } else {
-                            let view = MessageHistoryView(tagMask: nil, namespaces: .all, entries: [], holeEarlier: true, holeLater: true, isLoading: true)
+                            let view = MessageHistoryView(tag: nil, namespaces: .all, entries: [], holeEarlier: true, holeLater: true, isLoading: true)
                             return .single((view, .Initial, nil))
                         }
                     }
@@ -1824,7 +1958,7 @@ public final class AccountViewTracker {
     
     public func scheduledMessagesViewForLocation(_ chatLocation: ChatLocationInput, additionalData: [AdditionalMessageHistoryViewData] = []) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
         if let account = self.account {
-            let signal = account.postbox.aroundMessageHistoryViewForLocation(chatLocation, anchor: .upperBound, ignoreMessagesInTimestampRange: nil, count: 200, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: [], tagMask: nil, appendMessagesFromTheSameGroup: false, namespaces: .just(Namespaces.Message.allScheduled), orderStatistics: [], additionalData: additionalData)
+            let signal = account.postbox.aroundMessageHistoryViewForLocation(chatLocation, anchor: .upperBound, ignoreMessagesInTimestampRange: nil, count: 200, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: [], tag: nil, appendMessagesFromTheSameGroup: false, namespaces: .just(Namespaces.Message.allScheduled), orderStatistics: [], additionalData: additionalData)
             return withState(signal, { [weak self] () -> Int32 in
                 if let strongSelf = self {
                     return OSAtomicIncrement32(&strongSelf.nextViewId)
@@ -1835,14 +1969,14 @@ public final class AccountViewTracker {
                 if let strongSelf = self {
                     strongSelf.queue.async {
                         let (messageIds, localWebpages) = pendingWebpages(entries: next.0.entries)
-                        strongSelf.updatePendingWebpages(viewId: viewId, messageIds: messageIds, localWebpages: localWebpages)
+                        strongSelf.updatePendingWebpages(viewId: viewId, threadId: chatLocation.threadId, messageIds: messageIds, localWebpages: localWebpages)
                         strongSelf.historyViewStateValidationContexts.updateView(id: viewId, view: next.0, location: chatLocation)
                     }
                 }
             }, disposed: { [weak self] viewId in
                 if let strongSelf = self {
                     strongSelf.queue.async {
-                        strongSelf.updatePendingWebpages(viewId: viewId, messageIds: [], localWebpages: [:])
+                        strongSelf.updatePendingWebpages(viewId: viewId, threadId: chatLocation.threadId, messageIds: [], localWebpages: [:])
                         strongSelf.historyViewStateValidationContexts.updateView(id: viewId, view: nil, location: nil)
                     }
                 }
@@ -1852,21 +1986,82 @@ public final class AccountViewTracker {
         }
     }
     
-    public func aroundMessageOfInterestHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>? = nil, count: Int, tagMask: MessageTags? = nil, appendMessagesFromTheSameGroup: Bool = false, orderStatistics: MessageHistoryViewOrderStatistics = [], additionalData: [AdditionalMessageHistoryViewData] = []) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
+    public func quickReplyMessagesViewForLocation(quickReplyId: Int32, additionalData: [AdditionalMessageHistoryViewData] = []) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
+        guard let account = self.account else {
+            return .never()
+        }
+        let chatLocation: ChatLocationInput = .peer(peerId: account.peerId, threadId: Int64(quickReplyId))
+        let signal = account.postbox.aroundMessageHistoryViewForLocation(chatLocation, anchor: .upperBound, ignoreMessagesInTimestampRange: nil, count: 200, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: [], tag: nil, appendMessagesFromTheSameGroup: false, namespaces: .just(Namespaces.Message.allQuickReply), orderStatistics: [], additionalData: additionalData)
+        return withState(signal, { [weak self] () -> Int32 in
+            if let strongSelf = self {
+                return OSAtomicIncrement32(&strongSelf.nextViewId)
+            } else {
+                return -1
+            }
+        }, next: { [weak self] next, viewId in
+            if let strongSelf = self {
+                strongSelf.queue.async {
+                    let (messageIds, localWebpages) = pendingWebpages(entries: next.0.entries)
+                    strongSelf.updatePendingWebpages(viewId: viewId, threadId: Int64(quickReplyId), messageIds: messageIds, localWebpages: localWebpages)
+                    strongSelf.historyViewStateValidationContexts.updateView(id: viewId, view: next.0, location: chatLocation)
+                }
+            }
+        }, disposed: { [weak self] viewId in
+            if let strongSelf = self {
+                strongSelf.queue.async {
+                    strongSelf.updatePendingWebpages(viewId: viewId, threadId: Int64(quickReplyId), messageIds: [], localWebpages: [:])
+                    strongSelf.historyViewStateValidationContexts.updateView(id: viewId, view: nil, location: nil)
+                }
+            }
+        })
+    }
+    
+    public func pendingQuickReplyMessagesViewForLocation(shortcut: String) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
+        guard let account = self.account else {
+            return .never()
+        }
+        let chatLocation: ChatLocationInput = .peer(peerId: account.peerId, threadId: nil)
+        let signal = account.postbox.aroundMessageHistoryViewForLocation(chatLocation, anchor: .upperBound, ignoreMessagesInTimestampRange: nil, count: 200, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: [], tag: nil, appendMessagesFromTheSameGroup: false, namespaces: .just([Namespaces.Message.QuickReplyLocal]), orderStatistics: [], additionalData: [])
+        |> map { view, update, initialData in
+            var entries: [MessageHistoryEntry] = []
+            for entry in view.entries {
+                var matches = false
+                inner: for attribute in entry.message.attributes {
+                    if let attribute = attribute as? OutgoingQuickReplyMessageAttribute {
+                        if attribute.shortcut == shortcut {
+                            matches = true
+                        }
+                        break inner
+                    }
+                }
+                if matches {
+                    entries.append(entry)
+                }
+            }
+            let mappedView = MessageHistoryView(tag: nil, namespaces: .just([Namespaces.Message.QuickReplyLocal]), entries: entries, holeEarlier: false, holeLater: false, isLoading: false)
+            
+            return (mappedView, update, initialData)
+        }
+        return signal
+    }
+    
+    public func aroundMessageOfInterestHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>? = nil, count: Int, tag: HistoryViewInputTag? = nil, appendMessagesFromTheSameGroup: Bool = false, orderStatistics: MessageHistoryViewOrderStatistics = [], additionalData: [AdditionalMessageHistoryViewData] = [], useRootInterfaceStateForThread: Bool = false) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
         if let account = self.account {
             let signal: Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError>
-            if let peerId = chatLocation.peerId, let threadId = chatLocation.threadId, tagMask == nil {
-                signal = account.postbox.transaction { transaction -> MessageHistoryThreadData? in
-                    return transaction.getMessageHistoryThreadInfo(peerId: peerId, threadId: threadId)?.data.get(MessageHistoryThreadData.self)
+            if let peerId = chatLocation.peerId, let threadId = chatLocation.threadId, tag == nil {
+                signal = account.postbox.transaction { transaction -> (MessageHistoryThreadData?, MessageIndex?) in
+                    let interfaceState = transaction.getPeerChatThreadInterfaceState(peerId, threadId: threadId)
+                    
+                    return (
+                        transaction.getMessageHistoryThreadInfo(peerId: peerId, threadId: threadId)?.data.get(MessageHistoryThreadData.self),
+                        interfaceState?.historyScrollMessageIndex
+                    )
                 }
-                |> mapToSignal { threadInfo -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> in
-                    if let threadInfo = threadInfo {
+                |> mapToSignal { threadInfo, scrollRestorationIndex -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> in
+                    if peerId == account.peerId {
                         let anchor: HistoryViewInputAnchor
-                        if threadInfo.maxIncomingReadId <= 1 {
-                            anchor = .message(MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: 1))
-                        } else if threadInfo.incomingUnreadCount > 0 && tagMask == nil {
-                            let customUnreadMessageId = MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: threadInfo.maxIncomingReadId)
-                            anchor = .message(customUnreadMessageId)
+                        if let scrollRestorationIndex {
+                            anchor = .index(scrollRestorationIndex)
                         } else {
                             anchor = .upperBound
                         }
@@ -1876,20 +2071,50 @@ public final class AccountViewTracker {
                             anchor: anchor,
                             ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange,
                             count: count,
-                            fixedCombinedReadStates: nil,
+                            fixedCombinedReadStates: .peer([peerId: CombinedPeerReadState(states: [
+                                (Namespaces.Message.Cloud, PeerReadState.idBased(maxIncomingReadId: Int32.max - 1, maxOutgoingReadId: Int32.max - 1, maxKnownId: Int32.max - 1, count: 0, markedUnread: false))
+                            ])]),
                             topTaggedMessageIdNamespaces: [],
-                            tagMask: tagMask,
+                            tag: tag,
                             appendMessagesFromTheSameGroup: false,
-                            namespaces: .not(Namespaces.Message.allScheduled),
+                            namespaces: .not(Namespaces.Message.allNonRegular),
                             orderStatistics: orderStatistics,
-                            additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData)
+                            additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData),
+                            useRootInterfaceStateForThread: useRootInterfaceStateForThread
                         )
+                    } else {
+                        if let threadInfo = threadInfo {
+                            let anchor: HistoryViewInputAnchor
+                            if threadInfo.maxIncomingReadId <= 1 {
+                                anchor = .message(MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: 1))
+                            } else if threadInfo.incomingUnreadCount > 0 && tag == nil {
+                                let customUnreadMessageId = MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: threadInfo.maxIncomingReadId)
+                                anchor = .message(customUnreadMessageId)
+                            } else {
+                                anchor = .upperBound
+                            }
+                            
+                            return account.postbox.aroundMessageHistoryViewForLocation(
+                                chatLocation,
+                                anchor: anchor,
+                                ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange,
+                                count: count,
+                                fixedCombinedReadStates: nil,
+                                topTaggedMessageIdNamespaces: [],
+                                tag: tag,
+                                appendMessagesFromTheSameGroup: false,
+                                namespaces: .not(Namespaces.Message.allNonRegular),
+                                orderStatistics: orderStatistics,
+                                additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData),
+                                useRootInterfaceStateForThread: useRootInterfaceStateForThread
+                            )
+                        }
                     }
                     
-                    return account.postbox.aroundMessageOfInterestHistoryViewForChatLocation(chatLocation, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, count: count, topTaggedMessageIdNamespaces: [Namespaces.Message.Cloud], tagMask: tagMask, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: .not(Namespaces.Message.allScheduled), orderStatistics: orderStatistics, customUnreadMessageId: nil, additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData))
+                    return account.postbox.aroundMessageOfInterestHistoryViewForChatLocation(chatLocation, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, count: count, topTaggedMessageIdNamespaces: [Namespaces.Message.Cloud], tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: orderStatistics, customUnreadMessageId: nil, additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData), useRootInterfaceStateForThread: useRootInterfaceStateForThread)
                 }
             } else {
-                signal = account.postbox.aroundMessageOfInterestHistoryViewForChatLocation(chatLocation, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, count: count, topTaggedMessageIdNamespaces: [Namespaces.Message.Cloud], tagMask: tagMask, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: .not(Namespaces.Message.allScheduled), orderStatistics: orderStatistics, customUnreadMessageId: nil, additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData))
+                signal = account.postbox.aroundMessageOfInterestHistoryViewForChatLocation(chatLocation, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, count: count, topTaggedMessageIdNamespaces: [Namespaces.Message.Cloud], tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: orderStatistics, customUnreadMessageId: nil, additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData), useRootInterfaceStateForThread: useRootInterfaceStateForThread)
             }
             return wrappedMessageHistorySignal(chatLocation: chatLocation, signal: signal, fixedCombinedReadStates: nil, addHoleIfNeeded: true)
         } else {
@@ -1897,16 +2122,16 @@ public final class AccountViewTracker {
         }
     }
     
-    public func aroundIdMessageHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>? = nil, count: Int, ignoreRelatedChats: Bool, messageId: MessageId, tagMask: MessageTags? = nil, appendMessagesFromTheSameGroup: Bool = false, orderStatistics: MessageHistoryViewOrderStatistics = [], additionalData: [AdditionalMessageHistoryViewData] = []) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
+    public func aroundIdMessageHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>? = nil, count: Int, ignoreRelatedChats: Bool, messageId: MessageId, tag: HistoryViewInputTag? = nil, appendMessagesFromTheSameGroup: Bool = false, orderStatistics: MessageHistoryViewOrderStatistics = [], additionalData: [AdditionalMessageHistoryViewData] = [], useRootInterfaceStateForThread: Bool = false) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
         if let account = self.account {
-            let signal = account.postbox.aroundIdMessageHistoryViewForLocation(chatLocation, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, count: count, ignoreRelatedChats: ignoreRelatedChats, messageId: messageId, topTaggedMessageIdNamespaces: [Namespaces.Message.Cloud], tagMask: tagMask, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: .not(Namespaces.Message.allScheduled), orderStatistics: orderStatistics, additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData))
+            let signal = account.postbox.aroundIdMessageHistoryViewForLocation(chatLocation, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, count: count, ignoreRelatedChats: ignoreRelatedChats, messageId: messageId, topTaggedMessageIdNamespaces: [Namespaces.Message.Cloud], tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: orderStatistics, additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData), useRootInterfaceStateForThread: useRootInterfaceStateForThread)
             return wrappedMessageHistorySignal(chatLocation: chatLocation, signal: signal, fixedCombinedReadStates: nil, addHoleIfNeeded: false)
         } else {
             return .never()
         }
     }
     
-    public func aroundMessageHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>? = nil, index: MessageHistoryAnchorIndex, anchorIndex: MessageHistoryAnchorIndex, count: Int, clipHoles: Bool = true, ignoreRelatedChats: Bool = false, fixedCombinedReadStates: MessageHistoryViewReadState?, tagMask: MessageTags? = nil, appendMessagesFromTheSameGroup: Bool = false, orderStatistics: MessageHistoryViewOrderStatistics = [], additionalData: [AdditionalMessageHistoryViewData] = []) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
+    public func aroundMessageHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>? = nil, index: MessageHistoryAnchorIndex, anchorIndex: MessageHistoryAnchorIndex, count: Int, clipHoles: Bool = true, ignoreRelatedChats: Bool = false, fixedCombinedReadStates: MessageHistoryViewReadState?, tag: HistoryViewInputTag? = nil, appendMessagesFromTheSameGroup: Bool = false, orderStatistics: MessageHistoryViewOrderStatistics = [], additionalData: [AdditionalMessageHistoryViewData] = [], useRootInterfaceStateForThread: Bool = false) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
         if let account = self.account {
             let inputAnchor: HistoryViewInputAnchor
             switch index {
@@ -1917,7 +2142,7 @@ public final class AccountViewTracker {
                 case let .message(index):
                     inputAnchor = .index(index)
             }
-            let signal = account.postbox.aroundMessageHistoryViewForLocation(chatLocation, anchor: inputAnchor, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, count: count, clipHoles: clipHoles, ignoreRelatedChats: ignoreRelatedChats, fixedCombinedReadStates: fixedCombinedReadStates, topTaggedMessageIdNamespaces: [Namespaces.Message.Cloud], tagMask: tagMask, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: .not(Namespaces.Message.allScheduled), orderStatistics: orderStatistics, additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData))
+            let signal = account.postbox.aroundMessageHistoryViewForLocation(chatLocation, anchor: inputAnchor, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, count: count, clipHoles: clipHoles, ignoreRelatedChats: ignoreRelatedChats, fixedCombinedReadStates: fixedCombinedReadStates, topTaggedMessageIdNamespaces: [Namespaces.Message.Cloud], tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: orderStatistics, additionalData: wrappedHistoryViewAdditionalData(chatLocation: chatLocation, additionalData: additionalData), useRootInterfaceStateForThread: useRootInterfaceStateForThread)
             return wrappedMessageHistorySignal(chatLocation: chatLocation, signal: signal, fixedCombinedReadStates: fixedCombinedReadStates, addHoleIfNeeded: false)
         } else {
             return .never()
@@ -2184,10 +2409,10 @@ public final class AccountViewTracker {
     public func unseenPersonalMessagesAndReactionCount(peerId: PeerId, threadId: Int64?) -> Signal<(mentionCount: Int32, reactionCount: Int32), NoError> {
         if let account = self.account {
             let pendingMentionsKey: PostboxViewKey = .pendingMessageActionsSummary(type: .consumeUnseenPersonalMessage, peerId: peerId, namespace: Namespaces.Message.Cloud)
-            let summaryMentionsKey: PostboxViewKey = .historyTagSummaryView(tag: .unseenPersonalMessage, peerId: peerId, threadId: threadId, namespace: Namespaces.Message.Cloud)
+            let summaryMentionsKey: PostboxViewKey = .historyTagSummaryView(tag: .unseenPersonalMessage, peerId: peerId, threadId: threadId, namespace: Namespaces.Message.Cloud, customTag: nil)
             
             let pendingReactionsKey: PostboxViewKey = .pendingMessageActionsSummary(type: .readReaction, peerId: peerId, namespace: Namespaces.Message.Cloud)
-            let summaryReactionsKey: PostboxViewKey = .historyTagSummaryView(tag: .unseenReaction, peerId: peerId, threadId: threadId, namespace: Namespaces.Message.Cloud)
+            let summaryReactionsKey: PostboxViewKey = .historyTagSummaryView(tag: .unseenReaction, peerId: peerId, threadId: threadId, namespace: Namespaces.Message.Cloud, customTag: nil)
             
             return account.postbox.combinedView(keys: [pendingMentionsKey, summaryMentionsKey, pendingReactionsKey, summaryReactionsKey])
             |> map { views -> (mentionCount: Int32, reactionCount: Int32) in
@@ -2201,9 +2426,6 @@ public final class AccountViewTracker {
                     }
                 }
                 var reactionCount: Int32 = 0
-                /*if let view = views.views[pendingReactionsKey] as? PendingMessageActionsSummaryView {
-                    reactionCount -= view.count
-                }*/
                 if let view = views.views[summaryReactionsKey] as? MessageHistoryTagSummaryView {
                     if let unseenCount = view.count {
                         reactionCount += unseenCount
@@ -2247,7 +2469,7 @@ public final class AccountViewTracker {
         })
     }
     
-    public func tailChatListView(groupId: PeerGroupId, filterPredicate: ChatListFilterPredicate? = nil, count: Int) -> Signal<(ChatListView, ViewUpdateType), NoError> {
+    public func tailChatListView(groupId: PeerGroupId, filterPredicate: ChatListFilterPredicate? = nil, count: Int, shouldLoadCanMessagePeer: Bool = false) -> Signal<(ChatListView, ViewUpdateType), NoError> {
         if let account = self.account {
             return self.wrappedChatListView(signal: account.postbox.tailChatListView(
                 groupId: groupId,
@@ -2270,14 +2492,16 @@ public final class AccountViewTracker {
                             actionsSummary: ChatListEntryPendingMessageActionsSummaryComponent(namespace: Namespaces.Message.Cloud)
                         )
                     ]
-                )
+                ),
+                extractCachedData: shouldLoadCanMessagePeer ? extractCachedDataIsPremiumRequiredToMessage : nil,
+                accountPeerId: shouldLoadCanMessagePeer ? account.peerId : nil
             ))
         } else {
             return .never()
         }
     }
     
-    public func aroundChatListView(groupId: PeerGroupId, filterPredicate: ChatListFilterPredicate? = nil, index: ChatListIndex, count: Int) -> Signal<(ChatListView, ViewUpdateType), NoError> {
+    public func aroundChatListView(groupId: PeerGroupId, filterPredicate: ChatListFilterPredicate? = nil, index: ChatListIndex, count: Int, shouldLoadCanMessagePeer: Bool = false) -> Signal<(ChatListView, ViewUpdateType), NoError> {
         if let account = self.account {
             return self.wrappedChatListView(signal: account.postbox.aroundChatListView(
                 groupId: groupId,
@@ -2301,7 +2525,9 @@ public final class AccountViewTracker {
                             actionsSummary: ChatListEntryPendingMessageActionsSummaryComponent(namespace: Namespaces.Message.Cloud)
                         )
                     ]
-                )
+                ),
+                extractCachedData: shouldLoadCanMessagePeer ? extractCachedDataIsPremiumRequiredToMessage : nil,
+                accountPeerId: shouldLoadCanMessagePeer ? account.peerId : nil
             ))
         } else {
             return .never()
@@ -2355,4 +2581,41 @@ public final class AccountViewTracker {
             }
         }
     }
+    
+    public func keepQuickRepliesApproximatelyUpdated() {
+        self.queue.async {
+            guard let account = self.account else {
+                return
+            }
+            let timestamp = CFAbsoluteTimeGetCurrent()
+            if self.quickRepliesUpdateTimestamp + 16 * 60 * 60 < timestamp {
+                self.quickRepliesUpdateTimestamp = timestamp
+                self.quickRepliesUpdateDisposable?.dispose()
+                self.quickRepliesUpdateDisposable = _internal_keepShortcutMessagesUpdated(account: account).startStrict()
+            }
+        }
+    }
+}
+
+public final class ExtractedChatListItemCachedData: Hashable {
+    public let isPremiumRequiredToMessage: Bool
+    
+    public init(isPremiumRequiredToMessage: Bool) {
+        self.isPremiumRequiredToMessage = isPremiumRequiredToMessage
+    }
+    
+    public static func ==(lhs: ExtractedChatListItemCachedData, rhs: ExtractedChatListItemCachedData) -> Bool {
+        return true
+    }
+    
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(self.isPremiumRequiredToMessage)
+    }
+}
+
+private func extractCachedDataIsPremiumRequiredToMessage(_ cachedData: CachedPeerData) -> AnyHashable? {
+    if let cachedData = cachedData as? CachedUserData {
+        return ExtractedChatListItemCachedData(isPremiumRequiredToMessage: cachedData.flags.contains(.premiumRequired))
+    }
+    return nil
 }

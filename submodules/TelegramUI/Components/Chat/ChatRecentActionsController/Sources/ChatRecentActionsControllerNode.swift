@@ -210,7 +210,7 @@ final class ChatRecentActionsControllerNode: ViewControllerTracingNode {
                     }
                 }
                 let gallerySource = GalleryControllerItemSource.standaloneMessage(message)
-                return context.sharedContext.openChatMessage(OpenChatMessageParams(context: context, chatLocation: nil, chatLocationContextHolder: nil, message: message, standalone: true, reverseMessageGalleryOrder: false, navigationController: navigationController, dismissInput: {
+                return context.sharedContext.openChatMessage(OpenChatMessageParams(context: context, chatLocation: nil, chatFilterTag: nil, chatLocationContextHolder: nil, message: message, standalone: true, reverseMessageGalleryOrder: false, navigationController: navigationController, dismissInput: {
                     //self?.chatDisplayNode.dismissInput()
                 }, present: { c, a in
                     self?.presentController(c, .window(.root), a)
@@ -271,7 +271,7 @@ final class ChatRecentActionsControllerNode: ViewControllerTracingNode {
             let gesture: ContextGesture? = anyRecognizer as? ContextGesture
             self?.openMessageContextMenu(message: message, selectAll: selectAll, node: node, frame: frame, recognizer: recognizer, gesture: gesture, location: location)
         }, openMessageReactionContextMenu: { _, _, _, _ in
-        }, updateMessageReaction: { _, _ in
+        }, updateMessageReaction: { _, _, _, _ in
         }, activateMessagePinch: { _ in
         }, openMessageContextActions: { _, _, _, _ in
         }, navigateToMessage: { _, _, _ in }, navigateToMessageStandalone: { _ in
@@ -571,6 +571,8 @@ final class ChatRecentActionsControllerNode: ViewControllerTracingNode {
         }, displayGiveawayParticipationStatus: { _ in
         }, openPremiumStatusInfo: { _, _, _, _ in
         }, openRecommendedChannelContextMenu: { _, _, _ in
+        }, openGroupBoostInfo: { _, _ in
+        }, openStickerEditor: {   
         }, requestMessageUpdate: { _, _ in
         }, cancelInteractiveKeyboardGestures: {
         }, dismissTextInput: {
@@ -608,12 +610,14 @@ final class ChatRecentActionsControllerNode: ViewControllerTracingNode {
         
         let previousView = Atomic<[ChatRecentActionsEntry]?>(value: nil)
         
-        let historyViewTransition = combineLatest(historyViewUpdate, self.chatPresentationDataPromise.get())
-        |> mapToQueue { update, chatPresentationData -> Signal<ChatRecentActionsHistoryTransition, NoError> in
+        let chatThemes = self.context.engine.themes.getChatThemes(accountManager: self.context.sharedContext.accountManager)
+        
+        let historyViewTransition = combineLatest(historyViewUpdate, self.chatPresentationDataPromise.get(), chatThemes)
+        |> mapToQueue { update, chatPresentationData, chatThemes -> Signal<ChatRecentActionsHistoryTransition, NoError> in
             let processedView = chatRecentActionsEntries(entries: update.0, presentationData: chatPresentationData)
             let previous = previousView.swap(processedView)
             
-            return .single(chatRecentActionsHistoryPreparedTransition(from: previous ?? [], to: processedView, type: update.2, canLoadEarlier: update.1, displayingResults: update.3, context: context, peer: peer, controllerInteraction: controllerInteraction))
+            return .single(chatRecentActionsHistoryPreparedTransition(from: previous ?? [], to: processedView, type: update.2, canLoadEarlier: update.1, displayingResults: update.3, context: context, peer: peer, controllerInteraction: controllerInteraction, chatThemes: chatThemes))
         }
         
         let appliedTransition = historyViewTransition |> deliverOnMainQueue |> mapToQueue { [weak self] transition -> Signal<Void, NoError> in
@@ -1089,6 +1093,8 @@ final class ChatRecentActionsControllerNode: ViewControllerTracingNode {
                     case .boost:
                         break
                     case .premiumGiftCode:
+                        break
+                    case .premiumMultiGift:
                         break
                 }
             }

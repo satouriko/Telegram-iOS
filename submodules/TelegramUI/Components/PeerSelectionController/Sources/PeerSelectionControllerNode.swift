@@ -80,7 +80,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
     var requestActivateSearch: (() -> Void)?
     var requestDeactivateSearch: (() -> Void)?
     var requestOpenPeer: ((EnginePeer, Int64?) -> Void)?
-    var requestOpenDisabledPeer: ((EnginePeer, Int64?) -> Void)?
+    var requestOpenDisabledPeer: ((EnginePeer, Int64?, ChatListDisabledPeerReason) -> Void)?
     var requestOpenPeerFromSearch: ((EnginePeer, Int64?) -> Void)?
     var requestOpenMessageFromSearch: ((EnginePeer, Int64?, EngineMessage.Id) -> Void)?
     var requestSend: (([EnginePeer], [EnginePeer.Id: EnginePeer], NSAttributedString, AttachmentTextInputPanelSendMode, ChatInterfaceForwardOptionsState?) -> Void)?
@@ -124,7 +124,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         self.animationCache = context.animationCache
         self.animationRenderer = context.animationRenderer
         
-        self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: .builtin(WallpaperSettings()), theme: self.presentationData.theme, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: self.context.currentLimitsConfiguration.with { $0 }, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: self.context.account.peerId, mode: .standard(previewing: false), chatLocation: .peer(id: PeerId(0)), subject: nil, peerNearbyData: nil, greetingData: nil, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, importState: nil, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil)
+        self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: .builtin(WallpaperSettings()), theme: self.presentationData.theme, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: self.context.currentLimitsConfiguration.with { $0 }, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: self.context.account.peerId, mode: .standard(.default), chatLocation: .peer(id: PeerId(0)), subject: nil, peerNearbyData: nil, greetingData: nil, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, importState: nil, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil)
         
         self.presentationInterfaceState = self.presentationInterfaceState.updatedInterfaceState { $0.withUpdatedForwardMessageIds(forwardedMessageIds) }
         self.presentationInterfaceStatePromise.set(self.presentationInterfaceState)
@@ -250,8 +250,11 @@ final class PeerSelectionControllerNode: ASDisplayNode {
             self?.requestOpenPeer?(peer, threadId)
         }
         
-        self.chatListNode?.disabledPeerSelected = { [weak self] peer, threadId in
-            self?.requestOpenDisabledPeer?(peer, threadId)
+        self.chatListNode?.disabledPeerSelected = { [weak self] peer, threadId, reason in
+            self?.requestOpenDisabledPeer?(peer, threadId, reason)
+        }
+        self.mainContainerNode?.disabledPeerSelected = { [weak self] peer, threadId, reason in
+            self?.requestOpenDisabledPeer?(peer, threadId, reason)
         }
         
         self.chatListNode?.contentOffsetChanged = { [weak self] offset in
@@ -337,6 +340,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         self.interfaceInteraction = ChatPanelInterfaceInteraction(setupReplyMessage: { _, _ in
         }, setupEditMessage: { _, _ in
         }, beginMessageSelection: { _, _ in
+        }, cancelMessageSelection: { _ in
         }, deleteSelectedMessages: {
         }, reportSelectedMessages: {
         }, reportMessages: { _, _ in
@@ -373,7 +377,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
                 chatLocation: .peer(id: strongSelf.context.account.peerId),
                 subject: .messageOptions(peerIds: peerIds, ids: strongSelf.presentationInterfaceState.interfaceState.forwardMessageIds ?? [], info: .forward(ChatControllerSubject.MessageOptionsInfo.Forward(options: forwardOptions))),
                 botStart: nil,
-                mode: .standard(previewing: true)
+                mode: .standard(.previewing)
             )
             chatController.canReadHistory.set(false)
             
@@ -587,14 +591,17 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         }, sendContextResult: { _, _, _, _ in
             return false
         }, sendBotCommand: { _, _ in
+        }, sendShortcut: { _ in
+        }, openEditShortcuts: {
         }, sendBotStart: { _ in
         }, botSwitchChatWithPayload: { _, _ in
         }, beginMediaRecording: { _ in
         }, finishMediaRecording: { _ in
         }, stopMediaRecording: {
         }, lockMediaRecording: {
+        }, resumeMediaRecording: {
         }, deleteRecordedMedia: {
-        }, sendRecordedMedia: { _ in
+        }, sendRecordedMedia: { _, _ in
         }, displayRestrictedInfo: { _, _ in
         }, displayVideoUnmuteTip: { _ in
         }, switchMediaRecordingMode: {
@@ -728,6 +735,11 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         }, addDoNotTranslateLanguage: { _ in
         }, hideTranslationPanel: {
         }, openPremiumGift: {
+        }, openPremiumRequiredForMessaging: {
+        }, openBoostToUnrestrict: {
+        }, updateVideoTrimRange: { _, _, _, _ in
+        }, updateHistoryFilter: { _ in
+        }, updateDisplayHistoryFilterAsList: { _ in
         }, requestLayout: { _ in
         }, chatController: {
             return nil
@@ -1177,8 +1189,8 @@ final class PeerSelectionControllerNode: ASDisplayNode {
                             requestOpenPeerFromSearch(peer, threadId)
                         }
                     },
-                    openDisabledPeer: { [weak self] peer, threadId in
-                        self?.requestOpenDisabledPeer?(peer, threadId)
+                    openDisabledPeer: { [weak self] peer, threadId, reason in
+                        self?.requestOpenDisabledPeer?(peer, threadId, reason)
                     },
                     openRecentPeerOptions: { _ in
                     },
@@ -1268,6 +1280,11 @@ final class PeerSelectionControllerNode: ASDisplayNode {
                         }
                     }
                 }
+            }, openDisabledPeer: { [weak self] peer, reason in
+                guard let self else {
+                    return
+                }
+                self.requestOpenDisabledPeer?(peer, nil, reason)
             }, contextAction: nil), cancel: { [weak self] in
                 if let requestDeactivateSearch = self?.requestDeactivateSearch {
                     requestDeactivateSearch()
@@ -1339,7 +1356,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
                         self.controller?.containerLayoutUpdated(layout, transition: .immediate)
                     }
                 } else {
-                    let contactListNode = ContactListNode(context: self.context, updatedPresentationData: self.updatedPresentationData, presentation: .single(.natural(options: [], includeChatList: false, topPeers: false)))
+                    let contactListNode = ContactListNode(context: self.context, updatedPresentationData: self.updatedPresentationData, presentation: .single(.natural(options: [], includeChatList: false, topPeers: false)), onlyWriteable: self.filter.contains(.onlyWriteable))
                     self.contactListNode = contactListNode
                     contactListNode.enableUpdates = true
                     contactListNode.selectionStateUpdated = { [weak self] selectionState in
@@ -1355,6 +1372,12 @@ final class PeerSelectionControllerNode: ASDisplayNode {
                             self?.contactListNode?.listNode.clearHighlightAnimated(true)
                             self?.requestOpenPeer?(EnginePeer(peer), nil)
                         }
+                    }
+                    contactListNode.openDisabledPeer = { [weak self] peer, reason in
+                        guard let self else {
+                            return
+                        }
+                        self.requestOpenDisabledPeer?(peer, nil, reason)
                     }
                     contactListNode.suppressPermissionWarning = { [weak self] in
                         if let strongSelf = self {

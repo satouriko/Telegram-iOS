@@ -252,49 +252,53 @@ public class PremiumLimitDisplayComponent: Component {
                 rotationAngle = 0.26
             }
             
+            let to: CGFloat = self.badgeView.center.x
+            
             let positionAnimation = CABasicAnimation(keyPath: "position.x")
             positionAnimation.fromValue = NSValue(cgPoint: CGPoint(x: from ?? 0.0, y: 0.0))
-            positionAnimation.toValue = NSValue(cgPoint: self.badgeView.center)
+            positionAnimation.toValue = NSValue(cgPoint: CGPoint(x: to, y: 0.0))
             positionAnimation.duration = 0.5
             positionAnimation.fillMode = .forwards
             positionAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             self.badgeView.layer.add(positionAnimation, forKey: "appearance1")
            
-            let rotateAnimation = CABasicAnimation(keyPath: "transform.rotation.z")
-            rotateAnimation.fromValue = 0.0 as NSNumber
-            rotateAnimation.toValue = -rotationAngle as NSNumber
-            rotateAnimation.duration = 0.15
-            rotateAnimation.fillMode = .forwards
-            rotateAnimation.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            rotateAnimation.isRemovedOnCompletion = false
-            self.badgeView.layer.add(rotateAnimation, forKey: "appearance2")
-            
-            Queue.mainQueue().after(0.5, {
-                let bounceAnimation = CABasicAnimation(keyPath: "transform.rotation.z")
-                bounceAnimation.fromValue = -rotationAngle as NSNumber
-                bounceAnimation.toValue = 0.04 as NSNumber
-                bounceAnimation.duration = 0.2
-                bounceAnimation.fillMode = .forwards
-                bounceAnimation.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                bounceAnimation.isRemovedOnCompletion = false
-                self.badgeView.layer.add(bounceAnimation, forKey: "appearance3")
-                self.badgeView.layer.removeAnimation(forKey: "appearance2")
+            if from != to {
+                let rotateAnimation = CABasicAnimation(keyPath: "transform.rotation.z")
+                rotateAnimation.fromValue = 0.0 as NSNumber
+                rotateAnimation.toValue = -rotationAngle as NSNumber
+                rotateAnimation.duration = 0.15
+                rotateAnimation.fillMode = .forwards
+                rotateAnimation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                rotateAnimation.isRemovedOnCompletion = false
+                self.badgeView.layer.add(rotateAnimation, forKey: "appearance2")
                 
-                if !self.badgeView.isHidden {
-                    self.hapticFeedback.impact(.light)
-                }
-                
-                Queue.mainQueue().after(0.2) {
-                    let returnAnimation = CABasicAnimation(keyPath: "transform.rotation.z")
-                    returnAnimation.fromValue = 0.04 as NSNumber
-                    returnAnimation.toValue = 0.0 as NSNumber
-                    returnAnimation.duration = 0.15
-                    returnAnimation.fillMode = .forwards
-                    returnAnimation.timingFunction = CAMediaTimingFunction(name: .easeIn)
-                    self.badgeView.layer.add(returnAnimation, forKey: "appearance4")
-                    self.badgeView.layer.removeAnimation(forKey: "appearance3")
-                }
-            })
+                Queue.mainQueue().after(0.5, {
+                    let bounceAnimation = CABasicAnimation(keyPath: "transform.rotation.z")
+                    bounceAnimation.fromValue = -rotationAngle as NSNumber
+                    bounceAnimation.toValue = 0.04 as NSNumber
+                    bounceAnimation.duration = 0.2
+                    bounceAnimation.fillMode = .forwards
+                    bounceAnimation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    bounceAnimation.isRemovedOnCompletion = false
+                    self.badgeView.layer.add(bounceAnimation, forKey: "appearance3")
+                    self.badgeView.layer.removeAnimation(forKey: "appearance2")
+                    
+                    if !self.badgeView.isHidden {
+                        self.hapticFeedback.impact(.light)
+                    }
+                    
+                    Queue.mainQueue().after(0.2) {
+                        let returnAnimation = CABasicAnimation(keyPath: "transform.rotation.z")
+                        returnAnimation.fromValue = 0.04 as NSNumber
+                        returnAnimation.toValue = 0.0 as NSNumber
+                        returnAnimation.duration = 0.15
+                        returnAnimation.fillMode = .forwards
+                        returnAnimation.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                        self.badgeView.layer.add(returnAnimation, forKey: "appearance4")
+                        self.badgeView.layer.removeAnimation(forKey: "appearance3")
+                    }
+                })
+            }
             
             if from == nil {
                 self.badgeView.alpha = 1.0
@@ -323,6 +327,7 @@ public class PremiumLimitDisplayComponent: Component {
             self.badgeIcon.image = component.badgeIconName.flatMap { UIImage(bundleImageName: $0)?.withRenderingMode(.alwaysTemplate) }
             self.badgeIcon.tintColor = component.activeTitleColor
             self.badgeView.isHidden = self.badgeIcon.image == nil
+            self.badgeLabel.color = component.activeTitleColor
             
             let lineHeight: CGFloat = 30.0
             let containerFrame = CGRect(origin: CGPoint(x: 0.0, y: size.height - lineHeight), size: CGSize(width: size.width, height: lineHeight))
@@ -914,11 +919,11 @@ private final class LimitSheetContent: CombinedComponent {
                 defaultValue = component.count > limit ? "\(limit)" : ""
                 premiumValue = component.count >= premiumLimit ? "" : "\(premiumLimit)"
                 if component.count >= premiumLimit {
-                    badgeGraphPosition = max(0.15, CGFloat(limit) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(limit) / CGFloat(premiumLimit))
                 } else {
-                    badgeGraphPosition = max(0.15, CGFloat(component.count) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(component.count) / CGFloat(premiumLimit))
                 }
-                badgePosition = max(0.15, CGFloat(component.count) / CGFloat(premiumLimit))
+                badgePosition = max(0.35, CGFloat(component.count) / CGFloat(premiumLimit))
             
                 if !state.isPremium && badgePosition > 0.5 {
                     string = strings.Premium_MaxFoldersCountText("\(limit)", "\(premiumLimit)").string
@@ -952,11 +957,11 @@ private final class LimitSheetContent: CombinedComponent {
                 defaultValue = component.count > limit ? "\(limit)" : ""
                 premiumValue = component.count >= premiumLimit ? "" : "\(premiumLimit)"
                 if component.count >= premiumLimit {
-                    badgeGraphPosition = max(0.15, CGFloat(limit) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(limit) / CGFloat(premiumLimit))
                 } else {
-                    badgeGraphPosition = max(0.15, CGFloat(component.count) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(component.count) / CGFloat(premiumLimit))
                 }
-                badgePosition = max(0.15, CGFloat(component.count) / CGFloat(premiumLimit))
+                badgePosition = max(0.35, CGFloat(component.count) / CGFloat(premiumLimit))
             
                 if isPremiumDisabled {
                     badgeText = "\(limit)"
@@ -977,11 +982,11 @@ private final class LimitSheetContent: CombinedComponent {
                 defaultValue = count > limit ? "\(limit)" : ""
                 premiumValue = count >= premiumLimit ? "" : "\(premiumLimit)"
                 if count >= premiumLimit {
-                    badgeGraphPosition = max(0.15, CGFloat(limit) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(limit) / CGFloat(premiumLimit))
                 } else {
-                    badgeGraphPosition = max(0.15, CGFloat(count) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(count) / CGFloat(premiumLimit))
                 }
-                badgePosition = max(0.15, CGFloat(count) / CGFloat(premiumLimit))
+                badgePosition = max(0.35, CGFloat(count) / CGFloat(premiumLimit))
             
                 if isPremiumDisabled {
                     badgeText = "\(limit)"
@@ -998,11 +1003,11 @@ private final class LimitSheetContent: CombinedComponent {
                 defaultValue = component.count > limit ? "\(limit)" : ""
                 premiumValue = component.count >= premiumLimit ? "" : "\(premiumLimit)"
                 if component.count >= premiumLimit {
-                    badgeGraphPosition = max(0.15, CGFloat(limit) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(limit) / CGFloat(premiumLimit))
                 } else {
-                    badgeGraphPosition = max(0.15, CGFloat(component.count) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(component.count) / CGFloat(premiumLimit))
                 }
-                badgePosition = max(0.15, CGFloat(component.count) / CGFloat(premiumLimit))
+                badgePosition = max(0.35, CGFloat(component.count) / CGFloat(premiumLimit))
             
                 if isPremiumDisabled {
                     badgeText = "\(limit)"
@@ -1024,6 +1029,22 @@ private final class LimitSheetContent: CombinedComponent {
                 if isPremiumDisabled {
                     badgeText = "\(limit)"
                     string = strings.Premium_MaxPinsNoPremiumText("\(limit)").string
+                }
+            case .pinnedSavedPeers:
+                let limit = state.limits.maxPinnedSavedChatCount
+                let premiumLimit = state.premiumLimits.maxPinnedSavedChatCount
+                iconName = "Premium/Pin"
+                badgeText = "\(component.count)"
+                string = component.count >= premiumLimit ? strings.Premium_MaxSavedPinsFinalText("\(premiumLimit)").string : strings.Premium_MaxSavedPinsText("\(limit)", "\(premiumLimit)").string
+                defaultValue = component.count > limit ? "\(limit)" : ""
+                premiumValue = component.count >= premiumLimit ? "" : "\(premiumLimit)"
+                badgePosition = max(0.35, min(0.65, CGFloat(component.count) / CGFloat(premiumLimit)))
+                badgeGraphPosition = badgePosition
+                buttonAnimationName = nil
+            
+                if isPremiumDisabled {
+                    badgeText = "\(limit)"
+                    string = strings.Premium_MaxSavedPinsNoPremiumText("\(limit)").string
                 }
             case .files:
                 let limit = Int64(state.limits.maxUploadFileParts) * 512 * 1024 + 1024 * 1024 * 100
@@ -1110,6 +1131,11 @@ private final class LimitSheetContent: CombinedComponent {
                 }
                 buttonAnimationName = nil
             case let .storiesChannelBoost(peer, boostSubject, isCurrent, level, currentLevelBoosts, nextLevelBoosts, link, myBoostCount, canBoostAgain):
+                var isGroup = false
+                if case let .channel(channel) = peer, case .group = channel.info {
+                    isGroup = true
+                }
+                
                 if link == nil, !isCurrent, state.initialized {
                     peerShortcutChild = peerShortcut.update(
                         component: Button(
@@ -1117,8 +1143,7 @@ private final class LimitSheetContent: CombinedComponent {
                                 PeerShortcutComponent(
                                     context: component.context,
                                     theme: environment.theme,
-                                    peer: peer,
-                                    badge: myBoostCount > 0 ? "\(myBoostCount)" : nil
+                                    peer: peer
                                 )
                             ),
                             action: {
@@ -1176,6 +1201,7 @@ private final class LimitSheetContent: CombinedComponent {
                     remaining = nextLevelBoosts - component.count
                 }
                 
+                
                 if let _ = link {
                     if let remaining {
                         let storiesString = strings.ChannelBoost_StoriesPerDay(level + 1)
@@ -1185,15 +1211,15 @@ private final class LimitSheetContent: CombinedComponent {
                         case .stories:
                             if level == 0 {
                                 titleText = strings.ChannelBoost_EnableStories
-                                string = strings.ChannelBoost_EnableStoriesText(valueString).string
+                                string = isGroup ? strings.GroupBoost_EnableStoriesText(valueString).string : strings.ChannelBoost_EnableStoriesText(valueString).string
                             } else {
                                 titleText = strings.ChannelBoost_IncreaseLimit
-                                string = strings.ChannelBoost_IncreaseLimitText(valueString, storiesString).string
+                                string = isGroup ? strings.GroupBoost_IncreaseLimitText(valueString, storiesString).string : strings.ChannelBoost_IncreaseLimitText(valueString, storiesString).string
                             }
                         case let .nameColors(colors):
                             titleText = strings.ChannelBoost_EnableColors
                             
-                            let colorLevel = requiredBoostSubjectLevel(subject: .nameColors(colors: colors), context: component.context, configuration: premiumConfiguration)
+                            let colorLevel = requiredBoostSubjectLevel(subject: .nameColors(colors: colors), group: false, context: component.context, configuration: premiumConfiguration)
                             
                             string = strings.ChannelBoost_EnableColorsLevelText("\(colorLevel)").string
                         case let .channelReactions(reactionCount):
@@ -1771,6 +1797,7 @@ public class PremiumLimitScreen: ViewControllerComponentContainer {
         case folders
         case chatsPerFolder
         case pins
+        case pinnedSavedPeers
         case files
         case accounts
         case linksPerSharedFolder
@@ -1867,17 +1894,15 @@ public class PremiumLimitScreen: ViewControllerComponentContainer {
     }
 }
 
-private final class PeerShortcutComponent: Component {
+final class PeerShortcutComponent: Component {
     let context: AccountContext
     let theme: PresentationTheme
     let peer: EnginePeer
-    let badge: String?
 
-    init(context: AccountContext, theme: PresentationTheme, peer: EnginePeer, badge: String?) {
+    init(context: AccountContext, theme: PresentationTheme, peer: EnginePeer) {
         self.context = context
         self.theme = theme
         self.peer = peer
-        self.badge = badge
     }
 
     static func ==(lhs: PeerShortcutComponent, rhs: PeerShortcutComponent) -> Bool {
@@ -1888,9 +1913,6 @@ private final class PeerShortcutComponent: Component {
             return false
         }
         if lhs.peer != rhs.peer {
-            return false
-        }
-        if lhs.badge != rhs.badge {
             return false
         }
         return true

@@ -35,9 +35,9 @@ public enum PeerMessagesPlaylistLocation: Equatable, SharedMediaPlaylistLocation
                 case let .peer(peerId):
                     return .peer(peerId)
                 case let .replyThread(replyThreaMessage):
-                    return .peer(replyThreaMessage.messageId.peerId)
-                case let .feed(id):
-                    return .feed(id)
+                    return .peer(replyThreaMessage.peerId)
+                case .customChatContents:
+                    return .custom
                 }
             case let .singleMessage(id):
                 return .peer(id.peerId)
@@ -228,6 +228,8 @@ public protocol ManagedAudioRecorder: AnyObject {
     var recordingState: Signal<AudioRecordingState, NoError> { get }
     
     func start()
+    func pause()
+    func resume()
     func stop()
     func takenRecordedData() -> Signal<RecordedAudioData?, NoError>
 }

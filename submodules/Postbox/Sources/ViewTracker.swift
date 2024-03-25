@@ -1,7 +1,7 @@
 import Foundation
 import SwiftSignalKit
 
-public enum ViewUpdateType : Equatable {
+public enum ViewUpdateType: Equatable {
     case Initial
     case InitialUnread(MessageIndex)
     case Generic
@@ -351,10 +351,6 @@ final class ViewTracker {
         
         self.updateTrackedChatListHoles()
         
-        if updateTrackedHoles {
-            self.updateTrackedHoles()
-        }
-        
         if self.unsentMessageView.replay(transaction.unsentMessageOperations) {
             self.unsentViewUpdated()
         }
@@ -414,8 +410,13 @@ final class ViewTracker {
         }
         
         for (mutableView, pipe) in self.combinedViews.copyItems() {
-            if mutableView.replay(postbox: postbox, transaction: transaction) {
+            let result = mutableView.replay(postbox: postbox, transaction: transaction)
+            
+            if result.updated {
                 pipe.putNext(mutableView.immutableView())
+            }
+            if result.updateTrackedHoles {
+                updateTrackedHoles = true
             }
         }
         
@@ -423,6 +424,10 @@ final class ViewTracker {
             if view.replay(postbox: postbox, transaction: transaction) {
                 pipe.putNext(view.immutableView())
             }
+        }
+        
+        if updateTrackedHoles {
+            self.updateTrackedHoles()
         }
         
         self.updateTrackedForumTopicListHoles()
@@ -453,6 +458,10 @@ final class ViewTracker {
                     if let hole = view.topHole() {
                         firstHoles.insert(hole)
                     }
+                } else if case .savedMessagesIndex = key, let view = view as? MutableMessageHistorySavedMessagesIndexView {
+                    if let hole = view.topHole() {
+                        firstHoles.insert(hole)
+                    }
                 }
             }
         }
@@ -468,13 +477,38 @@ final class ViewTracker {
         var firstHolesAndTags = Set<MessageHistoryHolesViewEntry>()
         for (view, _) in self.messageHistoryViews.copyItems() {
             if let (hole, direction, count, userId) = view.firstHole() {
-                let space: MessageHistoryHoleSpace
+                let space: MessageHistoryHoleOperationSpace
                 if let tag = view.tag {
-                    space = .tag(tag)
+                    switch tag {
+                    case let .tag(value):
+                        space = .tag(value)
+                    case let .customTag(value, regularTag):
+                        space = .customTag(value, regularTag)
+                    }
                 } else {
                     space = .everywhere
                 }
                 firstHolesAndTags.insert(MessageHistoryHolesViewEntry(hole: hole, direction: direction, space: space, count: count, userId: userId))
+            }
+        }
+        for (view, _) in self.combinedViews.copyItems() {
+            for (_, subview) in view.views {
+                if let subview = subview as? MutableMessageHistoryView {
+                    if let (hole, direction, count, userId) = subview.firstHole() {
+                        let space: MessageHistoryHoleOperationSpace
+                        if let tag = subview.tag {
+                            switch tag {
+                            case let .tag(value):
+                                space = .tag(value)
+                            case let .customTag(value, regularTag):
+                                space = .customTag(value, regularTag)
+                            }
+                        } else {
+                            space = .everywhere
+                        }
+                        firstHolesAndTags.insert(MessageHistoryHolesViewEntry(hole: hole, direction: direction, space: space, count: count, userId: userId))
+                    }
+                }
             }
         }
         

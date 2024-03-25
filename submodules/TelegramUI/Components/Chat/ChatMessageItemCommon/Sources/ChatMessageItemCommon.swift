@@ -158,7 +158,7 @@ public struct ChatMessageItemLayoutConstants {
     }
 }
 
-public func canViewMessageReactionList(message: Message) -> Bool {
+public func canViewMessageReactionList(message: Message, isInline: Bool) -> Bool {
     var found = false
     var canViewList = false
     for attribute in message.attributes {
@@ -234,11 +234,11 @@ public func isPollEffectivelyClosed(message: Message, poll: TelegramMediaPoll) -
 
 public extension ChatReplyThreadMessage {
     var effectiveTopId: MessageId {
-        return self.channelMessageId ?? self.messageId
+        return self.channelMessageId ?? MessageId(peerId: self.peerId, namespace: Namespaces.Message.Cloud, id: Int32(clamping: self.threadId))
     }
 }
 
-public func messageIsElligibleForLargeEmoji(_ message: Message) -> Bool {
+public func messageIsEligibleForLargeEmoji(_ message: Message) -> Bool {
     if !message.text.isEmpty && message.text.containsOnlyEmoji {
         if !(message.textEntitiesAttribute?.entities.isEmpty ?? true) {
             return false
@@ -249,7 +249,7 @@ public func messageIsElligibleForLargeEmoji(_ message: Message) -> Bool {
     }
 }
 
-public func messageIsElligibleForLargeCustomEmoji(_ message: Message) -> Bool {
+public func messageIsEligibleForLargeCustomEmoji(_ message: Message) -> Bool {
     let text = message.text.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
     guard !text.isEmpty && text.containsOnlyEmoji else {
         return false

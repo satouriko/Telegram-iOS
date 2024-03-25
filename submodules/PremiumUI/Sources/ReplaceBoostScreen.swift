@@ -477,6 +477,7 @@ public class ReplaceBoostScreen: ViewController {
                 statusBarHeight: 0.0,
                 navigationHeight: navigationHeight,
                 safeInsets: UIEdgeInsets(top: layout.intrinsicInsets.top + layout.safeInsets.top, left: layout.safeInsets.left, bottom: layout.intrinsicInsets.bottom + layout.safeInsets.bottom, right: layout.safeInsets.right),
+                additionalInsets: layout.additionalInsets,
                 inputHeight: layout.inputHeight ?? 0.0,
                 metrics: layout.metrics,
                 deviceMetrics: layout.deviceMetrics,
@@ -880,7 +881,7 @@ public class ReplaceBoostScreen: ViewController {
             }
             let navigationController = self.navigationController
             self.dismiss(animated: true, completion: {
-                let giftController = context.sharedContext.makePremiumGiftController(context: context)
+                let giftController = context.sharedContext.makePremiumGiftController(context: context, source: .channelBoost, completion: nil)
                 navigationController?.pushViewController(giftController, animated: true)
             })
         }

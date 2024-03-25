@@ -285,6 +285,7 @@ open class ItemListControllerNode: ASDisplayNode {
     public var searchActivated: ((Bool) -> Void)?
     public var reorderEntry: ((Int, Int, [ItemListNodeAnyEntry]) -> Signal<Bool, NoError>)?
     public var reorderCompleted: (([ItemListNodeAnyEntry]) -> Void)?
+    public var afterTransactionCompleted: (() -> Void)?
     public var requestLayout: ((ContainedViewLayoutTransition) -> Void)?
     
     public var enableInteractiveDismiss = false {
@@ -585,7 +586,11 @@ open class ItemListControllerNode: ASDisplayNode {
         if let headerItemNode = self.headerItemNode {
             let headerHeight = headerItemNode.updateLayout(layout: layout, transition: transition)
             headerItemNode.frame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: 56.0))
-            insets.top += headerHeight
+            if headerHeight > 300.0 {
+                insets.top = headerHeight
+            } else {
+                insets.top += headerHeight
+            }
         }
         
         var footerHeight: CGFloat = 0.0
@@ -916,6 +921,8 @@ open class ItemListControllerNode: ASDisplayNode {
                             }
                         }
                     }
+                    
+                    strongSelf.afterTransactionCompleted?()
                 }
             })
             var updateEmptyStateItem = false
@@ -986,8 +993,8 @@ open class ItemListControllerNode: ASDisplayNode {
             
             if updateSearchItem {
                 self.requestLayout?(.animated(duration: 0.3, curve: .spring))
-            } else if updateToolbarItem || updateFooterItem, let (layout, navigationBarHeight, additionalInsets) = self.validLayout {
-                self.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: .animated(duration: 0.3, curve: .spring), additionalInsets: additionalInsets)
+            } else if updateToolbarItem || updateHeaderItem || updateFooterItem, let (layout, navigationBarHeight, additionalInsets) = self.validLayout {
+                self.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: updateHeaderItem ? .immediate : .animated(duration: 0.3, curve: .spring), additionalInsets: additionalInsets)
             }
         }
     }

@@ -56,7 +56,7 @@ public class ChatMessageRestrictedBubbleContentNode: ChatMessageBubbleContentNod
                 var viewCount: Int?
                 var rawText = ""
                 var dateReplies = 0
-                var dateReactionsAndPeers = mergedMessageReactionsAndPeers(accountPeer: item.associatedData.accountPeer, message: item.message)
+                var dateReactionsAndPeers = mergedMessageReactionsAndPeers(accountPeerId: item.context.account.peerId, accountPeer: item.associatedData.accountPeer, message: item.message)
                 if item.message.isRestricted(platform: "ios", contentSettings: item.context.currentContentSettings.with { $0 }) {
                     dateReactionsAndPeers = ([], [])
                 }
@@ -77,21 +77,25 @@ public class ChatMessageRestrictedBubbleContentNode: ChatMessageBubbleContentNod
                 let dateText = stringForMessageTimestampStatus(accountPeerId: item.context.account.peerId, message: item.message, dateTimeFormat: item.presentationData.dateTimeFormat, nameDisplayOrder: item.presentationData.nameDisplayOrder, strings: item.presentationData.strings, associatedData: item.associatedData)
                 
                 let statusType: ChatMessageDateAndStatusType?
-                switch position {
-                case .linear(_, .None), .linear(_, .Neighbour(true, _, _)):
-                    if incoming {
-                        statusType = .BubbleIncoming
-                    } else {
-                        if message.flags.contains(.Failed) {
-                            statusType = .BubbleOutgoing(.Failed)
-                        } else if message.flags.isSending && !message.isSentOrAcknowledged {
-                            statusType = .BubbleOutgoing(.Sending)
-                        } else {
-                            statusType = .BubbleOutgoing(.Sent(read: item.read))
-                        }
-                    }
-                default:
+                if case .customChatContents = item.associatedData.subject {
                     statusType = nil
+                } else {
+                    switch position {
+                    case .linear(_, .None), .linear(_, .Neighbour(true, _, _)):
+                        if incoming {
+                            statusType = .BubbleIncoming
+                        } else {
+                            if message.flags.contains(.Failed) {
+                                statusType = .BubbleOutgoing(.Failed)
+                            } else if message.flags.isSending && !message.isSentOrAcknowledged {
+                                statusType = .BubbleOutgoing(.Sending)
+                            } else {
+                                statusType = .BubbleOutgoing(.Sent(read: item.read))
+                            }
+                        }
+                    default:
+                        statusType = nil
+                    }
                 }
                 
                 let entities = [MessageTextEntity(range: 0..<rawText.count, type: .Italic)]
@@ -129,13 +133,15 @@ public class ChatMessageRestrictedBubbleContentNode: ChatMessageBubbleContentNod
                         layoutInput: .trailingContent(contentWidth: textLayout.trailingLineWidth, reactionSettings: ChatMessageDateAndStatusNode.TrailingReactionSettings(displayInline: shouldDisplayInlineDateReactions(message: message, isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions), preferAdditionalInset: false)),
                         constrainedSize: textConstrainedSize,
                         availableReactions: item.associatedData.availableReactions,
+                        savedMessageTags: item.associatedData.savedMessageTags,
                         reactions: dateReactionsAndPeers.reactions,
                         reactionPeers: dateReactionsAndPeers.peers,
                         displayAllReactionPeers: item.message.id.peerId.namespace == Namespaces.Peer.CloudUser,
+                        areReactionsTags: item.topMessage.areReactionsTags(accountPeerId: item.context.account.peerId),
                         replyCount: dateReplies,
                         isPinned: item.message.tags.contains(.pinned) && !item.associatedData.isInPinnedListMode && isReplyThread,
                         hasAutoremove: item.message.isSelfExpiring,
-                        canViewReactionList: canViewMessageReactionList(message: item.message),
+                        canViewReactionList: canViewMessageReactionList(message: item.topMessage, isInline: item.associatedData.isInline),
                         animationCache: item.controllerInteraction.presentationContext.animationCache,
                         animationRenderer: item.controllerInteraction.presentationContext.animationRenderer
                     ))
